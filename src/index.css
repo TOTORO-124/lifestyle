@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-[#f8f9fa] text-[#3c4043] font-sans antialiased;
+  }
+}
+
+@layer components {
+  .excel-grid {
+    @apply border-collapse w-full bg-white border border-[#d1d1d1];
+  }
+  .excel-grid th {
+    @apply border border-[#d1d1d1] bg-[#f8f9fa] px-2 py-1 text-center font-normal text-[#666] text-[10px] select-none uppercase tracking-tighter;
+  }
+  .excel-grid td {
+    @apply border border-[#d1d1d1] px-3 py-1.5 text-sm relative;
+  }
+  .excel-grid tr:hover td {
+    @apply bg-[#f1f8f5];
+  }
+  
+  .office-btn {
+    @apply inline-flex items-center justify-center px-4 py-1 border border-[#d1d1d1] rounded bg-white text-xs font-medium text-[#333] hover:bg-[#f1f1f1] active:bg-[#e1e1e1] focus:outline-none focus:ring-1 focus:ring-[#217346] disabled:opacity-50 transition-colors shadow-sm;
+  }
+  .office-btn-primary {
+    @apply inline-flex items-center justify-center px-4 py-1 border border-transparent rounded bg-[#217346] text-xs font-medium text-white hover:bg-[#1a5c38] active:bg-[#14462b] focus:outline-none focus:ring-1 focus:ring-[#217346] disabled:opacity-50 transition-colors shadow-sm;
+  }
+  
+  .office-input {
+    @apply block w-full px-2 py-1 border border-[#d1d1d1] focus:border-[#217346] focus:ring-0 rounded bg-white text-sm transition-colors outline-none;
+  }
+  
+  .office-toolbar {
+    @apply flex items-center space-x-2 px-2 py-1 bg-white border-b border-[#d1d1d1] text-[10px] text-[#666];
+  }
+  
+  .office-tab {
+    @apply px-4 py-1 border-r border-[#d1d1d1] text-[10px] font-bold cursor-pointer transition-colors flex items-center;
+  }
+  .office-tab.active {
+    @apply bg-white border-t-2 border-t-[#217346] text-[#217346];
+  }
+  .office-tab:not(.active) {
+    @apply bg-[#f8f9fa] hover:bg-[#f1f1f1] text-[#666];
+  }
+
+  .spreadsheet-bg {
+    background-color: #f3f3f3;
+    background-image: 
+      linear-gradient(#e2e2e2 1px, transparent 1px),
+      linear-gradient(90deg, #e2e2e2 1px, transparent 1px);
+    background-size: 100px 25px;
+  }
+}
