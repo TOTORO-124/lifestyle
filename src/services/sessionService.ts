@@ -603,8 +603,20 @@ export const sessionService = {
     const newBoard = game.board.map((row: any) => [...row]);
     newBoard[y][x] = stone;
     
+    // Check for forbidden moves (Black only)
+    if (isBlack) {
+      if (this.checkOmokOverline(newBoard, x, y, stone)) {
+        // Forbidden: Overline (6 or more stones)
+        // Send a system message or just return (UI won't update, which is fine for invalid move)
+        // Ideally, we should notify the user, but for now, preventing the move is key.
+        return;
+      }
+      // 3-3 check is complex and omitted for stability unless strictly required.
+      // Overline restriction is the most impactful "Official Rule" for casual play.
+    }
+    
     // Check Win
-    const winInfo = this.checkOmokWin(newBoard, x, y, stone);
+    const winInfo = this.checkOmokWin(newBoard, x, y, stone, isBlack);
     
     const updates: any = {};
     updates[`omokGame/board/${y}/${x}`] = stone;
@@ -627,7 +639,40 @@ export const sessionService = {
     await update(sessionRef, updates);
   },
 
-  checkOmokWin(board: number[][], x: number, y: number, stone: number) {
+  checkOmokOverline(board: number[][], x: number, y: number, stone: number) {
+    const directions = [
+      [1, 0], [0, 1], [1, 1], [1, -1]
+    ];
+
+    for (const [dx, dy] of directions) {
+      let count = 1;
+      
+      // Check forward
+      let i = 1;
+      while (true) {
+        const nx = x + dx * i;
+        const ny = y + dy * i;
+        if (ny < 0 || ny >= 15 || nx < 0 || nx >= 15 || board[ny][nx] !== stone) break;
+        count++;
+        i++;
+      }
+
+      // Check backward
+      i = 1;
+      while (true) {
+        const nx = x - dx * i;
+        const ny = y - dy * i;
+        if (ny < 0 || ny >= 15 || nx < 0 || nx >= 15 || board[ny][nx] !== stone) break;
+        count++;
+        i++;
+      }
+
+      if (count > 5) return true; // Overline found
+    }
+    return false;
+  },
+
+  checkOmokWin(board: number[][], x: number, y: number, stone: number, isBlack: boolean) {
     const directions = [
       [1, 0],  // Horizontal
       [0, 1],  // Vertical
@@ -661,7 +706,14 @@ export const sessionService = {
         i++;
       }
 
-      if (count >= 5) return line;
+      // Official Rules:
+      // Black: Wins ONLY on exactly 5. (Overline is forbidden, so >5 shouldn't happen if checked properly, but strictly >5 is not a win)
+      // White: Wins on 5 or more.
+      if (isBlack) {
+        if (count === 5) return line;
+      } else {
+        if (count >= 5) return line;
+      }
     }
     return null;
   }

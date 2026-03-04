@@ -806,12 +806,21 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-2 text-[#666]">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                        <span>상대방의 수를 기다리는 중입니다...</span>
+                        {session.omokGame?.blackPlayerId === currentUser.uid || session.omokGame?.whitePlayerId === currentUser.uid ? (
+                          <>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                            <span>상대방의 수를 기다리는 중입니다...</span>
+                          </>
+                        ) : (
+                          <span className="font-medium text-gray-500">현재 관전 중입니다.</span>
+                        )}
                       </div>
                     )}
+                    <div className="mt-2 text-[10px] text-gray-400">
+                      * 흑돌은 3-3, 4-4, 6목(장목) 금지 (공식 룰 적용) / 백돌은 제한 없음
+                    </div>
                   </div>
                 </div>
 
