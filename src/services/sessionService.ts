@@ -321,7 +321,7 @@ export const sessionService = {
     if (mafiaCount === 0) {
       updates['status'] = SessionStatus.SUMMARY;
       updates['mafiaGame/winner'] = 'CITIZEN';
-    } else if (mafiaCount >= citizenCount) {
+    } else if (mafiaCount > citizenCount) {
       updates['status'] = SessionStatus.SUMMARY;
       updates['mafiaGame/winner'] = 'MAFIA';
     }
@@ -415,7 +415,7 @@ export const sessionService = {
       if (mafiaCount === 0) {
         updates['status'] = SessionStatus.SUMMARY;
         updates['mafiaGame/winner'] = 'CITIZEN';
-      } else if (mafiaCount >= citizenCount) {
+      } else if (mafiaCount > citizenCount) {
         updates['status'] = SessionStatus.SUMMARY;
         updates['mafiaGame/winner'] = 'MAFIA';
       }

@@ -33,11 +33,15 @@ export default function App() {
 
     const players = Object.values(session.players) as Player[];
     
-    // Reveal -> Playing
+    // Reveal -> Playing/Night
     if (session.status === SessionStatus.REVEAL) {
       const allConfirmed = players.every(p => p.hasConfirmedRole);
       if (allConfirmed && players.length > 0) {
-        sessionService.advanceStatus(session.id, SessionStatus.PLAYING);
+        if (session.gameType === GameType.MAFIA) {
+          sessionService.startNightPhase(session.id, session.players);
+        } else {
+          sessionService.advanceStatus(session.id, SessionStatus.PLAYING);
+        }
       }
     }
 
@@ -559,7 +563,9 @@ export default function App() {
                           session.liarGame?.spyPlayerId === currentUser?.uid ? '스파이' : '시민'
                         )
                       ) : (
-                        me?.role === 'MAFIA' ? '마피아' : '시민'
+                        me?.role === 'MAFIA' ? '마피아' : 
+                        me?.role === 'DOCTOR' ? '의사' :
+                        me?.role === 'POLICE' ? '경찰' : '시민'
                       )}
                     </div>
                   </div>
@@ -583,6 +589,20 @@ export default function App() {
                       <div className="text-[10px] text-gray-400 mt-1">
                         {(Object.values(session.players) as Player[]).filter(p => p.hasConfirmedRole).length} / {(Object.values(session.players) as Player[]).length} 명 확인 완료
                       </div>
+                      {isHost && (
+                        <button 
+                          onClick={() => {
+                            if (session.gameType === GameType.MAFIA) {
+                              sessionService.startNightPhase(session.id, session.players);
+                            } else {
+                              sessionService.advanceStatus(session.id, SessionStatus.PLAYING);
+                            }
+                          }}
+                          className="mt-4 text-xs text-red-500 underline hover:text-red-700"
+                        >
+                          강제 시작 (모든 플레이어 확인 무시)
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <button 
@@ -1076,8 +1096,19 @@ export default function App() {
                             {(Object.values(session.players) as Player[]).filter(p => p.role === 'MAFIA').map(p => p.nickname).join(', ')}
                           </div>
                           {session.mafiaGame?.winner && (
-                            <div className="mt-4 p-2 bg-[#f1f8f5] text-[#217346] text-xs font-bold border border-[#217346] rounded">
-                              {session.mafiaGame.winner === 'MAFIA' ? '마피아_승리' : '시민_승리'}
+                            <div className="mt-4 space-y-2">
+                              <div className={`p-2 text-xs font-bold border rounded ${
+                                session.mafiaGame.winner === 'MAFIA' 
+                                  ? 'bg-red-50 text-red-600 border-red-200' 
+                                  : 'bg-green-50 text-green-600 border-green-200'
+                              }`}>
+                                {session.mafiaGame.winner === 'MAFIA' ? '마피아_승리' : '시민_승리'}
+                              </div>
+                              <p className="text-[10px] text-[#666]">
+                                {session.mafiaGame.winner === 'MAFIA' 
+                                  ? '마피아의 수가 시민의 수보다 많아져서 마피아가 승리했습니다.' 
+                                  : '모든 마피아가 제거되어 시민이 승리했습니다.'}
+                              </p>
                             </div>
                           )}
                         </div>
