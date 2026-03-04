@@ -9,6 +9,7 @@ export enum SessionStatus {
   PLAYING = 'PLAYING',
   VOTING = 'VOTING',
   VOTE_RESULT = 'VOTE_RESULT',
+  NIGHT = 'NIGHT',
   SUMMARY = 'SUMMARY',
 }
 
@@ -62,6 +63,12 @@ export interface MafiaGameState {
   policeTarget?: string;
   eliminatedPlayerId?: string;
   winner?: 'MAFIA' | 'CITIZEN';
+  nightResult?: {
+    eliminatedPlayerId?: string;
+    savedPlayerId?: string;
+    investigatedPlayerId?: string;
+    investigatedRole?: string;
+  };
 }
 
 export interface Session {
@@ -78,7 +85,11 @@ export interface Session {
     maxPlayers: number;
     liarMode?: LiarMode;
     liarCategory?: string;
+    mafiaCount?: number;
+    doctorCount?: number;
+    policeCount?: number;
   };
+  turnOrder?: string[];
   messages?: Record<string, ChatMessage>;
 }
 
@@ -89,6 +100,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   isSystem?: boolean;
+  isSpectatorChat?: boolean;
 }
 
 export interface Topic {

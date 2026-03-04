@@ -32,6 +32,9 @@ export const sessionService = {
         maxPlayers: 10,
         liarMode: LiarMode.BASIC,
         liarCategory: '랜덤',
+        mafiaCount: 1,
+        doctorCount: 1,
+        policeCount: 1,
       },
     };
 
@@ -129,9 +132,13 @@ export const sessionService = {
       liarGame.spyPlayerId = spyPlayerId;
     }
 
+    // Generate random turn order
+    const turnOrder = [...playerIds].sort(() => Math.random() - 0.5);
+
     const updates: any = {
       status: SessionStatus.REVEAL,
       liarGame,
+      turnOrder,
     };
 
     // Reset player states
@@ -149,22 +156,48 @@ export const sessionService = {
     await update(ref(db, `sessions/${sessionId}/players/${playerId}`), { hasConfirmedRole: true });
   },
 
-  async startMafiaGame(sessionId: string, players: Record<string, Player>) {
+  async startMafiaGame(sessionId: string, players: Record<string, Player>, settings: any) {
     const playerIds = Object.keys(players);
     const count = playerIds.length;
+    
+    const mafiaCount = settings.mafiaCount || 1;
+    const doctorCount = settings.doctorCount || 1;
+    const policeCount = settings.policeCount || 1;
+
+    if (mafiaCount + doctorCount + policeCount > count) {
+      throw new Error('설정된 역할 수가 전체 플레이어 수보다 많습니다.');
+    }
     
     // Shuffle player IDs
     const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
     
-    let mafiaCount = count >= 6 ? 2 : 1;
     const roles: Record<string, string> = {};
     
-    shuffled.forEach((pid, idx) => {
-      if (idx < mafiaCount) roles[pid] = 'MAFIA';
-      else if (idx === mafiaCount) roles[pid] = 'DOCTOR';
-      else if (idx === mafiaCount + 1) roles[pid] = 'POLICE';
-      else roles[pid] = 'CITIZEN';
-    });
+    let currentIndex = 0;
+
+    // Assign Mafia
+    for (let i = 0; i < mafiaCount; i++) {
+      roles[shuffled[currentIndex]] = 'MAFIA';
+      currentIndex++;
+    }
+
+    // Assign Doctor
+    for (let i = 0; i < doctorCount; i++) {
+      roles[shuffled[currentIndex]] = 'DOCTOR';
+      currentIndex++;
+    }
+
+    // Assign Police
+    for (let i = 0; i < policeCount; i++) {
+      roles[shuffled[currentIndex]] = 'POLICE';
+      currentIndex++;
+    }
+
+    // Assign Citizens to the rest
+    while (currentIndex < count) {
+      roles[shuffled[currentIndex]] = 'CITIZEN';
+      currentIndex++;
+    }
 
     const updates: any = {};
     Object.entries(roles).forEach(([pid, role]) => {
@@ -182,6 +215,121 @@ export const sessionService = {
 
     updates['status'] = SessionStatus.REVEAL;
     updates['mafiaGame'] = mafiaGame;
+    updates['turnOrder'] = shuffled;
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+  },
+
+  async shuffleTurnOrder(sessionId: string, players: Record<string, Player>) {
+    if (!db) return;
+    const playerIds = Object.keys(players);
+    const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
+    await update(ref(db, `sessions/${sessionId}`), { turnOrder: shuffled });
+  },
+
+  async startNightPhase(sessionId: string, players: Record<string, Player>) {
+    if (!db) return;
+    
+    // Reset night actions
+    const updates: any = {
+      status: SessionStatus.NIGHT,
+      'mafiaGame/phase': MafiaPhase.NIGHT,
+      'mafiaGame/mafiaTargets': null,
+      'mafiaGame/doctorTarget': null,
+      'mafiaGame/policeTarget': null,
+      'mafiaGame/nightResult': null,
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+  },
+
+  async submitNightAction(sessionId: string, playerId: string, role: string, targetId: string) {
+    if (!db) return;
+    
+    const updates: any = {};
+    
+    if (role === 'MAFIA') {
+      updates[`mafiaGame/mafiaTargets/${playerId}`] = targetId;
+    } else if (role === 'DOCTOR') {
+      updates['mafiaGame/doctorTarget'] = targetId;
+    } else if (role === 'POLICE') {
+      updates['mafiaGame/policeTarget'] = targetId;
+    }
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+  },
+
+  async processNightPhase(sessionId: string, players: Record<string, Player>, mafiaGame: MafiaGameState) {
+    if (!db) return;
+
+    // 1. Calculate Mafia target (majority vote)
+    const mafiaVotes: Record<string, number> = {};
+    if (mafiaGame.mafiaTargets) {
+      Object.values(mafiaGame.mafiaTargets).forEach(targetId => {
+        mafiaVotes[targetId] = (mafiaVotes[targetId] || 0) + 1;
+      });
+    }
+
+    let mafiaTargetId: string | null = null;
+    let maxVotes = 0;
+    Object.entries(mafiaVotes).forEach(([targetId, count]) => {
+      if (count > maxVotes) {
+        maxVotes = count;
+        mafiaTargetId = targetId;
+      }
+    });
+
+    // 2. Resolve actions
+    let eliminatedId: string | undefined = undefined;
+    let savedId: string | undefined = undefined;
+
+    if (mafiaTargetId) {
+      if (mafiaTargetId === mafiaGame.doctorTarget) {
+        savedId = mafiaTargetId;
+      } else {
+        eliminatedId = mafiaTargetId;
+      }
+    }
+
+    // 3. Update state
+    const updates: any = {
+      status: SessionStatus.PLAYING,
+      'mafiaGame/phase': MafiaPhase.DAY,
+      'mafiaGame/round': (mafiaGame.round || 1) + 1,
+      'mafiaGame/nightResult': {
+        eliminatedPlayerId: eliminatedId,
+        savedPlayerId: savedId,
+        investigatedPlayerId: mafiaGame.policeTarget,
+        investigatedRole: mafiaGame.policeTarget ? players[mafiaGame.policeTarget]?.role : undefined,
+      }
+    };
+
+    if (eliminatedId) {
+      updates[`players/${eliminatedId}/isAlive`] = false;
+    }
+
+    // 4. Check Win Conditions
+    const currentPlayers = { ...players };
+    if (eliminatedId) {
+      currentPlayers[eliminatedId].isAlive = false;
+    }
+
+    const alivePlayers = Object.values(currentPlayers).filter(p => p.isAlive);
+    const mafiaCount = alivePlayers.filter(p => p.role === 'MAFIA').length;
+    const citizenCount = alivePlayers.length - mafiaCount;
+
+    if (mafiaCount === 0) {
+      updates['status'] = SessionStatus.SUMMARY;
+      updates['mafiaGame/winner'] = 'CITIZEN';
+    } else if (mafiaCount >= citizenCount) {
+      updates['status'] = SessionStatus.SUMMARY;
+      updates['mafiaGame/winner'] = 'MAFIA';
+    }
+
+    // Reset votes for the next day
+    Object.keys(players).forEach(pid => {
+      updates[`players/${pid}/voteTarget`] = null;
+    });
 
     await update(ref(db, `sessions/${sessionId}`), updates);
   },
@@ -217,6 +365,68 @@ export const sessionService = {
   async submitVote(sessionId: string, playerId: string, targetId: string) {
     if (!db) return;
     await update(ref(db, `sessions/${sessionId}/players/${playerId}`), { voteTarget: targetId });
+  },
+
+  async processMafiaVote(sessionId: string, players: Record<string, Player>) {
+    if (!db) return;
+    
+    const voteCounts: Record<string, number> = {};
+    Object.values(players).forEach(p => {
+      if (p.isAlive && p.voteTarget) {
+        voteCounts[p.voteTarget] = (voteCounts[p.voteTarget] || 0) + 1;
+      }
+    });
+
+    let maxVotes = 0;
+    let votedPlayerId: string | null = null;
+    let isTie = false;
+
+    Object.entries(voteCounts).forEach(([pid, count]) => {
+      if (count > maxVotes) {
+        maxVotes = count;
+        votedPlayerId = pid;
+        isTie = false;
+      } else if (count === maxVotes) {
+        isTie = true;
+      }
+    });
+
+    // In Mafia, usually a tie means no one dies, or a re-vote. Let's assume tie = no death for simplicity, or just kill the first one?
+    // Let's say tie = no death.
+    if (isTie) {
+      votedPlayerId = null;
+    }
+
+    const updates: any = {};
+    updates['status'] = SessionStatus.VOTE_RESULT;
+    updates['mafiaGame/eliminatedPlayerId'] = votedPlayerId || null;
+
+    if (votedPlayerId) {
+      updates[`players/${votedPlayerId}/isAlive`] = false;
+      
+      // Check win condition
+      const currentPlayers = { ...players };
+      currentPlayers[votedPlayerId].isAlive = false; // Simulate death
+      
+      const alivePlayers = Object.values(currentPlayers).filter(p => p.isAlive);
+      const mafiaCount = alivePlayers.filter(p => p.role === 'MAFIA').length;
+      const citizenCount = alivePlayers.length - mafiaCount;
+
+      if (mafiaCount === 0) {
+        updates['status'] = SessionStatus.SUMMARY;
+        updates['mafiaGame/winner'] = 'CITIZEN';
+      } else if (mafiaCount >= citizenCount) {
+        updates['status'] = SessionStatus.SUMMARY;
+        updates['mafiaGame/winner'] = 'MAFIA';
+      }
+    }
+
+    // Reset votes
+    Object.keys(players).forEach(pid => {
+      updates[`players/${pid}/voteTarget`] = null;
+    });
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
   },
 
   async processLiarVote(sessionId: string, players: Record<string, Player>, liarGame: LiarGameState) {
@@ -284,7 +494,7 @@ export const sessionService = {
     await update(ref(db, `sessions/${sessionId}`), updates);
   },
 
-  async sendMessage(sessionId: string, senderId: string, senderName: string, content: string) {
+  async sendMessage(sessionId: string, senderId: string, senderName: string, content: string, isSpectatorChat: boolean = false) {
     if (!db) return;
     const messagesRef = ref(db, `sessions/${sessionId}/messages`);
     const newMessageRef = push(messagesRef);
@@ -294,6 +504,7 @@ export const sessionService = {
       senderName,
       content,
       timestamp: Date.now(),
+      isSpectatorChat,
     });
   }
 };

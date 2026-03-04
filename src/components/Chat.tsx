@@ -7,9 +7,10 @@ interface ChatProps {
   session: Session;
   currentUser: { uid: string; displayName: string } | null;
   nickname: string;
+  isSpectator: boolean;
 }
 
-export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname }) => {
+export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSpectator }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
@@ -18,7 +19,9 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname }) =>
   const lastReadTimestampRef = useRef<number>(Date.now());
 
   const messages = session.messages 
-    ? Object.values(session.messages).sort((a, b) => a.timestamp - b.timestamp)
+    ? (Object.values(session.messages) as ChatMessage[])
+        .filter(msg => isSpectator || !msg.isSpectatorChat) // Spectators see all, alive see only non-spectator
+        .sort((a, b) => a.timestamp - b.timestamp)
     : [];
 
   useEffect(() => {
@@ -42,7 +45,13 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname }) =>
     if (!message.trim() || !currentUser) return;
 
     try {
-      await sessionService.sendMessage(session.id, currentUser.uid, nickname, message.trim());
+      await sessionService.sendMessage(
+        session.id, 
+        currentUser.uid, 
+        nickname, 
+        message.trim(),
+        isSpectator // Pass isSpectator status
+      );
       setMessage('');
       scrollToBottom();
     } catch (error) {
@@ -58,7 +67,7 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname }) =>
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 bg-[#217346] text-white p-4 rounded-full shadow-lg hover:bg-[#1e6b41] transition-all duration-200 flex items-center justify-center group"
+          className={`fixed bottom-6 right-6 z-50 ${isSpectator ? 'bg-gray-600 hover:bg-gray-700' : 'bg-[#217346] hover:bg-[#1e6b41]'} text-white p-4 rounded-full shadow-lg transition-all duration-200 flex items-center justify-center group`}
         >
           <MessageCircle size={24} />
           {unreadCount > 0 && (
@@ -67,7 +76,7 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname }) =>
             </span>
           )}
           <span className="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:ml-2 transition-all duration-300 ease-in-out whitespace-nowrap font-bold">
-            팀 채팅
+            {isSpectator ? '관전자 채팅' : '팀 채팅'}
           </span>
         </button>
       )}
@@ -81,12 +90,12 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname }) =>
         >
           {/* Header */}
           <div 
-            className="bg-[#217346] text-white p-3 rounded-t-lg flex justify-between items-center cursor-pointer"
+            className={`${isSpectator ? 'bg-gray-600' : 'bg-[#217346]'} text-white p-3 rounded-t-lg flex justify-between items-center cursor-pointer`}
             onClick={() => setIsMinimized(!isMinimized)}
           >
             <div className="flex items-center gap-2">
               <MessageCircle size={18} />
-              <span className="font-bold text-sm">팀 채팅 ({messages.length})</span>
+              <span className="font-bold text-sm">{isSpectator ? '관전자 채팅' : '팀 채팅'} ({messages.length})</span>
             </div>
             <div className="flex items-center gap-1">
               <button 
@@ -115,6 +124,8 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname }) =>
                 ) : (
                   messages.map((msg) => {
                     const isMe = msg.senderId === currentUser.uid;
+                    const isSpectatorMsg = msg.isSpectatorChat;
+                    
                     return (
                       <div 
                         key={msg.id} 
@@ -124,10 +135,11 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname }) =>
                           <div 
                             className={`px-3 py-2 rounded-lg text-sm break-words shadow-sm ${
                               isMe 
-                                ? 'bg-[#217346] text-white rounded-tr-none' 
-                                : 'bg-white border border-[#d1d1d1] text-gray-800 rounded-tl-none'
+                                ? (isSpectatorMsg ? 'bg-gray-500 text-white rounded-tr-none' : 'bg-[#217346] text-white rounded-tr-none')
+                                : (isSpectatorMsg ? 'bg-gray-200 border border-gray-300 text-gray-600 rounded-tl-none' : 'bg-white border border-[#d1d1d1] text-gray-800 rounded-tl-none')
                             }`}
                           >
+                            {isSpectatorMsg && !isMe && <span className="text-[9px] font-bold block text-gray-500 mb-1">[관전자]</span>}
                             {msg.content}
                           </div>
                           <span className="text-[9px] text-gray-400 min-w-[30px] mb-1">
@@ -152,13 +164,13 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname }) =>
                   type="text"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="메시지를 입력하세요..."
-                  className="flex-1 px-3 py-2 text-sm border border-[#d1d1d1] rounded focus:outline-none focus:border-[#217346] focus:ring-1 focus:ring-[#217346]"
+                  placeholder={isSpectator ? "관전자들과 대화하세요..." : "메시지를 입력하세요..."}
+                  className={`flex-1 px-3 py-2 text-sm border border-[#d1d1d1] rounded focus:outline-none focus:ring-1 ${isSpectator ? 'focus:border-gray-500 focus:ring-gray-500' : 'focus:border-[#217346] focus:ring-[#217346]'}`}
                 />
                 <button 
                   type="submit"
                   disabled={!message.trim()}
-                  className="bg-[#217346] text-white p-2 rounded hover:bg-[#1e6b41] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className={`${isSpectator ? 'bg-gray-600 hover:bg-gray-700' : 'bg-[#217346] hover:bg-[#1e6b41]'} text-white p-2 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
                 >
                   <Send size={16} />
                 </button>
