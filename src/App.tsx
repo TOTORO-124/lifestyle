@@ -1397,6 +1397,10 @@ export default function App() {
                               <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
                               <td className="excel-cell text-xs">{p.nickname}</td>
                               <td className={`excel-cell text-xs font-bold text-center ${
+                                session.gameType === GameType.OMOK ? (
+                                  p.id === session.omokGame?.blackPlayerId ? 'text-black' : 
+                                  p.id === session.omokGame?.whitePlayerId ? 'text-gray-500' : 'text-[#999]'
+                                ) :
                                 p.role === 'MAFIA' || p.id === session.liarGame?.liarPlayerId ? 'text-red-600' : 
                                 p.role === 'DOCTOR' ? 'text-green-600' :
                                 p.role === 'POLICE' ? 'text-blue-600' : 'text-[#217346]'
@@ -1405,6 +1409,9 @@ export default function App() {
                                   p.role === 'MAFIA' ? '마피아' :
                                   p.role === 'DOCTOR' ? '의사' :
                                   p.role === 'POLICE' ? '경찰' : '시민'
+                                ) : session.gameType === GameType.OMOK ? (
+                                  p.id === session.omokGame?.blackPlayerId ? '흑돌' :
+                                  p.id === session.omokGame?.whitePlayerId ? '백돌' : '관전'
                                 ) : (
                                   p.id === session.liarGame?.liarPlayerId ? '라이어' :
                                   p.id === session.liarGame?.spyPlayerId ? '스파이' : '시민'
