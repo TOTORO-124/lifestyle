@@ -144,9 +144,9 @@ export default function App() {
   const handleStartGame = async () => {
     if (!session) return;
     if (session.gameType === GameType.LIAR) {
-      await sessionService.startLiarGame(session.id, session.players, session.settings);
+      await sessionService.startLiarGame(session.id, session.players, session.settings, session.turnOrder);
     } else {
-      await sessionService.startMafiaGame(session.id, session.players, session.settings);
+      await sessionService.startMafiaGame(session.id, session.players, session.settings, session.turnOrder);
     }
   };
 
@@ -161,6 +161,22 @@ export default function App() {
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const getSortedPlayers = () => {
+    if (!session) return [];
+    const players = Object.values(session.players) as Player[];
+    if (!session.turnOrder) return players;
+    
+    return [...players].sort((a, b) => {
+      const idxA = session.turnOrder!.indexOf(a.id);
+      const idxB = session.turnOrder!.indexOf(b.id);
+      // If a player is not in turnOrder (newly joined), put them at the end
+      if (idxA === -1 && idxB === -1) return 0;
+      if (idxA === -1) return 1;
+      if (idxB === -1) return -1;
+      return idxA - idxB;
+    });
   };
 
   if (!isConfigured) {
@@ -378,7 +394,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(Object.values(session.players) as Player[]).map((player, idx) => (
+                      {getSortedPlayers().map((player, idx) => (
                         <tr key={player.id} className="hover:bg-[#f1f8f5]">
                           <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
                           <td className={`excel-cell ${player.id === currentUser?.uid ? 'bg-[#e8f0fe] font-bold' : ''}`}>
@@ -527,6 +543,13 @@ export default function App() {
                           </div>
                         </div>
                       )}
+                      <button 
+                        onClick={() => sessionService.shuffleTurnOrder(session.id, session.players)}
+                        className="office-btn w-full py-2 flex items-center justify-center gap-2"
+                      >
+                        <RefreshCw size={14} />
+                        <span>참가자 순서 섞기</span>
+                      </button>
                       <button onClick={handleStartGame} className="office-btn-primary w-full py-2">
                         세션_실행
                       </button>
@@ -1132,8 +1155,19 @@ export default function App() {
                             <tr key={p.id}>
                               <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
                               <td className="excel-cell text-xs">{p.nickname}</td>
-                              <td className="excel-cell text-xs font-bold text-[#217346] text-center">
-                                {p.role === 'MAFIA' ? '마피아' : (p.id === session.liarGame?.liarPlayerId ? '라이어' : '시민')}
+                              <td className={`excel-cell text-xs font-bold text-center ${
+                                p.role === 'MAFIA' || p.id === session.liarGame?.liarPlayerId ? 'text-red-600' : 
+                                p.role === 'DOCTOR' ? 'text-green-600' :
+                                p.role === 'POLICE' ? 'text-blue-600' : 'text-[#217346]'
+                              }`}>
+                                {session.gameType === GameType.MAFIA ? (
+                                  p.role === 'MAFIA' ? '마피아' :
+                                  p.role === 'DOCTOR' ? '의사' :
+                                  p.role === 'POLICE' ? '경찰' : '시민'
+                                ) : (
+                                  p.id === session.liarGame?.liarPlayerId ? '라이어' :
+                                  p.id === session.liarGame?.spyPlayerId ? '스파이' : '시민'
+                                )}
                               </td>
                             </tr>
                           ))}

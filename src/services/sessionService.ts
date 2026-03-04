@@ -100,7 +100,7 @@ export const sessionService = {
     await update(ref(db, `sessions/${sessionId}/players/${playerId}`), { isReady });
   },
 
-  async startLiarGame(sessionId: string, players: Record<string, Player>, settings: any) {
+  async startLiarGame(sessionId: string, players: Record<string, Player>, settings: any, currentTurnOrder?: string[]) {
     const playerIds = Object.keys(players);
     const liarIdx = Math.floor(Math.random() * playerIds.length);
     const liarPlayerId = playerIds[liarIdx];
@@ -132,8 +132,13 @@ export const sessionService = {
       liarGame.spyPlayerId = spyPlayerId;
     }
 
-    // Generate random turn order
-    const turnOrder = [...playerIds].sort(() => Math.random() - 0.5);
+    // Use existing turn order if valid, otherwise shuffle
+    let turnOrder: string[];
+    if (currentTurnOrder && currentTurnOrder.length === playerIds.length && currentTurnOrder.every(id => playerIds.includes(id))) {
+      turnOrder = [...currentTurnOrder];
+    } else {
+      turnOrder = [...playerIds].sort(() => Math.random() - 0.5);
+    }
 
     const updates: any = {
       status: SessionStatus.REVEAL,
@@ -156,7 +161,7 @@ export const sessionService = {
     await update(ref(db, `sessions/${sessionId}/players/${playerId}`), { hasConfirmedRole: true });
   },
 
-  async startMafiaGame(sessionId: string, players: Record<string, Player>, settings: any) {
+  async startMafiaGame(sessionId: string, players: Record<string, Player>, settings: any, currentTurnOrder?: string[]) {
     const playerIds = Object.keys(players);
     const count = playerIds.length;
     
@@ -168,34 +173,41 @@ export const sessionService = {
       throw new Error('설정된 역할 수가 전체 플레이어 수보다 많습니다.');
     }
     
-    // Shuffle player IDs
-    const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
+    // Determine Turn Order
+    let finalTurnOrder: string[];
+    if (currentTurnOrder && currentTurnOrder.length === playerIds.length && currentTurnOrder.every(id => playerIds.includes(id))) {
+      finalTurnOrder = [...currentTurnOrder];
+    } else {
+      finalTurnOrder = [...playerIds].sort(() => Math.random() - 0.5);
+    }
     
+    // Assign Roles Randomly (independent of turn order)
+    const roleAssignmentOrder = [...playerIds].sort(() => Math.random() - 0.5);
     const roles: Record<string, string> = {};
     
     let currentIndex = 0;
 
     // Assign Mafia
     for (let i = 0; i < mafiaCount; i++) {
-      roles[shuffled[currentIndex]] = 'MAFIA';
+      roles[roleAssignmentOrder[currentIndex]] = 'MAFIA';
       currentIndex++;
     }
 
     // Assign Doctor
     for (let i = 0; i < doctorCount; i++) {
-      roles[shuffled[currentIndex]] = 'DOCTOR';
+      roles[roleAssignmentOrder[currentIndex]] = 'DOCTOR';
       currentIndex++;
     }
 
     // Assign Police
     for (let i = 0; i < policeCount; i++) {
-      roles[shuffled[currentIndex]] = 'POLICE';
+      roles[roleAssignmentOrder[currentIndex]] = 'POLICE';
       currentIndex++;
     }
 
     // Assign Citizens to the rest
     while (currentIndex < count) {
-      roles[shuffled[currentIndex]] = 'CITIZEN';
+      roles[roleAssignmentOrder[currentIndex]] = 'CITIZEN';
       currentIndex++;
     }
 
@@ -215,7 +227,7 @@ export const sessionService = {
 
     updates['status'] = SessionStatus.REVEAL;
     updates['mafiaGame'] = mafiaGame;
-    updates['turnOrder'] = shuffled;
+    updates['turnOrder'] = finalTurnOrder;
 
     await update(ref(db, `sessions/${sessionId}`), updates);
   },
