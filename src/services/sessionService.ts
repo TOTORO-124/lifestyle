@@ -1,4 +1,4 @@
-import { ref, set, push, onValue, update, get, remove } from 'firebase/database';
+import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
 import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase } from '../types';
@@ -11,6 +11,21 @@ export const sessionService = {
       await signInAnonymously(auth);
     }
     return auth.currentUser;
+  },
+
+  async updatePresence(sessionId: string, playerId: string, isConnected: boolean) {
+    if (!db) return;
+    const playerRef = ref(db, `sessions/${sessionId}/players/${playerId}`);
+    
+    if (isConnected) {
+      // Set to true and setup onDisconnect
+      await update(playerRef, { isConnected: true });
+      onDisconnect(ref(db, `sessions/${sessionId}/players/${playerId}/isConnected`)).set(false);
+    } else {
+      // Explicitly set to false (e.g. on logout)
+      await update(playerRef, { isConnected: false });
+      onDisconnect(ref(db, `sessions/${sessionId}/players/${playerId}/isConnected`)).cancel();
+    }
   },
 
   async createSession(nickname: string, gameType: GameType): Promise<string> {

@@ -48,8 +48,11 @@ export default function App() {
     // Voting -> Vote Result
     if (session.status === SessionStatus.VOTING) {
       const alivePlayers = players.filter(p => p.isAlive);
-      const allVoted = alivePlayers.every(p => p.voteTarget);
-      if (allVoted && alivePlayers.length > 0) {
+      // Only require votes from connected players
+      const activePlayers = alivePlayers.filter(p => p.isConnected !== false);
+      const allVoted = activePlayers.every(p => p.voteTarget);
+      
+      if (allVoted && activePlayers.length > 0) {
         if (session.gameType === GameType.LIAR && session.liarGame) {
           sessionService.processLiarVote(session.id, session.players, session.liarGame);
         } else if (session.gameType === GameType.MAFIA) {
@@ -58,6 +61,16 @@ export default function App() {
       }
     }
   }, [session, currentUser]);
+
+  useEffect(() => {
+    if (session?.id && currentUser && session.players?.[currentUser.uid]) {
+      sessionService.updatePresence(session.id, currentUser.uid, true);
+      
+      return () => {
+        sessionService.updatePresence(session.id, currentUser.uid, false);
+      };
+    }
+  }, [session?.id, currentUser?.uid]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -828,7 +841,7 @@ export default function App() {
                     ))}
                   </div>
 
-                  <div className="pt-4 border-t border-[#d1d1d1] flex justify-center">
+                  <div className="pt-4 border-t border-[#d1d1d1] flex flex-col items-center gap-4">
                     {me?.voteTarget ? (
                       <div className="text-center">
                         <div className="animate-pulse text-sm font-bold text-gray-500">투표 완료! 다른 플레이어 대기 중...</div>
@@ -848,6 +861,23 @@ export default function App() {
                         className="office-btn-primary px-8 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         투표_제출
+                      </button>
+                    )}
+
+                    {isHost && (
+                      <button 
+                        onClick={() => {
+                          if (confirm('투표를 강제로 종료하시겠습니까? 투표하지 않은 플레이어는 기권 처리됩니다.')) {
+                            if (session.gameType === GameType.LIAR && session.liarGame) {
+                              sessionService.processLiarVote(session.id, session.players, session.liarGame);
+                            } else if (session.gameType === GameType.MAFIA) {
+                              sessionService.processMafiaVote(session.id, session.players);
+                            }
+                          }
+                        }}
+                        className="text-xs text-red-500 underline hover:text-red-700"
+                      >
+                        강제 투표 종료 (미투표자 무시)
                       </button>
                     )}
                   </div>
