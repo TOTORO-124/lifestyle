@@ -19,7 +19,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const roomParam = params.get('room');
     if (roomParam) {
-      setJoinCode(roomParam.toUpperCase());
+      setJoinCode(roomParam);
     }
   }, []);
 
@@ -41,14 +41,15 @@ export default function App() {
   }, [sessionId]);
 
   const handleCreateSession = async (gameType: GameType) => {
-    if (!nickname.trim()) {
+    const trimmedNickname = nickname.trim();
+    if (!trimmedNickname) {
       setError('닉네임을 입력해주세요.');
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const id = await sessionService.createSession(nickname, gameType);
+      const id = await sessionService.createSession(trimmedNickname, gameType);
       setSessionId(id);
     } catch (err: any) {
       setError(err.message);
@@ -58,19 +59,22 @@ export default function App() {
   };
 
   const handleJoinSession = async () => {
-    if (!nickname.trim()) {
+    const trimmedNickname = nickname.trim();
+    const trimmedJoinCode = joinCode.trim();
+
+    if (!trimmedNickname) {
       setError('닉네임을 입력해주세요.');
       return;
     }
-    if (!joinCode.trim()) {
+    if (!trimmedJoinCode) {
       setError('세션 코드를 입력해주세요.');
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      await sessionService.joinSession(joinCode, nickname);
-      setSessionId(joinCode);
+      await sessionService.joinSession(trimmedJoinCode, trimmedNickname);
+      setSessionId(trimmedJoinCode);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -169,15 +173,29 @@ export default function App() {
                     placeholder="닉네임을 입력하세요..."
                     value={nickname}
                     onChange={(e) => setNickname(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        if (joinCode) handleJoinSession();
+                        else handleCreateSession(GameType.LIAR);
+                      }
+                    }}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => handleCreateSession(GameType.LIAR)} className="office-btn-primary py-2">
-                    새_세션 (라이어)
+                  <button 
+                    onClick={() => handleCreateSession(GameType.LIAR)} 
+                    className="office-btn-primary py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={loading}
+                  >
+                    {loading ? '생성 중...' : '새_세션 (라이어)'}
                   </button>
-                  <button onClick={() => handleCreateSession(GameType.MAFIA)} className="office-btn py-2">
-                    새_세션 (마피아)
+                  <button 
+                    onClick={() => handleCreateSession(GameType.MAFIA)} 
+                    className="office-btn py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={loading}
+                  >
+                    {loading ? '생성 중...' : '새_세션 (마피아)'}
                   </button>
                 </div>
 
@@ -185,13 +203,18 @@ export default function App() {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      className="office-input flex-1 uppercase"
+                      className="office-input flex-1"
                       placeholder="세션_코드"
                       value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                      onChange={(e) => setJoinCode(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleJoinSession()}
                     />
-                    <button onClick={handleJoinSession} className="office-btn px-6">
-                      참여
+                    <button 
+                      onClick={handleJoinSession} 
+                      className="office-btn px-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={loading}
+                    >
+                      {loading ? '참여 중...' : '참여'}
                     </button>
                   </div>
                 </div>
