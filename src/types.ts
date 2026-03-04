@@ -78,6 +78,16 @@ export interface Session {
     liarMode?: LiarMode;
     liarCategory?: string;
   };
+  messages?: Record<string, ChatMessage>;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  timestamp: number;
+  isSystem?: boolean;
 }
 
 export interface Topic {

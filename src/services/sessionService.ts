@@ -236,5 +236,18 @@ export const sessionService = {
       updates[`players/${pid}/voteTarget`] = null;
     });
     await update(ref(db, `sessions/${sessionId}`), updates);
+  },
+
+  async sendMessage(sessionId: string, senderId: string, senderName: string, content: string) {
+    if (!db) return;
+    const messagesRef = ref(db, `sessions/${sessionId}/messages`);
+    const newMessageRef = push(messagesRef);
+    await set(newMessageRef, {
+      id: newMessageRef.key,
+      senderId,
+      senderName,
+      content,
+      timestamp: Date.now(),
+    });
   }
 };

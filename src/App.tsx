@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Session, Player, SessionStatus, GameType, LiarMode } from './types';
 import { sessionService } from './services/sessionService';
 import { isConfigured } from './firebase';
+import { Chat } from './components/Chat';
 import { LIAR_TOPICS } from './data/topics';
 import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download } from 'lucide-react';
 
@@ -816,6 +817,13 @@ export default function App() {
           <span>준비됨</span>
         </div>
       </footer>
+
+      {/* Chat Component */}
+      <Chat 
+        session={session} 
+        currentUser={currentUser} 
+        nickname={session.players[currentUser?.uid]?.nickname || nickname} 
+      />
     </div>
   );
 }
