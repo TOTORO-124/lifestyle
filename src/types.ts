@@ -2,6 +2,8 @@ export enum GameType {
   LIAR = 'LIAR',
   MAFIA = 'MAFIA',
   OMOK = 'OMOK',
+  BINGO = 'BINGO',
+  DRAW = 'DRAW',
 }
 
 export enum SessionStatus {
@@ -12,6 +14,7 @@ export enum SessionStatus {
   VOTE_RESULT = 'VOTE_RESULT',
   NIGHT = 'NIGHT',
   SUMMARY = 'SUMMARY',
+  PREPARING = 'PREPARING', // Added for Bingo setup
 }
 
 export enum LiarMode {
@@ -43,6 +46,7 @@ export interface Player {
   voteTarget?: string;
   hasConfirmedRole?: boolean;
   lastActive?: number;
+  score?: number;
 }
 
 export interface LiarGameState {
@@ -82,6 +86,34 @@ export interface OmokGameState {
   isDraw?: boolean;
 }
 
+export interface BingoGameState {
+  boards: Record<string, string[][]>; // playerId -> 5x5 board
+  markedWords: string[];
+  currentPlayerId: string;
+  winner?: string;
+  targetLines: number;
+  category: string;
+}
+
+export interface DrawGameState {
+  presenterId: string;
+  word: string;
+  category: string;
+  canvasData?: string; // Base64 or path data
+  round: number;
+  maxRounds: number;
+  timer: number;
+  lastGuesserId?: string;
+  scores: Record<string, number>;
+}
+
+export interface GameLog {
+  id: string;
+  type: 'info' | 'success' | 'warning';
+  content: string;
+  timestamp: number;
+}
+
 export interface Session {
   id: string;
   gameType: GameType;
@@ -93,6 +125,8 @@ export interface Session {
   liarGame?: LiarGameState;
   mafiaGame?: MafiaGameState;
   omokGame?: OmokGameState;
+  bingoGame?: BingoGameState;
+  drawGame?: DrawGameState;
   settings: {
     maxPlayers: number;
     liarMode?: LiarMode;
@@ -100,9 +134,15 @@ export interface Session {
     mafiaCount?: number;
     doctorCount?: number;
     policeCount?: number;
+    bingoLines?: number;
+    bingoCategory?: string;
+    drawRounds?: number;
+    drawTime?: number;
   };
   turnOrder?: string[];
   messages?: Record<string, ChatMessage>;
+  logs?: Record<string, GameLog>;
+  stats?: Record<string, { wins: number; totalScore: number }>;
 }
 
 export interface ChatMessage {

@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Session, Player, SessionStatus, GameType, LiarMode, MafiaRole, MafiaPhase } from './types';
+import { Session, Player, SessionStatus, GameType, LiarMode, MafiaRole, MafiaPhase, GameLog } from './types';
 import { sessionService } from './services/sessionService';
 import { isConfigured } from './firebase';
 import { Chat } from './components/Chat';
 import { LIAR_TOPICS } from './data/topics';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown } from 'lucide-react';
+import { BINGO_TOPICS } from './data/bingoTopics';
+import { DRAW_TOPICS } from './data/drawTopics';
+import { Canvas } from './components/Canvas';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy } from 'lucide-react';
 
 export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [activeSheet, setActiveSheet] = useState<'GAME' | 'ROLES' | 'LOGS' | 'STATS' | 'HELP'>('GAME');
   const [nickname, setNickname] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [menuMode, setMenuMode] = useState<'create' | 'join'>('create');
@@ -20,11 +24,32 @@ export default function App() {
   const [selectedNightTarget, setSelectedNightTarget] = useState<string | null>(null);
   const [omokBlackId, setOmokBlackId] = useState<string>('');
   const [omokWhiteId, setOmokWhiteId] = useState<string>('');
+  const [bingoBoard, setBingoBoard] = useState<string[][]>(Array(5).fill(null).map(() => Array(5).fill('')));
+  const [bingoSubmitted, setBingoSubmitted] = useState(false);
+  const [drawGuess, setDrawGuess] = useState('');
+  const [showBingoWords, setShowBingoWords] = useState(false);
+
+  const isHost = session?.hostId === currentUser?.uid;
+  const me = session?.players?.[currentUser?.uid];
 
   useEffect(() => {
     setSelectedVoteTarget(null);
     setSelectedNightTarget(null);
   }, [session?.status]);
+
+  useEffect(() => {
+    let interval: any;
+    if (session?.status === SessionStatus.PLAYING && session.gameType === GameType.DRAW && isHost) {
+      interval = setInterval(() => {
+        if (session.drawGame && session.drawGame.timer > 0) {
+          sessionService.updateDrawTimer(session.id, session.drawGame.timer - 1);
+        } else if (session.drawGame && session.drawGame.timer === 0) {
+          sessionService.nextDrawTurn(session.id, session);
+        }
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [session?.status, session?.gameType, session?.drawGame?.timer, isHost]);
 
   // Synchronized Transitions
   useEffect(() => {
@@ -168,6 +193,10 @@ export default function App() {
         return;
       }
       await sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId);
+    } else if (session.gameType === GameType.BINGO) {
+      await sessionService.startBingoSetup(session.id, session.settings);
+    } else if (session.gameType === GameType.DRAW) {
+      await sessionService.startDrawGame(session.id, session.players, session.settings, session.turnOrder || Object.keys(session.players));
     }
   };
 
@@ -321,11 +350,27 @@ export default function App() {
                       </button>
                       <button 
                         onClick={() => handleCreateSession(GameType.OMOK)} 
-                        className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 col-span-2"
+                        className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
                         disabled={loading}
                       >
                         <span className="font-bold">오목 (1:1)</span>
                         <span className="text-[9px] font-normal opacity-80">전략 보드 게임</span>
+                      </button>
+                      <button 
+                        onClick={() => handleCreateSession(GameType.BINGO)} 
+                        className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                        disabled={loading}
+                      >
+                        <span className="font-bold">빙고 (다수)</span>
+                        <span className="text-[9px] font-normal opacity-80">데이터 매칭 감사</span>
+                      </button>
+                      <button 
+                        onClick={() => handleCreateSession(GameType.DRAW)} 
+                        className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                        disabled={loading}
+                      >
+                        <span className="font-bold">캐치마인드</span>
+                        <span className="text-[9px] font-normal opacity-80">비주얼 브리핑</span>
                       </button>
                     </div>
                   </div>
@@ -371,9 +416,6 @@ export default function App() {
 
   if (!session) return <div className="flex items-center justify-center h-screen spreadsheet-bg font-mono text-[10px] text-[#666]">#리소스_로드_중...</div>;
 
-  const isHost = session.hostId === currentUser?.uid;
-  const me = session.players[currentUser?.uid];
-
   return (
     <div className="min-h-screen spreadsheet-bg flex flex-col font-sans">
       {/* Header */}
@@ -383,7 +425,10 @@ export default function App() {
             <Grid className="text-[#217346]" size={16} />
           </div>
           <h1 className="text-sm font-bold tracking-tight truncate max-w-[200px] sm:max-w-none">
-            {session.gameType === GameType.LIAR ? '감사_라이어_게임.xlsx' : session.gameType === GameType.MAFIA ? '감사_마피아_게임.xlsx' : '감사_오목_대전.xlsx'}
+            {session.gameType === GameType.LIAR ? '감사_라이어_게임.xlsx' : 
+             session.gameType === GameType.MAFIA ? '감사_마피아_게임.xlsx' : 
+             session.gameType === GameType.OMOK ? '감사_오목_대전.xlsx' :
+             session.gameType === GameType.BINGO ? '데이터_매칭_감사.xlsx' : '비주얼_브리핑_보고.xlsx'}
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -414,9 +459,34 @@ export default function App() {
         </div>
       </div>
 
+      {/* Quick Reaction Bar */}
+      {activeSheet === 'GAME' && session.status !== SessionStatus.LOBBY && (
+        <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-1.5 flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <span className="text-[9px] font-bold text-[#999] uppercase whitespace-nowrap mr-2">신속_결재:</span>
+          {[
+            { label: '승인', color: 'bg-green-100 text-green-700 border-green-200' },
+            { label: '반려', color: 'bg-red-100 text-red-700 border-red-200' },
+            { label: '검토중', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+            { label: '수고하셨습니다', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+            { label: '퇴근각', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+            { label: '??', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+          ].map((reaction) => (
+            <button
+              key={reaction.label}
+              onClick={() => sessionService.sendMessage(session.id, currentUser.uid, nickname, `[결재] ${reaction.label}`)}
+              className={`px-2 py-0.5 rounded border text-[10px] font-bold whitespace-nowrap transition-transform active:scale-95 ${reaction.color}`}
+            >
+              {reaction.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <main className="flex-1 overflow-auto p-4 sm:p-6">
         <div className="max-w-5xl mx-auto space-y-6">
-          {session.status === SessionStatus.LOBBY && (
+          {activeSheet === 'GAME' ? (
+            <>
+              {session.status === SessionStatus.LOBBY && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 excel-grid rounded overflow-hidden shadow-sm">
                 <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
@@ -641,6 +711,73 @@ export default function App() {
                         </div>
                       )}
 
+                      {session.gameType === GameType.BINGO && (
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-[#999]">빙고 줄 수</label>
+                            <input 
+                              type="number" 
+                              min="1" 
+                              max="12"
+                              className="office-input text-xs text-center"
+                              value={session.settings.bingoLines || 3}
+                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, bingoLines: parseInt(e.target.value) || 3 })}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-[#999]">카테고리</label>
+                            <select 
+                              className="office-input text-xs"
+                              value={session.settings.bingoCategory || '랜덤'}
+                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, bingoCategory: e.target.value })}
+                            >
+                              <option value="랜덤">랜덤</option>
+                              {BINGO_TOPICS.map(t => <option key={t.category} value={t.category}>{t.category}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {session.gameType === GameType.DRAW && (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-[#999]">라운드 수</label>
+                              <input 
+                                type="number" 
+                                min="1" 
+                                max="10"
+                                className="office-input text-xs text-center"
+                                value={session.settings.drawRounds || 3}
+                                onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, drawRounds: parseInt(e.target.value) || 3 })}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-[#999]">제한 시간(초)</label>
+                              <input 
+                                type="number" 
+                                min="30" 
+                                max="180"
+                                className="office-input text-xs text-center"
+                                value={session.settings.drawTime || 60}
+                                onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, drawTime: parseInt(e.target.value) || 60 })}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-[#999]">카테고리</label>
+                            <select 
+                              className="office-input text-xs"
+                              value={session.settings.drawCategory || '랜덤'}
+                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, drawCategory: e.target.value })}
+                            >
+                              <option value="랜덤">랜덤</option>
+                              {DRAW_TOPICS.map(t => <option key={t.category} value={t.category}>{t.category}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
                       <button 
                         onClick={() => sessionService.shuffleTurnOrder(session.id, session.players)}
                         className="office-btn w-full py-2 flex items-center justify-center gap-2"
@@ -737,6 +874,139 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {session.status === SessionStatus.PREPARING && session.gameType === GameType.BINGO && (
+            <div className="max-w-2xl mx-auto space-y-6">
+              <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
+                <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-[#666]">빙고_시트_작성</span>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => {
+                        const category = session.bingoGame?.category || '랜덤';
+                        let words: string[] = [];
+                        if (category === '랜덤') {
+                          words = BINGO_TOPICS.flatMap(t => t.words);
+                        } else {
+                          words = BINGO_TOPICS.find(t => t.category === category)?.words || [];
+                        }
+                        const shuffled = [...words].sort(() => 0.5 - Math.random());
+                        const newBoard = Array(5).fill(null).map((_, r) => 
+                          Array(5).fill(null).map((_, c) => shuffled[r * 5 + c] || '')
+                        );
+                        setBingoBoard(newBoard);
+                      }}
+                      className="text-[10px] text-[#217346] hover:underline flex items-center gap-1"
+                    >
+                      <RefreshCw size={10} /> 자동 채우기
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="p-6 flex flex-col md:flex-row gap-6">
+                  <div className="flex-1">
+                    <div className="grid grid-cols-5 gap-1 bg-[#d1d1d1] p-1 border border-[#d1d1d1]">
+                      {bingoBoard.map((row, r) => (
+                        row.map((cell, c) => (
+                          <input
+                            key={`${r}-${c}`}
+                            type="text"
+                            value={cell}
+                            onChange={(e) => {
+                              const newBoard = [...bingoBoard.map(row => [...row])];
+                              newBoard[r][c] = e.target.value;
+                              setBingoBoard(newBoard);
+                            }}
+                            disabled={bingoSubmitted}
+                            className="w-full aspect-square text-center text-xs p-1 focus:outline-none focus:bg-[#e8f0fe] border border-transparent focus:border-[#217346]"
+                            placeholder="..."
+                          />
+                        ))
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="w-full md:w-64 space-y-4">
+                    <div className="bg-[#f8f9fa] border border-[#d1d1d1] rounded p-3">
+                      <div className="flex justify-between items-center mb-2">
+                        <h4 className="text-[9px] font-bold text-[#999] uppercase">추천 단어 리스트</h4>
+                        <button 
+                          onClick={() => setShowBingoWords(!showBingoWords)}
+                          className="text-[9px] text-[#217346] hover:underline"
+                        >
+                          {showBingoWords ? '숨기기' : '보기'}
+                        </button>
+                      </div>
+                      
+                      {showBingoWords && (
+                        <div className="max-h-64 overflow-y-auto grid grid-cols-2 gap-1">
+                          {(session.bingoGame?.category === '랜덤' 
+                            ? BINGO_TOPICS.flatMap(t => t.words) 
+                            : BINGO_TOPICS.find(t => t.category === session.bingoGame?.category)?.words || []
+                          ).map(word => (
+                            <button
+                              key={word}
+                              onClick={() => {
+                                if (bingoSubmitted) return;
+                                // Find first empty cell
+                                const newBoard = [...bingoBoard.map(row => [...row])];
+                                let found = false;
+                                for (let r = 0; r < 5; r++) {
+                                  for (let c = 0; c < 5; c++) {
+                                    if (!newBoard[r][c]) {
+                                      newBoard[r][c] = word;
+                                      found = true;
+                                      break;
+                                    }
+                                  }
+                                  if (found) break;
+                                }
+                                if (found) setBingoBoard(newBoard);
+                              }}
+                              className="text-[10px] p-1 bg-white border border-[#d1d1d1] hover:bg-[#e8f0fe] truncate text-left"
+                            >
+                              {word}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                  
+                  <div className="mt-6 flex flex-col items-center gap-4">
+                    {bingoSubmitted ? (
+                      <div className="text-center">
+                        <div className="animate-pulse text-sm font-bold text-[#217346]">시트 제출 완료! 다른 플레이어 대기 중...</div>
+                        <div className="text-[10px] text-gray-400 mt-1">
+                          {Object.keys(session.bingoGame?.boards || {}).length} / {Object.keys(session.players).length} 명 완료
+                        </div>
+                        {isHost && (
+                          <button 
+                            onClick={() => sessionService.startBingoGame(session.id, session.players, session.turnOrder || Object.keys(session.players))}
+                            className="mt-4 text-xs text-red-500 underline hover:text-red-700"
+                          >
+                            강제 시작 (미제출자 무시)
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => {
+                          const isComplete = bingoBoard.every(row => row.every(cell => cell.trim() !== ''));
+                          if (!isComplete && !confirm('빈 칸이 있습니다. 그대로 제출하시겠습니까?')) return;
+                          sessionService.submitBingoBoard(session.id, currentUser.uid, bingoBoard);
+                          setBingoSubmitted(true);
+                        }}
+                        className="office-btn-primary px-12 py-2"
+                      >
+                        시트_제출
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
           {session.status === SessionStatus.PLAYING && (
             session.gameType === GameType.OMOK ? (
@@ -836,6 +1106,281 @@ export default function App() {
                     ))}
                     {(Object.values(session.players) as Player[]).filter(p => p.id !== session.omokGame?.blackPlayerId && p.id !== session.omokGame?.whitePlayerId).length === 0 && (
                       <span className="text-xs text-gray-400">관전자가 없습니다.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : session.gameType === GameType.BINGO ? (
+              <div className="max-w-2xl mx-auto space-y-6">
+                <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
+                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-[#666]">빙고_감사_진행</span>
+                    <div className="flex items-center gap-3">
+                      <div className="text-[10px] text-[#666]">목표: <span className="font-bold text-[#217346]">{session.bingoGame?.targetLines}줄</span></div>
+                      <div className="h-3 w-px bg-[#d1d1d1]" />
+                      <div className="text-[10px] text-[#666]">현재: <span className="font-bold text-[#217346]">{session.bingoGame?.boards[currentUser.uid] ? sessionService.countBingoLines(session.bingoGame.boards[currentUser.uid], session.bingoGame.markedWords) : 0}줄</span></div>
+                    </div>
+                  </div>
+
+                  <div className="p-6 flex flex-col md:flex-row gap-8">
+                    {/* My Board */}
+                    <div className="flex-1 space-y-3">
+                      <h3 className="text-[10px] font-bold text-[#666] uppercase">나의 감사 시트</h3>
+                      <div className="relative">
+                        <div className="grid grid-cols-5 gap-1 bg-[#d1d1d1] p-1 border border-[#d1d1d1]">
+                          {session.bingoGame?.boards[currentUser.uid]?.map((row, r) => (
+                            row.map((word, c) => {
+                              const isMarked = session.bingoGame?.markedWords.includes(word);
+                              const isMyTurn = session.bingoGame?.currentPlayerId === currentUser.uid;
+                              return (
+                                <button
+                                  key={`${r}-${c}`}
+                                  disabled={!isMyTurn || isMarked}
+                                  onClick={() => sessionService.pickBingoWord(session.id, currentUser.uid, word, session)}
+                                  className={`aspect-square flex items-center justify-center text-[10px] p-1 transition-all break-all text-center leading-tight ${
+                                    isMarked 
+                                      ? 'bg-[#217346] text-white font-bold' 
+                                      : isMyTurn 
+                                        ? 'bg-white hover:bg-[#e8f0fe] cursor-pointer' 
+                                        : 'bg-white opacity-80'
+                                  }`}
+                                >
+                                  {word}
+                                </button>
+                              );
+                            })
+                          ))}
+                        </div>
+                        
+                        {/* Strike-through lines overlay */}
+                        <svg className="absolute inset-0 pointer-events-none w-full h-full z-20">
+                          {(() => {
+                            const board = session.bingoGame?.boards[currentUser.uid];
+                            const marked = session.bingoGame?.markedWords || [];
+                            if (!board) return null;
+                            const lines: React.ReactNode[] = [];
+                            
+                            // Rows
+                            for (let r = 0; r < 5; r++) {
+                              if (board[r].every(w => marked.includes(w))) {
+                                lines.push(<line key={`r-${r}`} x1="5%" y1={`${r * 20 + 10}%`} x2="95%" y2={`${r * 20 + 10}%`} stroke="red" strokeWidth="2" strokeOpacity="0.6" />);
+                              }
+                            }
+                            // Cols
+                            for (let c = 0; c < 5; c++) {
+                              let colMarked = true;
+                              for (let r = 0; r < 5; r++) if (!marked.includes(board[r][c])) colMarked = false;
+                              if (colMarked) {
+                                lines.push(<line key={`c-${c}`} x1={`${c * 20 + 10}%`} y1="5%" x2={`${c * 20 + 10}%`} y2="95%" stroke="red" strokeWidth="2" strokeOpacity="0.6" />);
+                              }
+                            }
+                            // Diagonals
+                            let d1 = true, d2 = true;
+                            for (let i = 0; i < 5; i++) {
+                              if (!marked.includes(board[i][i])) d1 = false;
+                              if (!marked.includes(board[i][4 - i])) d2 = false;
+                            }
+                            if (d1) lines.push(<line key="d1" x1="5%" y1="5%" x2="95%" y2="95%" stroke="red" strokeWidth="2" strokeOpacity="0.6" />);
+                            if (d2) lines.push(<line key="d2" x1="95%" y1="5%" x2="5%" y2="95%" stroke="red" strokeWidth="2" strokeOpacity="0.6" />);
+                            
+                            return lines;
+                          })()}
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Game Info */}
+                    <div className="w-full md:w-56 space-y-6">
+                      <div className="bg-[#f8f9fa] border border-[#d1d1d1] p-4 rounded">
+                        <h4 className="text-[9px] font-bold text-[#999] uppercase mb-3 flex items-center gap-2">
+                          <Users size={10} /> 플레이어 현황
+                        </h4>
+                        <div className="space-y-3">
+                          {(Object.values(session.players) as Player[]).map(p => {
+                            const lines = session.bingoGame?.boards[p.id] ? sessionService.countBingoLines(session.bingoGame.boards[p.id], session.bingoGame.markedWords) : 0;
+                            return (
+                              <div key={p.id} className="flex flex-col gap-1">
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className={`truncate ${p.id === session.bingoGame?.currentPlayerId ? 'font-bold text-[#217346]' : ''}`}>
+                                    {p.nickname}
+                                  </span>
+                                  <span className="font-mono font-bold text-[#217346]">{lines}줄</span>
+                                </div>
+                                <div className="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-[#217346] transition-all duration-500" 
+                                    style={{ width: `${(lines / (session.bingoGame?.targetLines || 5)) * 100}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="bg-white border border-[#d1d1d1] p-3 rounded">
+                        <h4 className="text-[9px] font-bold text-[#999] uppercase mb-2">최근 선택된 단어</h4>
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                          {[...session.bingoGame!.markedWords].reverse().map((word, i) => (
+                            <div key={i} className="text-[10px] py-1 border-b border-[#f1f1f1] last:border-0 flex items-center gap-2">
+                              <span className="text-[#999] font-mono">{session.bingoGame!.markedWords.length - i}.</span>
+                              <span className="font-medium">{word}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#f8f9fa] border-t border-[#d1d1d1] px-4 py-3 text-center text-xs">
+                    {session.bingoGame?.currentPlayerId === currentUser.uid ? (
+                      <div className="flex items-center justify-center gap-2 text-[#217346] font-bold animate-pulse">
+                        <Edit3 size={12} />
+                        <span>당신의 차례입니다! 시트에서 단어를 선택하세요.</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 text-[#666]">
+                        <RefreshCw size={12} className="animate-spin" />
+                        <span>{session.players[session.bingoGame!.currentPlayerId]?.nickname}님이 단어를 고르는 중...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : session.gameType === GameType.DRAW ? (
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
+                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                      <span className="text-[10px] font-bold text-[#666]">비주얼_브리핑_진행</span>
+                      <div className="h-3 w-px bg-[#d1d1d1]" />
+                      <div className="text-[10px] text-[#666]">라운드: <span className="font-bold text-[#217346]">{session.drawGame?.round} / {session.drawGame?.maxRounds}</span></div>
+                      <div className="h-3 w-px bg-[#d1d1d1]" />
+                      <div className="text-[10px] font-bold text-[#217346] tracking-widest">
+                        힌트: {(() => {
+                          const word = session.drawGame?.word || '';
+                          const timer = session.drawGame?.timer || 0;
+                          const maxTime = session.settings.drawTime || 60;
+                          if (session.drawGame?.presenterId === currentUser.uid) return word;
+                          let hint = word.split('').map(() => '_').join(' ');
+                          if (timer < maxTime * 0.5 && word.length > 0) {
+                            hint = word[0] + hint.substring(1);
+                          }
+                          if (timer < maxTime * 0.25 && word.length > 1) {
+                            hint = hint.substring(0, 2) + word[1] + hint.substring(3);
+                          }
+                          return hint;
+                        })()}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-bold text-red-600">
+                      <Timer size={14} />
+                      <span>{session.drawGame?.timer}s</span>
+                    </div>
+                  </div>
+
+                  <div className="p-6 flex flex-col lg:flex-row gap-8">
+                    {/* Canvas Area */}
+                    <div className="flex-1 space-y-4">
+                      <div className="relative">
+                        <Canvas 
+                          isPresenter={session.drawGame?.presenterId === currentUser.uid}
+                          onDraw={(data) => sessionService.updateDrawCanvas(session.id, data)}
+                          initialData={session.drawGame?.canvasData}
+                        />
+                        {session.drawGame?.presenterId === currentUser.uid && (
+                          <div className="absolute top-2 left-2 flex flex-col gap-2">
+                            <div className="bg-[#217346] text-white px-3 py-1 rounded text-xs font-bold shadow-md flex items-center gap-2">
+                              <Palette size={12} />
+                              <span>제시어: {session.drawGame?.word}</span>
+                            </div>
+                            <button 
+                              onClick={() => sessionService.passDrawTurn(session.id, session)}
+                              className="bg-white hover:bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1"
+                            >
+                              <RefreshCw size={10} /> 패스하기
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {session.drawGame?.presenterId !== currentUser.uid && (
+                        <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            placeholder="정답을 입력하세요..."
+                            className="office-input flex-1"
+                            value={drawGuess}
+                            onChange={(e) => setDrawGuess(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && drawGuess.trim()) {
+                                sessionService.submitDrawGuess(session.id, currentUser.uid, drawGuess.trim(), session);
+                                setDrawGuess('');
+                              }
+                            }}
+                          />
+                          <button 
+                            onClick={() => {
+                              if (drawGuess.trim()) {
+                                sessionService.submitDrawGuess(session.id, currentUser.uid, drawGuess.trim(), session);
+                                setDrawGuess('');
+                              }
+                            }}
+                            className="office-btn-primary px-6"
+                          >
+                            제출
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Sidebar */}
+                    <div className="w-full lg:w-56 space-y-6">
+                      <div className="bg-[#f8f9fa] border border-[#d1d1d1] p-4 rounded">
+                        <h4 className="text-[9px] font-bold text-[#999] uppercase mb-3 flex items-center gap-2">
+                          <Trophy size={10} /> 실시간 스코어보드
+                        </h4>
+                        <div className="space-y-2">
+                          {Object.entries(session.drawGame?.scores || {}).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([pid, score]) => (
+                            <div key={pid} className="flex justify-between items-center text-xs">
+                              <div className="flex items-center gap-2 truncate">
+                                {pid === session.drawGame?.presenterId && <Palette size={10} className="text-[#217346]" />}
+                                <span className={pid === currentUser.uid ? 'font-bold text-[#217346]' : ''}>
+                                  {session.players[pid]?.nickname}
+                                </span>
+                              </div>
+                              <span className="font-mono font-bold">{score}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-white border border-[#d1d1d1] p-4 rounded">
+                        <h4 className="text-[9px] font-bold text-[#999] uppercase mb-2">발표자</h4>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-[#e8f0fe] rounded-full flex items-center justify-center text-[#217346]">
+                            <User size={16} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-bold truncate">{session.players[session.drawGame!.presenterId]?.nickname}</div>
+                            <div className="text-[9px] text-[#999]">브리핑 중...</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#f8f9fa] border-t border-[#d1d1d1] px-4 py-3 text-center text-xs">
+                    {session.drawGame?.presenterId === currentUser.uid ? (
+                      <div className="flex items-center justify-center gap-2 text-[#217346] font-bold animate-pulse">
+                        <Palette size={12} />
+                        <span>당신은 발표자입니다! 화이트보드에 제시어를 그려주세요.</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 text-[#666]">
+                        <Search size={12} className="animate-bounce" />
+                        <span>발표자의 그림을 보고 정답을 맞혀보세요!</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -963,7 +1508,7 @@ export default function App() {
                 </table>
               </div>
             </div>
-          ))}
+          )}
 
           {session.status === SessionStatus.VOTING && (
             <div className="max-w-xl mx-auto">
@@ -1307,7 +1852,37 @@ export default function App() {
                     <h3 className="text-[10px] font-bold text-[#999] uppercase tracking-widest">감사 결과</h3>
                     
                     <div className="py-6 border-y border-[#d1d1d1] space-y-4">
-                      {session.gameType === GameType.OMOK ? (
+                      {session.gameType === GameType.DRAW ? (
+                        <div className="space-y-6">
+                          <div className="text-xs text-[#666]">최종 스코어 결과:</div>
+                          <div className="grid grid-cols-1 gap-3">
+                            {Object.entries(session.drawGame?.scores || {}).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([pid, score], i) => (
+                              <div key={pid} className={`flex items-center justify-between p-4 rounded border ${i === 0 ? 'bg-[#e8f0fe] border-[#217346]' : 'bg-[#f8f9fa] border-[#d1d1d1]'}`}>
+                                <div className="flex items-center gap-4">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-[#217346] text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                    {i + 1}
+                                  </div>
+                                  <span className="font-bold">{session.players[pid]?.nickname}</span>
+                                </div>
+                                <div className="text-xl font-black text-[#217346]">{score}점</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : session.gameType === GameType.BINGO ? (
+                        <div className="space-y-4">
+                          <div className="text-xs text-[#666]">최종 승리자:</div>
+                          <div className="text-4xl font-black text-[#217346]">
+                            {session.players[session.bingoGame!.winner!]?.nickname}
+                          </div>
+                          <div className="py-4 bg-[#f8f9fa] rounded border border-[#d1d1d1] inline-block px-8">
+                            <div className="text-[10px] text-[#999] uppercase mb-1">달성 기록</div>
+                            <div className="text-xl font-bold text-[#333]">
+                              {sessionService.countBingoLines(session.bingoGame!.boards[session.bingoGame!.winner!], session.bingoGame!.markedWords)}줄 완성
+                            </div>
+                          </div>
+                        </div>
+                      ) : session.gameType === GameType.OMOK ? (
                         <div className="space-y-4">
                           <div className="text-xs text-[#666]">승리:</div>
                           {session.omokGame?.isDraw ? (
@@ -1436,14 +2011,281 @@ export default function App() {
               </div>
             </div>
           )}
+            </>
+          ) : activeSheet === 'ROLES' ? (
+            <div className="bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden">
+              <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
+                역할_할당_데이터베이스
+              </div>
+              <div className="overflow-x-auto">
+                <table className="excel-grid">
+                  <thead>
+                    <tr>
+                      <th className="w-8"></th>
+                      <th className="text-left pl-4">플레이어</th>
+                      <th className="w-32">할당된_역할</th>
+                      <th className="w-24">상태</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(Object.values(session.players) as Player[]).map((p, idx) => (
+                      <tr key={p.id}>
+                        <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
+                        <td className="excel-cell">{p.nickname}</td>
+                        <td className="excel-cell text-center font-bold">
+                          {session.status === SessionStatus.LOBBY ? '대기 중' : (p.role || '시민')}
+                        </td>
+                        <td className="excel-cell text-center">
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full ${p.isAlive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {p.isAlive ? '활성' : '제거됨'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : activeSheet === 'LOGS' ? (
+            <div className="bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden">
+              <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666] flex justify-between items-center">
+                <span>시스템_이벤트_로그</span>
+                <span className="text-[9px] font-normal">총 {Object.keys(session.logs || {}).length}개의 레코드</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="excel-grid">
+                  <thead>
+                    <tr>
+                      <th className="w-8"></th>
+                      <th className="w-32 text-left pl-4">타임스탬프</th>
+                      <th className="w-20 text-center">유형</th>
+                      <th className="text-left pl-4">이벤트_내용</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(Object.values(session.logs || {}) as GameLog[]).sort((a, b) => b.timestamp - a.timestamp).map((log, idx) => (
+                      <tr key={log.id}>
+                        <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
+                        <td className="excel-cell font-mono text-[10px]">
+                          {new Date(log.timestamp).toLocaleTimeString()}
+                        </td>
+                        <td className="excel-cell text-center">
+                          <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                            log.type === 'success' ? 'bg-green-100 text-green-700' :
+                            log.type === 'warning' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {log.type}
+                          </span>
+                        </td>
+                        <td className={`excel-cell ${log.type === 'success' ? 'text-green-700 font-medium' : ''}`}>
+                          {log.content}
+                        </td>
+                      </tr>
+                    ))}
+                    {Object.keys(session.logs || {}).length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="excel-cell text-center py-8 text-gray-400 italic">
+                          기록된 로그가 없습니다.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : activeSheet === 'STATS' ? (
+            <div className="bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden">
+              <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
+                세션_성과_지표_대시보드
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                  <div className="bg-[#e8f0fe] border border-[#217346] p-4 rounded">
+                    <div className="text-[9px] text-[#217346] font-bold uppercase mb-1">총 라운드</div>
+                    <div className="text-2xl font-black text-[#217346]">{session.round}</div>
+                  </div>
+                  <div className="bg-[#f8f9fa] border border-[#d1d1d1] p-4 rounded">
+                    <div className="text-[9px] text-[#666] font-bold uppercase mb-1">참여 인원</div>
+                    <div className="text-2xl font-black text-[#333]">{Object.keys(session.players).length}</div>
+                  </div>
+                  <div className="bg-[#f8f9fa] border border-[#d1d1d1] p-4 rounded">
+                    <div className="text-[9px] text-[#666] font-bold uppercase mb-1">현재 게임</div>
+                    <div className="text-2xl font-black text-[#333]">{session.gameType}</div>
+                  </div>
+                </div>
+
+                <h4 className="text-xs font-bold text-[#333] mb-3">플레이어별 성과 기록</h4>
+                <div className="overflow-x-auto">
+                  <table className="excel-grid">
+                    <thead>
+                      <tr>
+                        <th className="w-8"></th>
+                        <th className="text-left pl-4">플레이어_성함</th>
+                        <th className="w-24 text-center">승리_횟수</th>
+                        <th className="w-24 text-center">누적_점수</th>
+                        <th className="text-left pl-4">성과_그래프</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(Object.values(session.players) as Player[]).map((p, idx) => {
+                        const stats = session.stats?.[p.id] || { wins: 0, totalScore: 0 };
+                        const maxWins = Math.max(...Object.values(session.stats || {}).map(s => s.wins), 1);
+                        return (
+                          <tr key={p.id}>
+                            <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
+                            <td className="excel-cell font-medium">{p.nickname}</td>
+                            <td className="excel-cell text-center font-bold text-[#217346]">{stats.wins}</td>
+                            <td className="excel-cell text-center">{stats.totalScore}</td>
+                            <td className="excel-cell">
+                              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-[#217346]" 
+                                  style={{ width: `${(stats.wins / maxWins) * 100}%` }}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden">
+              <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
+                게임_운영_매뉴얼_v1.0
+              </div>
+              <div className="p-8 space-y-10">
+                <section>
+                  <h3 className="text-lg font-bold text-[#217346] border-b-2 border-[#217346] pb-1 mb-4 flex items-center gap-2">
+                    <Shield size={20} /> 라이어 게임 (LIAR)
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-[#333]">규칙 개요</h4>
+                      <p className="text-gray-600 leading-relaxed">한 명의 라이어를 제외한 모든 플레이어는 제시어를 공유합니다. 라이어는 제시어를 모른 채 대화에 참여하여 정체를 숨겨야 합니다.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-[#333]">승리 조건</h4>
+                      <ul className="list-disc list-inside text-gray-600 space-y-1">
+                        <li>시민: 투표를 통해 라이어를 검거</li>
+                        <li>라이어: 끝까지 살아남거나 정체가 들켰을 때 제시어를 맞힘</li>
+                      </ul>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-lg font-bold text-red-700 border-b-2 border-red-700 pb-1 mb-4 flex items-center gap-2">
+                    <Siren size={20} /> 마피아 게임 (MAFIA)
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-[#333]">규칙 개요</h4>
+                      <p className="text-gray-600 leading-relaxed">낮에는 토론과 투표를 통해 마피아를 처형하고, 밤에는 마피아가 시민을 제거합니다. 의사와 경찰은 각자의 능력을 사용합니다.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-[#333]">역할 안내</h4>
+                      <ul className="list-disc list-inside text-gray-600 space-y-1">
+                        <li>마피아: 밤마다 한 명을 제거</li>
+                        <li>의사: 밤마다 한 명을 치료 (마피아 공격 방어)</li>
+                        <li>경찰: 밤마다 한 명의 정체를 조사</li>
+                      </ul>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-lg font-bold text-blue-700 border-b-2 border-blue-700 pb-1 mb-4 flex items-center gap-2">
+                    <Grid size={20} /> 오목 대전 (OMOK)
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-[#333]">규칙 개요</h4>
+                      <p className="text-gray-600 leading-relaxed">15x15 판 위에서 돌을 번갈아 놓아 가로, 세로, 대각선 중 하나라도 5개의 돌을 먼저 잇는 사람이 승리합니다.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-[#333]">금수 규칙 (흑돌)</h4>
+                      <p className="text-gray-600">흑돌은 3-3, 4-4, 6목(장목)이 금지됩니다. 백돌은 제한이 없습니다.</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-lg font-bold text-[#217346] border-b-2 border-[#217346] pb-1 mb-4 flex items-center gap-2">
+                    <Hash size={20} /> 빙고 감사 (BINGO)
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-[#333]">규칙 개요</h4>
+                      <p className="text-gray-600 leading-relaxed">5x5 시트에 단어를 채우고, 번갈아 가며 단어를 불러 목표한 줄 수를 먼저 완성하는 플레이어가 승리합니다.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-[#333]">팁</h4>
+                      <p className="text-gray-600">중앙 칸을 선점하고, 상대방이 부르는 단어를 잘 체크하여 전략적으로 줄을 완성하세요.</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-lg font-bold text-orange-600 border-b-2 border-orange-600 pb-1 mb-4 flex items-center gap-2">
+                    <Palette size={20} /> 비주얼 브리핑 (DRAW)
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-[#333]">규칙 개요</h4>
+                      <p className="text-gray-600 leading-relaxed">발표자는 제시어를 그림으로 설명하고, 나머지 플레이어들은 채팅을 통해 정답을 맞힙니다.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="font-bold text-[#333]">점수 배분</h4>
+                      <ul className="list-disc list-inside text-gray-600 space-y-1">
+                        <li>정답자: +10점</li>
+                        <li>발표자: +5점 (정답자가 나왔을 때)</li>
+                      </ul>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
       {/* Sheet Tabs */}
       <footer className="bg-[#f8f9fa] border-t border-[#d1d1d1] flex items-center h-8 shrink-0 overflow-x-auto">
-        <div className="office-tab active">감사_시트</div>
-        <div className="office-tab">역할_데이터</div>
-        <div className="office-tab">로그_시트</div>
+        <button 
+          onClick={() => setActiveSheet('GAME')}
+          className={`office-tab ${activeSheet === 'GAME' ? 'active' : ''}`}
+        >
+          감사_시트
+        </button>
+        <button 
+          onClick={() => setActiveSheet('ROLES')}
+          className={`office-tab ${activeSheet === 'ROLES' ? 'active' : ''}`}
+        >
+          역할_데이터
+        </button>
+        <button 
+          onClick={() => setActiveSheet('LOGS')}
+          className={`office-tab ${activeSheet === 'LOGS' ? 'active' : ''}`}
+        >
+          로그_시트
+        </button>
+        <button 
+          onClick={() => setActiveSheet('STATS')}
+          className={`office-tab ${activeSheet === 'STATS' ? 'active' : ''}`}
+        >
+          통계_보고서
+        </button>
+        <button 
+          onClick={() => setActiveSheet('HELP')}
+          className={`office-tab ${activeSheet === 'HELP' ? 'active' : ''}`}
+        >
+          도움말_매뉴얼
+        </button>
         <div className="flex-1" />
         <div className="px-4 text-[9px] text-[#999] flex items-center gap-3 whitespace-nowrap">
           <span>{

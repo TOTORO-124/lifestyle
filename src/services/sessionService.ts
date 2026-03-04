@@ -1,8 +1,9 @@
 import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
-import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase } from '../types';
+import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState } from '../types';
 import { LIAR_TOPICS } from '../data/topics';
+import { DRAW_TOPICS } from '../data/drawTopics';
 
 export const sessionService = {
   async authenticate() {
@@ -179,6 +180,7 @@ export const sessionService = {
     });
 
     await update(ref(db, `sessions/${sessionId}`), updates);
+    await this.addLog(sessionId, `라이어 게임이 시작되었습니다.`, 'success');
   },
 
   async confirmRole(sessionId: string, playerId: string) {
@@ -265,6 +267,7 @@ export const sessionService = {
     updates['turnOrder'] = finalTurnOrder;
 
     await update(ref(db, `sessions/${sessionId}`), updates);
+    await this.addLog(sessionId, `마피아 게임이 시작되었습니다.`, 'success');
   },
 
   async shuffleTurnOrder(sessionId: string, players: Record<string, Player>) {
@@ -373,9 +376,13 @@ export const sessionService = {
     if (mafiaCount === 0) {
       updates['status'] = SessionStatus.SUMMARY;
       updates['mafiaGame/winner'] = 'CITIZEN';
-    } else if (mafiaCount > citizenCount) {
+      const winners = Object.values(players).filter(p => p.role !== 'MAFIA').map(p => p.id);
+      await this.updateStats(sessionId, winners);
+    } else if (mafiaCount >= citizenCount) {
       updates['status'] = SessionStatus.SUMMARY;
       updates['mafiaGame/winner'] = 'MAFIA';
+      const winners = Object.values(players).filter(p => p.role === 'MAFIA').map(p => p.id);
+      await this.updateStats(sessionId, winners);
     }
 
     // Reset votes for the next day
@@ -391,9 +398,44 @@ export const sessionService = {
     await update(ref(db, `sessions/${sessionId}/settings`), settings);
   },
 
+  async addLog(sessionId: string, content: string, type: 'info' | 'success' | 'warning' = 'info') {
+    if (!db) return;
+    const logRef = ref(db, `sessions/${sessionId}/logs`);
+    const newLogRef = push(logRef);
+    await set(newLogRef, {
+      id: newLogRef.key,
+      content,
+      type,
+      timestamp: Date.now()
+    });
+  },
+
+  async updateStats(sessionId: string, playerIds: string | string[], score: number = 0) {
+    if (!db) return;
+    const sessionRef = ref(db, `sessions/${sessionId}`);
+    const snapshot = await get(sessionRef);
+    const session = snapshot.val();
+    if (!session) return;
+
+    const ids = Array.isArray(playerIds) ? playerIds : [playerIds];
+    const updates: any = {};
+    const currentStats = session.stats || {};
+
+    ids.forEach(pid => {
+      const playerStats = currentStats[pid] || { wins: 0, totalScore: 0 };
+      updates[`stats/${pid}`] = {
+        wins: playerStats.wins + 1,
+        totalScore: playerStats.totalScore + score
+      };
+    });
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+  },
+
   async advanceStatus(sessionId: string, status: SessionStatus) {
     if (!db) return;
     await update(ref(db, `sessions/${sessionId}`), { status });
+    await this.addLog(sessionId, `상태가 [${status}] 단계로 변경되었습니다.`);
   },
 
   async resetSession(sessionId: string, players: Record<string, Player>) {
@@ -467,9 +509,13 @@ export const sessionService = {
       if (mafiaCount === 0) {
         updates['status'] = SessionStatus.SUMMARY;
         updates['mafiaGame/winner'] = 'CITIZEN';
-      } else if (mafiaCount > citizenCount) {
+        const winners = Object.values(players).filter(p => p.role !== 'MAFIA').map(p => p.id);
+        await this.updateStats(sessionId, winners);
+      } else if (mafiaCount >= citizenCount) {
         updates['status'] = SessionStatus.SUMMARY;
         updates['mafiaGame/winner'] = 'MAFIA';
+        const winners = Object.values(players).filter(p => p.role === 'MAFIA').map(p => p.id);
+        await this.updateStats(sessionId, winners);
       }
     }
 
@@ -518,12 +564,16 @@ export const sessionService = {
         if (alivePlayersCount <= 2) {
           updates['status'] = SessionStatus.SUMMARY;
           updates['liarGame/winner'] = 'LIAR';
+          await this.updateStats(sessionId, liarGame.liarPlayerId);
         } else {
           updates['status'] = SessionStatus.VOTE_RESULT;
         }
       } else {
         // Liar died -> Go to result to reveal
         updates['status'] = SessionStatus.VOTE_RESULT;
+        updates['liarGame/winner'] = 'CITIZEN';
+        const winners = Object.values(players).filter(p => p.id !== liarGame.liarPlayerId).map(p => p.id);
+        await this.updateStats(sessionId, winners);
       }
     } else {
       updates['status'] = SessionStatus.VOTE_RESULT;
@@ -582,6 +632,237 @@ export const sessionService = {
     };
 
     await update(ref(db, `sessions/${sessionId}`), updates);
+    await this.addLog(sessionId, `오목 대전이 시작되었습니다.`, 'success');
+  },
+
+  async startBingoSetup(sessionId: string, settings: any) {
+    if (!db) return;
+    
+    const updates: any = {
+      status: SessionStatus.PREPARING,
+      bingoGame: {
+        boards: {},
+        markedWords: [],
+        currentPlayerId: '',
+        targetLines: settings.bingoLines || 3,
+        category: settings.bingoCategory || '랜덤'
+      }
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+    await this.addLog(sessionId, `빙고 게임 준비 단계가 시작되었습니다.`, 'success');
+  },
+
+  async submitBingoBoard(sessionId: string, playerId: string, board: string[][]) {
+    if (!db) return;
+    await set(ref(db, `sessions/${sessionId}/bingoGame/boards/${playerId}`), board);
+  },
+
+  async startBingoGame(sessionId: string, players: Record<string, Player>, turnOrder: string[]) {
+    if (!db) return;
+    
+    const updates: any = {
+      status: SessionStatus.PLAYING,
+      'bingoGame/currentPlayerId': turnOrder[0]
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+  },
+
+  async pickBingoWord(sessionId: string, playerId: string, word: string, session: Session) {
+    if (!db || !session.bingoGame) return;
+    
+    const game = session.bingoGame;
+    if (game.currentPlayerId !== playerId) return;
+    if (game.markedWords.includes(word)) return;
+
+    const newMarkedWords = [...game.markedWords, word];
+    const updates: any = {};
+    updates['bingoGame/markedWords'] = newMarkedWords;
+
+    // Check for winners
+    const winners: string[] = [];
+    Object.entries(game.boards).forEach(([pid, board]) => {
+      const lines = this.countBingoLines(board, newMarkedWords);
+      if (lines >= game.targetLines) {
+        winners.push(pid);
+      }
+    });
+
+    if (winners.length > 0) {
+      updates['bingoGame/winner'] = winners[0]; // First one detected
+      updates['status'] = SessionStatus.SUMMARY;
+    } else {
+      // Next turn
+      const turnOrder = session.turnOrder || Object.keys(session.players);
+      const currentIndex = turnOrder.indexOf(playerId);
+      const nextIndex = (currentIndex + 1) % turnOrder.length;
+      updates['bingoGame/currentPlayerId'] = turnOrder[nextIndex];
+    }
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+    const player = session.players[playerId].nickname;
+    await this.addLog(sessionId, `${player}님이 [${word}] 단어를 선택했습니다.`);
+    if (updates['bingoGame/winner']) {
+      await this.addLog(sessionId, `${player}님이 빙고를 완성하여 승리했습니다!`, 'success');
+      await this.updateStats(sessionId, updates['bingoGame/winner']);
+    }
+  },
+
+  async startDrawGame(sessionId: string, players: Record<string, Player>, settings: any, turnOrder: string[]) {
+    if (!db) return;
+    
+    const category = settings.drawCategory || '랜덤';
+    let words: string[] = [];
+    if (category === '랜덤') {
+      words = DRAW_TOPICS.flatMap(t => t.words);
+    } else {
+      words = DRAW_TOPICS.find(t => t.category === category)?.words || [];
+    }
+    const secretWord = words[Math.floor(Math.random() * words.length)];
+
+    const drawGame: DrawGameState = {
+      presenterId: turnOrder[0],
+      word: secretWord,
+      category: category,
+      canvasData: '',
+      round: 1,
+      maxRounds: settings.drawRounds || 3,
+      timer: settings.drawTime || 60,
+      scores: {}
+    };
+
+    // Initialize scores
+    Object.keys(players).forEach(pid => {
+      drawGame.scores[pid] = 0;
+    });
+
+    const updates: any = {
+      status: SessionStatus.PLAYING,
+      drawGame
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+    await this.addLog(sessionId, `비주얼 브리핑(캐치마인드) 게임이 시작되었습니다.`, 'success');
+  },
+
+  async updateDrawCanvas(sessionId: string, canvasData: string) {
+    if (!db) return;
+    await set(ref(db, `sessions/${sessionId}/drawGame/canvasData`), canvasData);
+  },
+
+  async updateDrawTimer(sessionId: string, timer: number) {
+    if (!db) return;
+    await set(ref(db, `sessions/${sessionId}/drawGame/timer`), timer);
+  },
+
+  async passDrawTurn(sessionId: string, session: Session) {
+    if (!db || !session.drawGame) return;
+    await this.nextDrawTurn(sessionId, session);
+  },
+
+  async submitDrawGuess(sessionId: string, playerId: string, guess: string, session: Session) {
+    if (!db || !session.drawGame) return;
+    
+    const game = session.drawGame;
+    if (playerId === game.presenterId) return; // Presenter cannot guess
+
+    if (guess.trim() === game.word) {
+      // Correct!
+      const updates: any = {};
+      const newScores = { ...game.scores };
+      newScores[playerId] = (newScores[playerId] || 0) + 10; // Guesser gets 10
+      newScores[game.presenterId] = (newScores[game.presenterId] || 0) + 5; // Presenter gets 5
+
+      updates['drawGame/scores'] = newScores;
+      updates['drawGame/lastGuesserId'] = playerId;
+      
+      const player = session.players[playerId].nickname;
+      await this.addLog(sessionId, `${player}님이 정답 [${game.word}]을 맞혔습니다! (+10점)`, 'success');
+      await this.updateStats(sessionId, playerId, 10);
+      await this.updateStats(sessionId, game.presenterId, 5);
+
+      // Move to next turn or end
+      await this.nextDrawTurn(sessionId, session, newScores);
+    }
+  },
+
+  async nextDrawTurn(sessionId: string, session: Session, currentScores?: Record<string, number>) {
+    if (!db || !session.drawGame) return;
+    
+    const game = session.drawGame;
+    const turnOrder = session.turnOrder || Object.keys(session.players);
+    const currentIndex = turnOrder.indexOf(game.presenterId);
+    let nextIndex = (currentIndex + 1) % turnOrder.length;
+    let nextRound = game.round;
+
+    if (nextIndex === 0) {
+      nextRound++;
+    }
+
+    if (nextRound > game.maxRounds) {
+      // End game
+      const updates: any = {
+        status: SessionStatus.SUMMARY
+      };
+      await update(ref(db, `sessions/${sessionId}`), updates);
+    } else {
+      // Next presenter
+      const category = game.category;
+      let words: string[] = [];
+      if (category === '랜덤') {
+        words = DRAW_TOPICS.flatMap(t => t.words);
+      } else {
+        words = DRAW_TOPICS.find(t => t.category === category)?.words || [];
+      }
+      const secretWord = words[Math.floor(Math.random() * words.length)];
+
+      const updates: any = {
+        'drawGame/presenterId': turnOrder[nextIndex],
+        'drawGame/word': secretWord,
+        'drawGame/canvasData': '',
+        'drawGame/round': nextRound,
+        'drawGame/lastGuesserId': null,
+        'drawGame/timer': session.settings.drawTime || 60
+      };
+      if (currentScores) {
+        updates['drawGame/scores'] = currentScores;
+      }
+      await update(ref(db, `sessions/${sessionId}`), updates);
+    }
+  },
+
+  countBingoLines(board: string[][], markedWords: string[]) {
+    let lines = 0;
+
+    // Rows
+    for (let i = 0; i < 5; i++) {
+      if (board[i].every(word => markedWords.includes(word))) lines++;
+    }
+
+    // Columns
+    for (let i = 0; i < 5; i++) {
+      let colMarked = true;
+      for (let j = 0; j < 5; j++) {
+        if (!markedWords.includes(board[j][i])) {
+          colMarked = false;
+          break;
+        }
+      }
+      if (colMarked) lines++;
+    }
+
+    // Diagonals
+    let diag1Marked = true;
+    let diag2Marked = true;
+    for (let i = 0; i < 5; i++) {
+      if (!markedWords.includes(board[i][i])) diag1Marked = false;
+      if (!markedWords.includes(board[i][4 - i])) diag2Marked = false;
+    }
+    if (diag1Marked) lines++;
+    if (diag2Marked) lines++;
+
+    return lines;
   },
 
   async placeOmokStone(sessionId: string, playerId: string, x: number, y: number) {
@@ -637,6 +918,13 @@ export const sessionService = {
     }
 
     await update(sessionRef, updates);
+    const player = session.players[playerId].nickname;
+    await this.addLog(sessionId, `${player}님이 (${x}, ${y}) 위치에 돌을 놓았습니다.`);
+    if (updates['omokGame/winner']) {
+      await this.addLog(sessionId, `${player}님이 오목 대전에서 승리했습니다!`, 'success');
+      await this.updateStats(sessionId, playerId);
+    }
+    if (updates['omokGame/isDraw']) await this.addLog(sessionId, `오목 대전이 무승부로 종료되었습니다.`, 'warning');
   },
 
   checkOmokOverline(board: number[][], x: number, y: number, stone: number) {
