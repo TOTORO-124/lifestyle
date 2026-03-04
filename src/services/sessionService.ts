@@ -132,11 +132,21 @@ export const sessionService = {
       liarGame.spyPlayerId = spyPlayerId;
     }
 
-    // Use existing turn order if valid, otherwise shuffle
-    let turnOrder: string[];
-    if (currentTurnOrder && currentTurnOrder.length === playerIds.length && currentTurnOrder.every(id => playerIds.includes(id))) {
-      turnOrder = [...currentTurnOrder];
-    } else {
+    // Determine Turn Order
+    let turnOrder: string[] = [];
+    if (currentTurnOrder) {
+      // Filter out players who are no longer in the session
+      const validOrderedIds = currentTurnOrder.filter(id => playerIds.includes(id));
+      
+      // Find players who are not in the turn order (newly joined)
+      const newPlayerIds = playerIds.filter(id => !validOrderedIds.includes(id));
+      
+      // Combine valid existing order with new players
+      turnOrder = [...validOrderedIds, ...newPlayerIds];
+    }
+
+    // If turnOrder is empty or invalid (shouldn't happen with logic above, but safety check), shuffle
+    if (turnOrder.length === 0) {
       turnOrder = [...playerIds].sort(() => Math.random() - 0.5);
     }
 
@@ -174,10 +184,20 @@ export const sessionService = {
     }
     
     // Determine Turn Order
-    let finalTurnOrder: string[];
-    if (currentTurnOrder && currentTurnOrder.length === playerIds.length && currentTurnOrder.every(id => playerIds.includes(id))) {
-      finalTurnOrder = [...currentTurnOrder];
-    } else {
+    let finalTurnOrder: string[] = [];
+    if (currentTurnOrder) {
+      // Filter out players who are no longer in the session
+      const validOrderedIds = currentTurnOrder.filter(id => playerIds.includes(id));
+      
+      // Find players who are not in the turn order (newly joined)
+      const newPlayerIds = playerIds.filter(id => !validOrderedIds.includes(id));
+      
+      // Combine valid existing order with new players
+      finalTurnOrder = [...validOrderedIds, ...newPlayerIds];
+    }
+
+    // If turnOrder is empty or invalid (shouldn't happen with logic above, but safety check), shuffle
+    if (finalTurnOrder.length === 0) {
       finalTurnOrder = [...playerIds].sort(() => Math.random() - 0.5);
     }
     
@@ -237,6 +257,11 @@ export const sessionService = {
     const playerIds = Object.keys(players);
     const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
     await update(ref(db, `sessions/${sessionId}`), { turnOrder: shuffled });
+  },
+
+  async updateTurnOrder(sessionId: string, turnOrder: string[]) {
+    if (!db) return;
+    await update(ref(db, `sessions/${sessionId}`), { turnOrder });
   },
 
   async startNightPhase(sessionId: string, players: Record<string, Player>) {

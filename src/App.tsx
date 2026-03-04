@@ -4,7 +4,7 @@ import { sessionService } from './services/sessionService';
 import { isConfigured } from './firebase';
 import { Chat } from './components/Chat';
 import { LIAR_TOPICS } from './data/topics';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered } from 'lucide-react';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown } from 'lucide-react';
 
 export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -177,6 +177,17 @@ export default function App() {
       if (idxB === -1) return -1;
       return idxA - idxB;
     });
+  };
+
+  const handleMovePlayer = (index: number, direction: 'up' | 'down') => {
+    if (!session) return;
+    const currentOrder = getSortedPlayers().map(p => p.id);
+    if (direction === 'up' && index > 0) {
+      [currentOrder[index], currentOrder[index - 1]] = [currentOrder[index - 1], currentOrder[index]];
+    } else if (direction === 'down' && index < currentOrder.length - 1) {
+      [currentOrder[index], currentOrder[index + 1]] = [currentOrder[index + 1], currentOrder[index]];
+    }
+    sessionService.updateTurnOrder(session.id, currentOrder);
   };
 
   if (!isConfigured) {
@@ -390,7 +401,8 @@ export default function App() {
                         <th className="text-left pl-4">사용자_이름</th>
                         <th className="w-24">상태</th>
                         <th className="w-20">권한</th>
-                        {isHost && <th className="w-16">관리</th>}
+                        {isHost && <th className="w-16 text-center">순서</th>}
+                        {isHost && <th className="w-16 text-center">관리</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -411,6 +423,28 @@ export default function App() {
                           <td className="excel-cell text-center text-[9px] text-[#999]">
                             {player.isHost ? '관리자' : '사용자'}
                           </td>
+                          {isHost && (
+                            <td className="excel-cell text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button 
+                                  onClick={() => handleMovePlayer(idx, 'up')}
+                                  disabled={idx === 0}
+                                  className="p-0.5 hover:bg-gray-100 rounded disabled:opacity-30 text-[#666]"
+                                  title="위로 이동"
+                                >
+                                  <ArrowUp size={12} />
+                                </button>
+                                <button 
+                                  onClick={() => handleMovePlayer(idx, 'down')}
+                                  disabled={idx === getSortedPlayers().length - 1}
+                                  className="p-0.5 hover:bg-gray-100 rounded disabled:opacity-30 text-[#666]"
+                                  title="아래로 이동"
+                                >
+                                  <ArrowDown size={12} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                           {isHost && (
                             <td className="excel-cell text-center">
                               {!player.isHost && (
