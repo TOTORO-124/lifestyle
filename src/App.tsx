@@ -10,6 +10,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [nickname, setNickname] = useState('');
   const [joinCode, setJoinCode] = useState('');
+  const [menuMode, setMenuMode] = useState<'create' | 'join'>('create');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -66,10 +67,18 @@ export default function App() {
   useEffect(() => {
     if (sessionId) {
       const unsubscribe = sessionService.subscribeToSession(sessionId, (data) => {
-        setSession(data);
         if (!data) {
           setSessionId(null);
+          setSession(null);
           setError('세션이 종료되었거나 찾을 수 없습니다.');
+        } else {
+          if (currentUser && data.players && !data.players[currentUser.uid]) {
+            setSessionId(null);
+            setSession(null);
+            setError('방장에 의해 강퇴되었습니다.');
+            return;
+          }
+          setSession(data);
         }
       });
       return () => unsubscribe();
@@ -199,6 +208,23 @@ export default function App() {
               <span>사용자_인증_프롬프트</span>
               <MoreVertical size={12} />
             </div>
+            
+            {/* Tabs */}
+            <div className="flex border-b border-[#d1d1d1]">
+              <button 
+                className={`flex-1 py-3 text-xs font-bold transition-colors ${menuMode === 'create' ? 'bg-white border-b-2 border-b-[#217346] text-[#217346]' : 'bg-[#f8f9fa] text-[#999] hover:bg-[#f1f1f1]'}`}
+                onClick={() => setMenuMode('create')}
+              >
+                새 세션 만들기
+              </button>
+              <button 
+                className={`flex-1 py-3 text-xs font-bold transition-colors ${menuMode === 'join' ? 'bg-white border-b-2 border-b-[#217346] text-[#217346]' : 'bg-[#f8f9fa] text-[#999] hover:bg-[#f1f1f1]'}`}
+                onClick={() => setMenuMode('join')}
+              >
+                코드로 참여하기
+              </button>
+            </div>
+
             <div className="p-6 space-y-6">
               <div className="space-y-4">
                 <div className="space-y-1">
@@ -211,51 +237,59 @@ export default function App() {
                     onChange={(e) => setNickname(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        if (joinCode) handleJoinSession();
+                        if (menuMode === 'join') handleJoinSession();
                         else handleCreateSession(GameType.LIAR);
                       }
                     }}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <button 
-                    onClick={() => handleCreateSession(GameType.LIAR)} 
-                    className="office-btn-primary py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={loading}
-                  >
-                    {loading ? '생성 중...' : '새_세션 (라이어)'}
-                  </button>
-                  <button 
-                    onClick={() => handleCreateSession(GameType.MAFIA)} 
-                    className="office-btn py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={loading}
-                  >
-                    {loading ? '생성 중...' : '새_세션 (마피아)'}
-                  </button>
-                </div>
-
-                <div className="pt-4 border-t border-[#d1d1d1] space-y-3">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      className="office-input flex-1"
-                      placeholder="세션_코드"
-                      value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleJoinSession()}
-                    />
-                    <button 
-                      onClick={handleJoinSession} 
-                      className="office-btn px-6 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={loading}
-                    >
-                      {loading ? '참여 중...' : '참여'}
-                    </button>
+                {menuMode === 'create' ? (
+                  <div className="space-y-3 pt-2">
+                    <p className="text-[10px] text-[#999]">새로운 감사 세션을 생성하고 팀원들을 초대합니다.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => handleCreateSession(GameType.LIAR)} 
+                        className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                        disabled={loading}
+                      >
+                        <span className="font-bold">라이어 게임</span>
+                        <span className="text-[9px] font-normal opacity-80">거짓말쟁이 찾기</span>
+                      </button>
+                      <button 
+                        onClick={() => handleCreateSession(GameType.MAFIA)} 
+                        className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                        disabled={loading}
+                      >
+                        <span className="font-bold">마피아 게임</span>
+                        <span className="text-[9px] font-normal opacity-80">범인 색출 작전</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-3 pt-2">
+                    <p className="text-[10px] text-[#999]">공유받은 세션 코드를 입력하여 참여합니다.</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        className="office-input flex-1"
+                        placeholder="세션_코드 (예: -Nxyz...)"
+                        value={joinCode}
+                        onChange={(e) => setJoinCode(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleJoinSession()}
+                      />
+                      <button 
+                        onClick={handleJoinSession} 
+                        className="office-btn px-6 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+                        disabled={loading}
+                      >
+                        {loading ? '참여 중...' : '입장'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              {error && <p className="text-[10px] text-red-600 font-mono">#오류: {error}</p>}
+              {error && <p className="text-[10px] text-red-600 font-mono bg-red-50 p-2 rounded border border-red-100">#오류: {error}</p>}
             </div>
           </div>
         </div>
@@ -333,6 +367,7 @@ export default function App() {
                         <th className="text-left pl-4">사용자_이름</th>
                         <th className="w-24">상태</th>
                         <th className="w-20">권한</th>
+                        {isHost && <th className="w-16">관리</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -353,6 +388,23 @@ export default function App() {
                           <td className="excel-cell text-center text-[9px] text-[#999]">
                             {player.isHost ? '관리자' : '사용자'}
                           </td>
+                          {isHost && (
+                            <td className="excel-cell text-center">
+                              {!player.isHost && (
+                                <button 
+                                  onClick={() => {
+                                    if (confirm(`${player.nickname}님을 강퇴하시겠습니까?`)) {
+                                      sessionService.kickPlayer(session.id, player.id);
+                                    }
+                                  }}
+                                  className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
+                                  title="강퇴"
+                                >
+                                  <LogOut size={12} />
+                                </button>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

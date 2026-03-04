@@ -1,4 +1,4 @@
-import { ref, set, push, onValue, update, get } from 'firebase/database';
+import { ref, set, push, onValue, update, get, remove } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
 import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase } from '../types';
@@ -69,6 +69,11 @@ export const sessionService = {
     };
 
     await set(ref(db, `sessions/${sessionId}/players/${user.uid}`), player);
+  },
+
+  async kickPlayer(sessionId: string, playerId: string) {
+    if (!db) return;
+    await remove(ref(db, `sessions/${sessionId}/players/${playerId}`));
   },
 
   subscribeToSession(sessionId: string, callback: (session: Session | null) => void) {
