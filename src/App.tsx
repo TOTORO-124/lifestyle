@@ -1508,7 +1508,8 @@ export default function App() {
                 </table>
               </div>
             </div>
-          )}
+          )
+        )}
 
           {session.status === SessionStatus.VOTING && (
             <div className="max-w-xl mx-auto">
@@ -2130,7 +2131,7 @@ export default function App() {
                     <tbody>
                       {(Object.values(session.players) as Player[]).map((p, idx) => {
                         const stats = session.stats?.[p.id] || { wins: 0, totalScore: 0 };
-                        const maxWins = Math.max(...Object.values(session.stats || {}).map(s => s.wins), 1);
+                        const maxWins = Math.max(...Object.values(session.stats || {}).map((s: any) => s.wins), 1);
                         return (
                           <tr key={p.id}>
                             <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
