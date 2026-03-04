@@ -8,6 +8,7 @@ export enum SessionStatus {
   REVEAL = 'REVEAL',
   PLAYING = 'PLAYING',
   VOTING = 'VOTING',
+  VOTE_RESULT = 'VOTE_RESULT',
   SUMMARY = 'SUMMARY',
 }
 
@@ -38,6 +39,7 @@ export interface Player {
   isConnected: boolean;
   role?: string;
   voteTarget?: string;
+  hasConfirmedRole?: boolean;
   lastActive?: number;
 }
 
@@ -48,6 +50,7 @@ export interface LiarGameState {
   liarWord: string;
   liarPlayerId: string;
   spyPlayerId?: string;
+  lastVotedPlayerId?: string;
 }
 
 export interface MafiaGameState {

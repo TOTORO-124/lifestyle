@@ -116,10 +116,23 @@ export const sessionService = {
       liarGame.spyPlayerId = spyPlayerId;
     }
 
-    await update(ref(db, `sessions/${sessionId}`), {
+    const updates: any = {
       status: SessionStatus.REVEAL,
       liarGame,
+    };
+
+    // Reset player states
+    playerIds.forEach(pid => {
+      updates[`players/${pid}/hasConfirmedRole`] = false;
+      updates[`players/${pid}/voteTarget`] = null;
     });
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+  },
+
+  async confirmRole(sessionId: string, playerId: string) {
+    if (!db) return;
+    await update(ref(db, `sessions/${sessionId}/players/${playerId}`), { hasConfirmedRole: true });
   },
 
   async startMafiaGame(sessionId: string, players: Record<string, Player>) {
@@ -143,6 +156,8 @@ export const sessionService = {
     Object.entries(roles).forEach(([pid, role]) => {
       updates[`players/${pid}/role`] = role;
       updates[`players/${pid}/isAlive`] = true;
+      updates[`players/${pid}/hasConfirmedRole`] = false;
+      updates[`players/${pid}/voteTarget`] = null;
     });
 
     const mafiaGame: MafiaGameState = {
@@ -170,6 +185,43 @@ export const sessionService = {
   async submitVote(sessionId: string, playerId: string, targetId: string) {
     if (!db) return;
     await update(ref(db, `sessions/${sessionId}/players/${playerId}`), { voteTarget: targetId });
+  },
+
+  async processLiarVote(sessionId: string, players: Record<string, Player>) {
+    if (!db) return;
+    
+    const voteCounts: Record<string, number> = {};
+    Object.values(players).forEach(p => {
+      if (p.isAlive && p.voteTarget) {
+        voteCounts[p.voteTarget] = (voteCounts[p.voteTarget] || 0) + 1;
+      }
+    });
+
+    let maxVotes = 0;
+    let votedPlayerId: string | null = null;
+
+    Object.entries(voteCounts).forEach(([pid, count]) => {
+      if (count > maxVotes) {
+        maxVotes = count;
+        votedPlayerId = pid;
+      }
+    });
+
+    const updates: any = {};
+    
+    if (votedPlayerId) {
+      updates[`players/${votedPlayerId}/isAlive`] = false;
+      updates['liarGame/lastVotedPlayerId'] = votedPlayerId;
+    }
+
+    // Reset votes for next round if needed
+    Object.keys(players).forEach(pid => {
+      updates[`players/${pid}/voteTarget`] = null;
+    });
+
+    updates['status'] = SessionStatus.VOTE_RESULT;
+    
+    await update(ref(db, `sessions/${sessionId}`), updates);
   },
 
   async resetVotes(sessionId: string, players: Record<string, Player>) {

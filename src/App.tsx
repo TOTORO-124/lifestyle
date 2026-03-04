@@ -14,6 +14,42 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [selectedVoteTarget, setSelectedVoteTarget] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedVoteTarget(null);
+  }, [session?.status]);
+
+  // Synchronized Transitions
+  useEffect(() => {
+    if (!session || !session.players) return;
+    
+    // Only host triggers transitions
+    if (session.hostId !== currentUser?.uid) return;
+
+    const players = Object.values(session.players) as Player[];
+    
+    // Reveal -> Playing
+    if (session.status === SessionStatus.REVEAL) {
+      const allConfirmed = players.every(p => p.hasConfirmedRole);
+      if (allConfirmed && players.length > 0) {
+        sessionService.advanceStatus(session.id, SessionStatus.PLAYING);
+      }
+    }
+
+    // Voting -> Vote Result (Liar) or Summary (Mafia)
+    if (session.status === SessionStatus.VOTING) {
+      const alivePlayers = players.filter(p => p.isAlive);
+      const allVoted = alivePlayers.every(p => p.voteTarget);
+      if (allVoted && alivePlayers.length > 0) {
+        if (session.gameType === GameType.LIAR) {
+          sessionService.processLiarVote(session.id, session.players);
+        } else {
+          sessionService.advanceStatus(session.id, SessionStatus.SUMMARY);
+        }
+      }
+    }
+  }, [session, currentUser]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -418,7 +454,9 @@ export default function App() {
                   </div>
 
                   <div className="bg-[#f8f9fa] border border-[#d1d1d1] p-6 inline-block min-w-[200px] rounded">
-                    <span className="text-[10px] font-bold text-[#999] uppercase mb-2 block">목표 키워드</span>
+                    <span className="text-[10px] font-bold text-[#999] uppercase mb-2 block">
+                      {session.gameType === GameType.LIAR ? `카테고리: ${session.liarGame?.category}` : '목표 키워드'}
+                    </span>
                     <div className="text-2xl font-bold text-[#333]">
                       {session.gameType === GameType.LIAR ? (
                         session.liarGame?.liarPlayerId === currentUser?.uid ? (
@@ -428,12 +466,21 @@ export default function App() {
                     </div>
                   </div>
 
-                  <button 
-                    onClick={() => sessionService.advanceStatus(session.id, SessionStatus.PLAYING)}
-                    className="office-btn-primary w-full py-3"
-                  >
-                    데이터_확인
-                  </button>
+                  {me?.hasConfirmedRole ? (
+                    <div className="p-4 bg-gray-100 rounded text-center">
+                      <div className="animate-pulse text-sm font-bold text-gray-500">다른 플레이어 대기 중...</div>
+                      <div className="text-[10px] text-gray-400 mt-1">
+                        {(Object.values(session.players) as Player[]).filter(p => p.hasConfirmedRole).length} / {(Object.values(session.players) as Player[]).length} 명 확인 완료
+                      </div>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => sessionService.confirmRole(session.id, currentUser.uid)}
+                      className="office-btn-primary w-full py-3"
+                    >
+                      데이터_확인_완료
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -500,29 +547,120 @@ export default function App() {
                       <button
                         key={p.id}
                         disabled={me?.voteTarget !== undefined || !me?.isAlive}
-                        onClick={() => sessionService.submitVote(session.id, currentUser.uid, p.id)}
+                        onClick={() => setSelectedVoteTarget(p.id)}
                         className={`p-2 border text-xs font-medium transition-all text-left px-4 rounded ${
-                          me?.voteTarget === p.id 
+                          (me?.voteTarget === p.id || selectedVoteTarget === p.id)
                             ? 'bg-[#f1f8f5] text-[#217346] border-[#217346]' 
                             : 'bg-white text-[#333] border-[#d1d1d1] hover:bg-[#f8f9fa]'
                         }`}
                       >
                         <div className="flex justify-between items-center">
                           <span>{p.nickname}</span>
-                          {me?.voteTarget === p.id && <CheckCircle2 size={12} />}
+                          {(me?.voteTarget === p.id || selectedVoteTarget === p.id) && <CheckCircle2 size={12} />}
                         </div>
                       </button>
                     ))}
                   </div>
 
-                  {isHost && (
-                    <div className="pt-4 border-t border-[#d1d1d1] flex justify-center">
+                  <div className="pt-4 border-t border-[#d1d1d1] flex justify-center">
+                    {me?.voteTarget ? (
+                      <div className="text-center">
+                        <div className="animate-pulse text-sm font-bold text-gray-500">투표 완료! 다른 플레이어 대기 중...</div>
+                        <div className="text-[10px] text-gray-400 mt-1">
+                          {(Object.values(session.players) as Player[]).filter(p => p.isAlive && p.voteTarget).length} / {(Object.values(session.players) as Player[]).filter(p => p.isAlive).length} 명 투표 완료
+                        </div>
+                      </div>
+                    ) : (
                       <button 
-                        onClick={() => sessionService.advanceStatus(session.id, SessionStatus.SUMMARY)}
-                        className="office-btn-primary px-8"
+                        onClick={() => {
+                          if (selectedVoteTarget) {
+                            sessionService.submitVote(session.id, currentUser.uid, selectedVoteTarget);
+                            setSelectedVoteTarget(null);
+                          }
+                        }}
+                        disabled={!selectedVoteTarget || !me?.isAlive}
+                        className="office-btn-primary px-8 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        보고서_생성
+                        투표_제출
                       </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {session.status === SessionStatus.VOTE_RESULT && (
+            <div className="max-w-xl mx-auto">
+              <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
+                <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
+                  투표_결과_보고서
+                </div>
+                <div className="p-8 space-y-8 text-center">
+                  {session.liarGame?.lastVotedPlayerId ? (
+                    <>
+                      <div className="space-y-2">
+                        <div className="text-xs text-[#666]">최다 득표자:</div>
+                        <div className="text-3xl font-black text-[#333]">
+                          {session.players[session.liarGame!.lastVotedPlayerId]?.nickname || '알 수 없음'}
+                        </div>
+                      </div>
+                      
+                      <div className="py-6 border-y border-[#d1d1d1] bg-[#f8f9fa] rounded">
+                        <div className="text-xs text-[#666] mb-2 uppercase tracking-widest">정체 확인 결과</div>
+                        {session.liarGame!.lastVotedPlayerId === session.liarGame!.liarPlayerId ? (
+                          <div className="space-y-2">
+                            <div className="text-4xl font-black text-[#217346]">
+                              라이어 검거 성공!
+                            </div>
+                            <p className="text-xs text-[#666]">해당 플레이어는 라이어가 맞습니다.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="text-4xl font-black text-red-600">
+                              라이어가 아닙니다
+                            </div>
+                            <p className="text-xs text-[#666]">해당 플레이어는 선량한 시민이었습니다.</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {isHost ? (
+                        <div className="pt-4 space-y-3">
+                          {session.liarGame!.lastVotedPlayerId === session.liarGame!.liarPlayerId ? (
+                             <button 
+                              onClick={() => sessionService.advanceStatus(session.id, SessionStatus.SUMMARY)}
+                              className="office-btn-primary w-full py-3 shadow-md hover:shadow-lg transition-all"
+                            >
+                              최종_결과_보기
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => sessionService.advanceStatus(session.id, SessionStatus.PLAYING)}
+                              className="office-btn-primary w-full py-3 shadow-md hover:shadow-lg transition-all"
+                            >
+                              게임_계속하기 (다음 라운드)
+                            </button>
+                          )}
+                          <p className="text-[10px] text-[#999]">관리자만 진행할 수 있습니다.</p>
+                        </div>
+                      ) : (
+                        <div className="text-center p-4 bg-gray-50 rounded border border-gray-100">
+                          <div className="animate-pulse text-xs font-bold text-gray-500">관리자가 다음 단계를 진행하기를 기다리는 중...</div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-sm text-[#666]">투표 결과가 없습니다.</p>
+                       {isHost && (
+                        <button 
+                          onClick={() => sessionService.advanceStatus(session.id, SessionStatus.PLAYING)}
+                          className="office-btn w-full py-2"
+                        >
+                          돌아가기
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
