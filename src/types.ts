@@ -51,6 +51,7 @@ export interface LiarGameState {
   liarPlayerId: string;
   spyPlayerId?: string;
   lastVotedPlayerId?: string;
+  winner?: 'LIAR' | 'CITIZEN';
 }
 
 export interface MafiaGameState {

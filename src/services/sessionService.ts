@@ -58,6 +58,14 @@ export const sessionService = {
     const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
     if (!sessionSnap.exists()) throw new Error('Session not found');
 
+    const sessionData = sessionSnap.val();
+    if (sessionData.players) {
+      const existingPlayer = Object.values(sessionData.players).find(
+        (p: any) => p.nickname === nickname && p.id !== user.uid
+      );
+      if (existingPlayer) throw new Error('이미 사용 중인 닉네임입니다.');
+    }
+
     const player: Player = {
       id: user.uid,
       nickname,
@@ -130,6 +138,7 @@ export const sessionService = {
     playerIds.forEach(pid => {
       updates[`players/${pid}/hasConfirmedRole`] = false;
       updates[`players/${pid}/voteTarget`] = null;
+      updates[`players/${pid}/isAlive`] = true;
     });
 
     await update(ref(db, `sessions/${sessionId}`), updates);
@@ -187,12 +196,30 @@ export const sessionService = {
     await update(ref(db, `sessions/${sessionId}`), { status });
   },
 
+  async resetSession(sessionId: string, players: Record<string, Player>) {
+    if (!db) return;
+    const updates: any = {
+      status: SessionStatus.LOBBY,
+      liarGame: null,
+      mafiaGame: null,
+    };
+    
+    Object.keys(players).forEach(pid => {
+      updates[`players/${pid}/isAlive`] = true;
+      updates[`players/${pid}/voteTarget`] = null;
+      updates[`players/${pid}/hasConfirmedRole`] = false;
+      updates[`players/${pid}/role`] = null;
+    });
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+  },
+
   async submitVote(sessionId: string, playerId: string, targetId: string) {
     if (!db) return;
     await update(ref(db, `sessions/${sessionId}/players/${playerId}`), { voteTarget: targetId });
   },
 
-  async processLiarVote(sessionId: string, players: Record<string, Player>) {
+  async processLiarVote(sessionId: string, players: Record<string, Player>, liarGame: LiarGameState) {
     if (!db) return;
     
     const voteCounts: Record<string, number> = {};
@@ -217,14 +244,33 @@ export const sessionService = {
     if (votedPlayerId) {
       updates[`players/${votedPlayerId}/isAlive`] = false;
       updates['liarGame/lastVotedPlayerId'] = votedPlayerId;
+
+      // Check win condition
+      const isLiarDead = votedPlayerId === liarGame.liarPlayerId;
+      
+      if (!isLiarDead) {
+        // Citizen died. Check if Liar wins.
+        const alivePlayersCount = Object.values(players).filter(p => p.isAlive && p.id !== votedPlayerId).length;
+        
+        // If only 2 players left (1 Liar + 1 Citizen), Liar wins
+        if (alivePlayersCount <= 2) {
+          updates['status'] = SessionStatus.SUMMARY;
+          updates['liarGame/winner'] = 'LIAR';
+        } else {
+          updates['status'] = SessionStatus.VOTE_RESULT;
+        }
+      } else {
+        // Liar died -> Go to result to reveal
+        updates['status'] = SessionStatus.VOTE_RESULT;
+      }
+    } else {
+      updates['status'] = SessionStatus.VOTE_RESULT;
     }
 
     // Reset votes for next round if needed
     Object.keys(players).forEach(pid => {
       updates[`players/${pid}/voteTarget`] = null;
     });
-
-    updates['status'] = SessionStatus.VOTE_RESULT;
     
     await update(ref(db, `sessions/${sessionId}`), updates);
   },

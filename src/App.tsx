@@ -44,8 +44,8 @@ export default function App() {
       const alivePlayers = players.filter(p => p.isAlive);
       const allVoted = alivePlayers.every(p => p.voteTarget);
       if (allVoted && alivePlayers.length > 0) {
-        if (session.gameType === GameType.LIAR) {
-          sessionService.processLiarVote(session.id, session.players);
+        if (session.gameType === GameType.LIAR && session.liarGame) {
+          sessionService.processLiarVote(session.id, session.players, session.liarGame);
         } else {
           sessionService.advanceStatus(session.id, SessionStatus.SUMMARY);
         }
@@ -734,13 +734,25 @@ export default function App() {
                     <div className="py-6 border-y border-[#d1d1d1] space-y-4">
                       {session.gameType === GameType.LIAR ? (
                         <div className="space-y-3">
-                          <div className="text-xs text-[#666]">식별된 라이어:</div>
-                          <div className="text-3xl font-black text-[#217346]">
-                            {session.players[session.liarGame!.liarPlayerId].nickname}
-                          </div>
-                          <div className="text-[10px] text-[#666] bg-[#f8f9fa] p-2 inline-block rounded">
-                            정답 데이터: <span className="font-bold text-[#333]">{session.liarGame?.commonWord}</span>
-                          </div>
+                          {session.liarGame?.winner === 'LIAR' ? (
+                            <>
+                              <div className="text-xs text-[#666]">승리:</div>
+                              <div className="text-4xl font-black text-red-600">라이어 승리!</div>
+                              <div className="text-sm text-[#666]">
+                                라이어는 <span className="font-bold text-[#333]">{session.players[session.liarGame!.liarPlayerId].nickname}</span> 였습니다.
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-xs text-[#666]">식별된 라이어:</div>
+                              <div className="text-3xl font-black text-[#217346]">
+                                {session.players[session.liarGame!.liarPlayerId].nickname}
+                              </div>
+                              <div className="text-[10px] text-[#666] bg-[#f8f9fa] p-2 inline-block rounded">
+                                정답 데이터: <span className="font-bold text-[#333]">{session.liarGame?.commonWord}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -786,7 +798,7 @@ export default function App() {
 
                   {isHost && (
                     <button 
-                      onClick={() => sessionService.advanceStatus(session.id, SessionStatus.LOBBY)}
+                      onClick={() => sessionService.resetSession(session.id, session.players)}
                       className="office-btn-primary w-full py-3"
                     >
                       세션_재시작
