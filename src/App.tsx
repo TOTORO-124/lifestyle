@@ -18,6 +18,8 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [selectedVoteTarget, setSelectedVoteTarget] = useState<string | null>(null);
   const [selectedNightTarget, setSelectedNightTarget] = useState<string | null>(null);
+  const [omokBlackId, setOmokBlackId] = useState<string>('');
+  const [omokWhiteId, setOmokWhiteId] = useState<string>('');
 
   useEffect(() => {
     setSelectedVoteTarget(null);
@@ -158,8 +160,14 @@ export default function App() {
     if (!session) return;
     if (session.gameType === GameType.LIAR) {
       await sessionService.startLiarGame(session.id, session.players, session.settings, session.turnOrder);
-    } else {
+    } else if (session.gameType === GameType.MAFIA) {
       await sessionService.startMafiaGame(session.id, session.players, session.settings, session.turnOrder);
+    } else if (session.gameType === GameType.OMOK) {
+      if (!omokBlackId || !omokWhiteId) {
+        alert('두 명의 플레이어를 선택해주세요.');
+        return;
+      }
+      await sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId);
     }
   };
 
@@ -311,6 +319,14 @@ export default function App() {
                         <span className="font-bold">마피아 게임</span>
                         <span className="text-[9px] font-normal opacity-80">범인 색출 작전</span>
                       </button>
+                      <button 
+                        onClick={() => handleCreateSession(GameType.OMOK)} 
+                        className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 col-span-2"
+                        disabled={loading}
+                      >
+                        <span className="font-bold">오목 (1:1)</span>
+                        <span className="text-[9px] font-normal opacity-80">전략 보드 게임</span>
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -367,7 +383,7 @@ export default function App() {
             <Grid className="text-[#217346]" size={16} />
           </div>
           <h1 className="text-sm font-bold tracking-tight truncate max-w-[200px] sm:max-w-none">
-            {session.gameType === GameType.LIAR ? '감사_라이어_게임.xlsx' : '감사_마피아_게임.xlsx'}
+            {session.gameType === GameType.LIAR ? '감사_라이어_게임.xlsx' : session.gameType === GameType.MAFIA ? '감사_마피아_게임.xlsx' : '감사_오목_대전.xlsx'}
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -590,6 +606,41 @@ export default function App() {
                           </div>
                         </div>
                       )}
+
+                      {session.gameType === GameType.OMOK && (
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-[#999]">흑돌 (선공)</label>
+                            <select 
+                              className="office-input text-xs"
+                              value={omokBlackId}
+                              onChange={(e) => setOmokBlackId(e.target.value)}
+                            >
+                              <option value="">선택하세요</option>
+                              {getSortedPlayers().map(p => (
+                                <option key={p.id} value={p.id} disabled={p.id === omokWhiteId}>{p.nickname}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-[#999]">백돌 (후공)</label>
+                            <select 
+                              className="office-input text-xs"
+                              value={omokWhiteId}
+                              onChange={(e) => setOmokWhiteId(e.target.value)}
+                            >
+                              <option value="">선택하세요</option>
+                              {getSortedPlayers().map(p => (
+                                <option key={p.id} value={p.id} disabled={p.id === omokBlackId}>{p.nickname}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <p className="text-[10px] text-[#999]">
+                            * 오목은 두 명의 플레이어가 진행하며, 나머지는 관전합니다.
+                          </p>
+                        </div>
+                      )}
+
                       <button 
                         onClick={() => sessionService.shuffleTurnOrder(session.id, session.players)}
                         className="office-btn w-full py-2 flex items-center justify-center gap-2"
@@ -688,6 +739,99 @@ export default function App() {
           )}
 
           {session.status === SessionStatus.PLAYING && (
+            session.gameType === GameType.OMOK ? (
+              <div className="max-w-xl mx-auto space-y-6">
+                <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
+                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-[#666]">오목_대전_보드</span>
+                    <div className="flex items-center gap-2 text-xs">
+                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded ${session.omokGame?.currentPlayerId === session.omokGame?.blackPlayerId ? 'bg-black text-white font-bold shadow-sm' : 'bg-gray-100 text-gray-400'}`}>
+                        <div className="w-2 h-2 rounded-full bg-black border border-white/20"></div>
+                        <span>{session.players[session.omokGame!.blackPlayerId].nickname}</span>
+                      </div>
+                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded ${session.omokGame?.currentPlayerId === session.omokGame?.whitePlayerId ? 'bg-white border border-gray-300 text-black font-bold shadow-sm' : 'bg-gray-100 text-gray-400'}`}>
+                        <div className="w-2 h-2 rounded-full bg-white border border-gray-300"></div>
+                        <span>{session.players[session.omokGame!.whitePlayerId].nickname}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 flex justify-center bg-[#e6b06e]">
+                    <div 
+                      className="grid grid-cols-[repeat(15,minmax(0,1fr))] bg-[#e6b06e] border-2 border-black p-1 shadow-inner"
+                      style={{ width: 'min(100%, 450px)', aspectRatio: '1/1' }}
+                    >
+                      {session.omokGame?.board.map((row, y) => (
+                        row.map((cell, x) => (
+                          <div 
+                            key={`${x}-${y}`} 
+                            onClick={() => {
+                              if (session.omokGame?.currentPlayerId === currentUser.uid && cell === 0) {
+                                sessionService.placeOmokStone(session.id, currentUser.uid, x, y);
+                              }
+                            }}
+                            className="relative flex items-center justify-center cursor-pointer hover:bg-black/5"
+                          >
+                            {/* Grid lines */}
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="w-full h-px bg-black/40"></div>
+                              <div className="h-full w-px bg-black/40 absolute"></div>
+                            </div>
+                            
+                            {/* Stone */}
+                            {cell === 1 && (
+                              <div className="w-[85%] h-[85%] rounded-full bg-black shadow-md z-10 relative transform transition-transform duration-200 scale-100" />
+                            )}
+                            {cell === 2 && (
+                              <div className="w-[85%] h-[85%] rounded-full bg-white border border-gray-300 shadow-md z-10 relative transform transition-transform duration-200 scale-100" />
+                            )}
+                            
+                            {/* Hover preview for current player */}
+                            {cell === 0 && session.omokGame?.currentPlayerId === currentUser.uid && (
+                              <div className={`absolute w-[40%] h-[40%] rounded-full opacity-0 hover:opacity-50 transition-opacity z-20 ${
+                                session.omokGame.blackPlayerId === currentUser.uid ? 'bg-black' : 'bg-white border border-gray-300'
+                              }`} />
+                            )}
+                          </div>
+                        ))
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-[#f8f9fa] border-t border-[#d1d1d1] px-4 py-3 text-center text-xs">
+                    {session.omokGame?.currentPlayerId === currentUser.uid ? (
+                      <div className="flex items-center justify-center gap-2 text-[#217346] font-bold animate-pulse">
+                        <Play size={12} fill="currentColor" />
+                        <span>당신의 차례입니다! 돌을 놓을 위치를 선택하세요.</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 text-[#666]">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                        <span>상대방의 수를 기다리는 중입니다...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Spectator List */}
+                <div className="bg-white border border-[#d1d1d1] rounded shadow-sm p-4">
+                  <h3 className="text-[10px] font-bold text-[#666] mb-2 uppercase">관전 중인 플레이어</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(Object.values(session.players) as Player[]).filter(p => p.id !== session.omokGame?.blackPlayerId && p.id !== session.omokGame?.whitePlayerId).map(p => (
+                      <div key={p.id} className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600 flex items-center gap-1">
+                        <User size={10} />
+                        {p.nickname}
+                      </div>
+                    ))}
+                    {(Object.values(session.players) as Player[]).filter(p => p.id !== session.omokGame?.blackPlayerId && p.id !== session.omokGame?.whitePlayerId).length === 0 && (
+                      <span className="text-xs text-gray-400">관전자가 없습니다.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div className="space-y-6">
               {session.gameType === GameType.MAFIA && session.mafiaGame?.nightResult && (
                 <div className="bg-slate-800 text-white p-4 rounded shadow-md border-l-4 border-slate-500">
@@ -810,7 +954,7 @@ export default function App() {
                 </table>
               </div>
             </div>
-          )}
+          ))}
 
           {session.status === SessionStatus.VOTING && (
             <div className="max-w-xl mx-auto">
@@ -1154,7 +1298,31 @@ export default function App() {
                     <h3 className="text-[10px] font-bold text-[#999] uppercase tracking-widest">감사 결과</h3>
                     
                     <div className="py-6 border-y border-[#d1d1d1] space-y-4">
-                      {session.gameType === GameType.LIAR ? (
+                      {session.gameType === GameType.OMOK ? (
+                        <div className="space-y-4">
+                          <div className="text-xs text-[#666]">승리:</div>
+                          {session.omokGame?.isDraw ? (
+                            <div className="text-3xl font-black text-[#666]">무승부</div>
+                          ) : (
+                            <div className="text-3xl font-black text-[#217346]">
+                              {session.players[session.omokGame!.winner!].nickname} 승리!
+                            </div>
+                          )}
+                          
+                          <div className="flex justify-center gap-8 mt-6">
+                            <div className={`text-center p-4 rounded border ${session.omokGame?.winner === session.omokGame?.blackPlayerId ? 'bg-black/5 border-black' : 'border-transparent'}`}>
+                              <div className="w-12 h-12 rounded-full bg-black mx-auto mb-2 shadow-lg flex items-center justify-center text-white font-bold text-xs border-2 border-white/20">흑</div>
+                              <div className="text-sm font-bold">{session.players[session.omokGame!.blackPlayerId].nickname}</div>
+                              {session.omokGame?.winner === session.omokGame?.blackPlayerId && <div className="text-[10px] text-[#217346] font-bold mt-1">WINNER</div>}
+                            </div>
+                            <div className={`text-center p-4 rounded border ${session.omokGame?.winner === session.omokGame?.whitePlayerId ? 'bg-gray-100 border-gray-400' : 'border-transparent'}`}>
+                              <div className="w-12 h-12 rounded-full bg-white border-2 border-gray-300 mx-auto mb-2 shadow-lg flex items-center justify-center text-black font-bold text-xs">백</div>
+                              <div className="text-sm font-bold">{session.players[session.omokGame!.whitePlayerId].nickname}</div>
+                              {session.omokGame?.winner === session.omokGame?.whitePlayerId && <div className="text-[10px] text-[#217346] font-bold mt-1">WINNER</div>}
+                            </div>
+                          </div>
+                        </div>
+                      ) : session.gameType === GameType.LIAR ? (
                         <div className="space-y-3">
                           {session.liarGame?.winner === 'LIAR' ? (
                             <>

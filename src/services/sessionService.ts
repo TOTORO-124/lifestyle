@@ -558,5 +558,111 @@ export const sessionService = {
       timestamp: Date.now(),
       isSpectatorChat,
     });
+  },
+
+  async startOmokGame(sessionId: string, blackPlayerId: string, whitePlayerId: string) {
+    if (!db) return;
+    
+    // Initialize 15x15 board
+    const board = Array(15).fill(null).map(() => Array(15).fill(0));
+    
+    const omokGame: any = {
+      board,
+      blackPlayerId,
+      whitePlayerId,
+      currentPlayerId: blackPlayerId,
+      winner: null,
+      winningLine: null,
+      isDraw: false
+    };
+
+    const updates: any = {
+      status: SessionStatus.PLAYING,
+      omokGame
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), updates);
+  },
+
+  async placeOmokStone(sessionId: string, playerId: string, x: number, y: number) {
+    if (!db) return;
+    
+    const sessionRef = ref(db, `sessions/${sessionId}`);
+    const snapshot = await get(sessionRef);
+    const session = snapshot.val();
+    if (!session || !session.omokGame) return;
+    
+    const game = session.omokGame;
+    if (game.currentPlayerId !== playerId) return;
+    if (game.board[y][x] !== 0) return;
+
+    const isBlack = playerId === game.blackPlayerId;
+    const stone = isBlack ? 1 : 2;
+    
+    // Update local board copy for win check
+    const newBoard = game.board.map((row: any) => [...row]);
+    newBoard[y][x] = stone;
+    
+    // Check Win
+    const winInfo = this.checkOmokWin(newBoard, x, y, stone);
+    
+    const updates: any = {};
+    updates[`omokGame/board/${y}/${x}`] = stone;
+    
+    if (winInfo) {
+      updates['omokGame/winner'] = playerId;
+      updates['omokGame/winningLine'] = winInfo;
+      updates['status'] = SessionStatus.SUMMARY;
+    } else {
+      // Check Draw (Board full)
+      const isFull = newBoard.every((row: any) => row.every((cell: any) => cell !== 0));
+      if (isFull) {
+        updates['omokGame/isDraw'] = true;
+        updates['status'] = SessionStatus.SUMMARY;
+      } else {
+        updates['omokGame/currentPlayerId'] = isBlack ? game.whitePlayerId : game.blackPlayerId;
+      }
+    }
+
+    await update(sessionRef, updates);
+  },
+
+  checkOmokWin(board: number[][], x: number, y: number, stone: number) {
+    const directions = [
+      [1, 0],  // Horizontal
+      [0, 1],  // Vertical
+      [1, 1],  // Diagonal \
+      [1, -1]  // Diagonal /
+    ];
+
+    for (const [dx, dy] of directions) {
+      let count = 1;
+      const line = [{x, y}];
+
+      // Check forward
+      let i = 1;
+      while (true) {
+        const nx = x + dx * i;
+        const ny = y + dy * i;
+        if (ny < 0 || ny >= 15 || nx < 0 || nx >= 15 || board[ny][nx] !== stone) break;
+        count++;
+        line.push({x: nx, y: ny});
+        i++;
+      }
+
+      // Check backward
+      i = 1;
+      while (true) {
+        const nx = x - dx * i;
+        const ny = y - dy * i;
+        if (ny < 0 || ny >= 15 || nx < 0 || nx >= 15 || board[ny][nx] !== stone) break;
+        count++;
+        line.push({x: nx, y: ny});
+        i++;
+      }
+
+      if (count >= 5) return line;
+    }
+    return null;
   }
 };

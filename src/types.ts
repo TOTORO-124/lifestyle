@@ -1,6 +1,7 @@
 export enum GameType {
   LIAR = 'LIAR',
   MAFIA = 'MAFIA',
+  OMOK = 'OMOK',
 }
 
 export enum SessionStatus {
@@ -71,6 +72,16 @@ export interface MafiaGameState {
   };
 }
 
+export interface OmokGameState {
+  board: number[][]; // 0: empty, 1: black, 2: white
+  currentPlayerId: string;
+  blackPlayerId: string;
+  whitePlayerId: string;
+  winner?: string; // playerId
+  winningLine?: {x: number, y: number}[];
+  isDraw?: boolean;
+}
+
 export interface Session {
   id: string;
   gameType: GameType;
@@ -81,6 +92,7 @@ export interface Session {
   players: Record<string, Player>;
   liarGame?: LiarGameState;
   mafiaGame?: MafiaGameState;
+  omokGame?: OmokGameState;
   settings: {
     maxPlayers: number;
     liarMode?: LiarMode;
