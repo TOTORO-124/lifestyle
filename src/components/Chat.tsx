@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, X, Minimize2, Maximize2 } from 'lucide-react';
+import { MessageCircle, Send, X, Minimize2, Maximize2, Smile } from 'lucide-react';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { Session, ChatMessage } from '../types';
 import { sessionService } from '../services/sessionService';
 
@@ -14,9 +15,11 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSp
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const lastReadTimestampRef = useRef<number>(Date.now());
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   const messages = session.messages 
     ? (Object.values(session.messages) as ChatMessage[])
@@ -36,6 +39,22 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSp
     }
   }, [messages.length, isOpen, isMinimized]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showEmojiPicker]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -53,10 +72,16 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSp
         isSpectator // Pass isSpectator status
       );
       setMessage('');
+      setShowEmojiPicker(false);
       scrollToBottom();
     } catch (error) {
       console.error('Failed to send message:', error);
     }
+  };
+
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    setMessage((prev) => prev + emojiData.emoji);
+    // Keep picker open for multiple emojis or close it? usually keep it open
   };
 
   if (!currentUser) return null;
@@ -116,7 +141,7 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSp
           {/* Messages Area */}
           {!isMinimized && (
             <>
-              <div className="flex-1 overflow-y-auto p-4 bg-[#f8f9fa] space-y-3">
+              <div className="flex-1 overflow-y-auto p-4 bg-[#f8f9fa] space-y-3 relative">
                 {messages.length === 0 ? (
                   <div className="text-center text-gray-400 text-xs py-8">
                     대화가 없습니다. 첫 메시지를 보내보세요!
@@ -156,10 +181,31 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSp
                   })
                 )}
                 <div ref={messagesEndRef} />
+                
+                {/* Emoji Picker Popup */}
+                {showEmojiPicker && (
+                  <div ref={emojiPickerRef} className="absolute bottom-2 left-2 z-10 shadow-xl">
+                    <EmojiPicker 
+                      onEmojiClick={onEmojiClick} 
+                      width={300} 
+                      height={350}
+                      searchDisabled={false}
+                      skinTonesDisabled={true}
+                      previewConfig={{ showPreview: false }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Input Area */}
-              <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-[#d1d1d1] flex gap-2">
+              <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-[#d1d1d1] flex gap-2 items-center">
+                <button
+                  type="button"
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <Smile size={20} />
+                </button>
                 <input
                   type="text"
                   value={message}
