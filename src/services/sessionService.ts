@@ -901,6 +901,7 @@ export const sessionService = {
     
     const updates: any = {};
     updates[`omokGame/board/${y}/${x}`] = stone;
+    updates['omokGame/lastMove'] = { x, y };
     
     if (winInfo) {
       updates['omokGame/winner'] = playerId;

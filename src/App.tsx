@@ -1057,10 +1057,18 @@ export default function App() {
                             
                             {/* Stone */}
                             {cell === 1 && (
-                              <div className="w-[85%] h-[85%] rounded-full bg-black shadow-md z-10 relative transform transition-transform duration-200 scale-100" />
+                              <div className="w-[85%] h-[85%] rounded-full bg-black shadow-md z-10 relative transform transition-transform duration-200 scale-100 flex items-center justify-center">
+                                {session.omokGame?.lastMove?.x === x && session.omokGame?.lastMove?.y === y && (
+                                  <div className="w-[30%] h-[30%] rounded-full bg-red-500 animate-pulse" />
+                                )}
+                              </div>
                             )}
                             {cell === 2 && (
-                              <div className="w-[85%] h-[85%] rounded-full bg-white border border-gray-300 shadow-md z-10 relative transform transition-transform duration-200 scale-100" />
+                              <div className="w-[85%] h-[85%] rounded-full bg-white border border-gray-300 shadow-md z-10 relative transform transition-transform duration-200 scale-100 flex items-center justify-center">
+                                {session.omokGame?.lastMove?.x === x && session.omokGame?.lastMove?.y === y && (
+                                  <div className="w-[30%] h-[30%] rounded-full bg-red-500 animate-pulse" />
+                                )}
+                              </div>
                             )}
                             
                             {/* Hover preview for current player */}

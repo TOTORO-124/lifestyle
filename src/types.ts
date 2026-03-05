@@ -84,6 +84,7 @@ export interface OmokGameState {
   winner?: string; // playerId
   winningLine?: {x: number, y: number}[];
   isDraw?: boolean;
+  lastMove?: { x: number; y: number };
 }
 
 export interface BingoGameState {
