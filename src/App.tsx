@@ -140,6 +140,41 @@ export default function App() {
     }
   }, [sessionId]);
 
+  // Timer effect for Draw Game
+  useEffect(() => {
+    if (!session || session.gameType !== GameType.DRAW || session.status !== SessionStatus.PLAYING) return;
+    if (!session.drawGame) return;
+
+    // Only host manages the timer
+    if (isHost) {
+      const timerId = setInterval(() => {
+        if (session.drawGame && session.drawGame.timer > 0) {
+          sessionService.updateDrawTimer(session.id, session.drawGame.timer - 1);
+        } else if (session.drawGame && session.drawGame.timer === 0) {
+          // Time's up!
+          sessionService.nextDrawTurn(session.id, session);
+        }
+      }, 1000);
+
+      return () => clearInterval(timerId);
+    }
+  }, [session?.id, session?.gameType, session?.status, session?.drawGame?.timer, isHost]);
+
+  const [chatMessage, setChatMessage] = useState('');
+  const chatContainerRef = React.useRef<HTMLDivElement>(null);
+
+  const handleSendMessage = async () => {
+    if (!chatMessage.trim() || !session || !currentUser) return;
+    await sessionService.sendMessage(session.id, currentUser.uid, nickname, chatMessage);
+    setChatMessage('');
+  };
+
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [session?.messages]);
+
   const handleCreateSession = async (gameType: GameType) => {
     const trimmedNickname = nickname.trim();
     if (!trimmedNickname) {
@@ -421,41 +456,6 @@ export default function App() {
       </div>
     );
   }
-
-  // Timer effect for Draw Game
-  useEffect(() => {
-    if (!session || session.gameType !== GameType.DRAW || session.status !== SessionStatus.PLAYING) return;
-    if (!session.drawGame) return;
-
-    // Only host manages the timer
-    if (isHost) {
-      const timerId = setInterval(() => {
-        if (session.drawGame && session.drawGame.timer > 0) {
-          sessionService.updateDrawTimer(session.id, session.drawGame.timer - 1);
-        } else if (session.drawGame && session.drawGame.timer === 0) {
-          // Time's up!
-          sessionService.nextDrawTurn(session.id, session);
-        }
-      }, 1000);
-
-      return () => clearInterval(timerId);
-    }
-  }, [session?.id, session?.gameType, session?.status, session?.drawGame?.timer, isHost]);
-
-  const [chatMessage, setChatMessage] = useState('');
-  const chatContainerRef = React.useRef<HTMLDivElement>(null);
-
-  const handleSendMessage = async () => {
-    if (!chatMessage.trim() || !session || !currentUser) return;
-    await sessionService.sendMessage(session.id, currentUser.uid, nickname, chatMessage);
-    setChatMessage('');
-  };
-
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  }, [session?.messages]);
 
   // Handle spectator mode
   if (me?.isSpectator) {
