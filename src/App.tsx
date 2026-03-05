@@ -28,6 +28,7 @@ export default function App() {
   const [bingoSubmitted, setBingoSubmitted] = useState(false);
   const [drawGuess, setDrawGuess] = useState('');
   const [showBingoWords, setShowBingoWords] = useState(false);
+  const [showLiarKeyword, setShowLiarKeyword] = useState(false);
 
   const isHost = session?.hostId === currentUser?.uid;
   const me = session?.players?.[currentUser?.uid];
@@ -1039,46 +1040,55 @@ export default function App() {
                       style={{ width: 'min(100%, 450px)', aspectRatio: '1/1' }}
                     >
                       {session.omokGame?.board.map((row, y) => (
-                        row.map((cell, x) => (
-                          <div 
-                            key={`${x}-${y}`} 
-                            onClick={() => {
-                              if (session.omokGame?.currentPlayerId === currentUser.uid && cell === 0) {
-                                sessionService.placeOmokStone(session.id, currentUser.uid, x, y);
-                              }
-                            }}
-                            className="relative flex items-center justify-center cursor-pointer hover:bg-black/5"
-                          >
-                            {/* Grid lines */}
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                              <div className="w-full h-px bg-black/40"></div>
-                              <div className="h-full w-px bg-black/40 absolute"></div>
+                        row.map((cell, x) => {
+                          const isWinningStone = session.omokGame?.winningLine?.some(pos => pos.x === x && pos.y === y);
+                          return (
+                            <div 
+                              key={`${x}-${y}`} 
+                              onClick={() => {
+                                if (session.omokGame?.currentPlayerId === currentUser.uid && cell === 0) {
+                                  sessionService.placeOmokStone(session.id, currentUser.uid, x, y);
+                                }
+                              }}
+                              className={`relative flex items-center justify-center cursor-pointer hover:bg-black/5 ${isWinningStone ? 'bg-yellow-200/50' : ''}`}
+                            >
+                              {/* Grid lines */}
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="w-full h-px bg-black/40"></div>
+                                <div className="h-full w-px bg-black/40 absolute"></div>
+                              </div>
+                              
+                              {/* Stone */}
+                              {cell === 1 && (
+                                <div className={`w-[85%] h-[85%] rounded-full bg-black shadow-md z-10 relative transform transition-transform duration-200 scale-100 flex items-center justify-center ${isWinningStone ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}>
+                                  {session.omokGame?.lastMove?.x === x && session.omokGame?.lastMove?.y === y && (
+                                    <div className="w-[30%] h-[30%] rounded-full bg-red-500 animate-pulse" />
+                                  )}
+                                  {isWinningStone && (
+                                    <div className="absolute inset-0 rounded-full animate-ping bg-yellow-400 opacity-20" />
+                                  )}
+                                </div>
+                              )}
+                              {cell === 2 && (
+                                <div className={`w-[85%] h-[85%] rounded-full bg-white border border-gray-300 shadow-md z-10 relative transform transition-transform duration-200 scale-100 flex items-center justify-center ${isWinningStone ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}>
+                                  {session.omokGame?.lastMove?.x === x && session.omokGame?.lastMove?.y === y && (
+                                    <div className="w-[30%] h-[30%] rounded-full bg-red-500 animate-pulse" />
+                                  )}
+                                  {isWinningStone && (
+                                    <div className="absolute inset-0 rounded-full animate-ping bg-yellow-400 opacity-20" />
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* Hover preview for current player */}
+                              {cell === 0 && session.omokGame?.currentPlayerId === currentUser.uid && (
+                                <div className={`absolute w-[40%] h-[40%] rounded-full opacity-0 hover:opacity-50 transition-opacity z-20 ${
+                                  session.omokGame.blackPlayerId === currentUser.uid ? 'bg-black' : 'bg-white border border-gray-300'
+                                }`} />
+                              )}
                             </div>
-                            
-                            {/* Stone */}
-                            {cell === 1 && (
-                              <div className="w-[85%] h-[85%] rounded-full bg-black shadow-md z-10 relative transform transition-transform duration-200 scale-100 flex items-center justify-center">
-                                {session.omokGame?.lastMove?.x === x && session.omokGame?.lastMove?.y === y && (
-                                  <div className="w-[30%] h-[30%] rounded-full bg-red-500 animate-pulse" />
-                                )}
-                              </div>
-                            )}
-                            {cell === 2 && (
-                              <div className="w-[85%] h-[85%] rounded-full bg-white border border-gray-300 shadow-md z-10 relative transform transition-transform duration-200 scale-100 flex items-center justify-center">
-                                {session.omokGame?.lastMove?.x === x && session.omokGame?.lastMove?.y === y && (
-                                  <div className="w-[30%] h-[30%] rounded-full bg-red-500 animate-pulse" />
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* Hover preview for current player */}
-                            {cell === 0 && session.omokGame?.currentPlayerId === currentUser.uid && (
-                              <div className={`absolute w-[40%] h-[40%] rounded-full opacity-0 hover:opacity-50 transition-opacity z-20 ${
-                                session.omokGame.blackPlayerId === currentUser.uid ? 'bg-black' : 'bg-white border border-gray-300'
-                              }`} />
-                            )}
-                          </div>
-                        ))
+                          );
+                        })
                       ))}
                     </div>
                   </div>
@@ -1441,6 +1451,39 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
+                  {session.gameType === GameType.LIAR && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowLiarKeyword(!showLiarKeyword)}
+                        className={`office-btn px-3 py-2 text-xs flex items-center justify-center gap-1 whitespace-nowrap ${showLiarKeyword ? 'bg-yellow-100 border-yellow-300 text-yellow-800' : ''}`}
+                        title="제시어 다시 확인하기"
+                      >
+                        {showLiarKeyword ? <Sun size={12} /> : <Moon size={12} />}
+                        <span>{showLiarKeyword ? '제시어 숨기기' : '제시어 확인'}</span>
+                      </button>
+                      {showLiarKeyword && (
+                        <div className="absolute top-full right-0 mt-2 p-3 bg-white border border-yellow-300 shadow-xl rounded z-50 min-w-[200px] animate-in fade-in zoom-in-95 duration-200">
+                          <div className="text-[10px] text-gray-500 mb-1 font-bold flex items-center gap-1">
+                            <AlertTriangle size={10} className="text-yellow-500" /> 보안 주의
+                          </div>
+                          <div className="text-center py-2">
+                            {session.liarGame?.liarPlayerId === currentUser.uid ? (
+                              session.liarGame?.mode === LiarMode.FOOL ? (
+                                <div className="flex flex-col items-center">
+                                  <span className="text-red-600 font-black text-lg">{session.liarGame?.liarWord}</span>
+                                  <span className="text-[9px] text-red-400 font-bold">(바보 라이어 단어)</span>
+                                </div>
+                              ) : (
+                                <span className="text-red-600 font-black text-lg">당신은 라이어입니다</span>
+                              )
+                            ) : (
+                              <span className="text-[#217346] font-black text-lg">{session.liarGame?.commonWord}</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {isHost && (
                     <button 
                       onClick={() => sessionService.shuffleTurnOrder(session.id, session.players)}
