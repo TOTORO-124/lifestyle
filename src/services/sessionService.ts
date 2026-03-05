@@ -85,6 +85,8 @@ export const sessionService = {
       if (existingPlayer) throw new Error('이미 사용 중인 닉네임입니다.');
     }
 
+    const isGameInProgress = sessionData.status !== SessionStatus.LOBBY;
+
     const player: Player = {
       id: user.uid,
       nickname,
@@ -93,9 +95,21 @@ export const sessionService = {
       isReady: false,
       isConnected: true,
       lastActive: Date.now(),
+      isSpectator: isGameInProgress, // Set spectator if game is running
     };
 
     await set(ref(db, `sessions/${sessionId}/players/${user.uid}`), player);
+    
+    if (isGameInProgress) {
+      // Add log for spectator join
+      const logRef = push(ref(db, `sessions/${sessionId}/logs`));
+      await set(logRef, {
+        id: logRef.key,
+        type: 'info',
+        content: `${nickname}님이 관전자로 입장했습니다.`,
+        timestamp: Date.now()
+      });
+    }
   },
 
   async kickPlayer(sessionId: string, playerId: string) {
@@ -809,6 +823,11 @@ export const sessionService = {
 
       // Move to next turn or end
       await this.nextDrawTurn(sessionId, session, newScores);
+    } else {
+      // Incorrect guess - Log it or send a message
+      const player = session.players[playerId].nickname;
+      // We can add a log or just a chat message. Let's add a system message to chat for better visibility
+      await this.sendMessage(sessionId, playerId, player, `오답: ${guess}`, false, false);
     }
   },
 
@@ -845,7 +864,7 @@ export const sessionService = {
       const updates: any = {
         'drawGame/presenterId': turnOrder[nextIndex],
         'drawGame/word': secretWord,
-        'drawGame/canvasData': '',
+        'drawGame/canvasData': '', // Clear canvas
         'drawGame/round': nextRound,
         'drawGame/lastGuesserId': null,
         'drawGame/timer': session.settings.drawTime || 60

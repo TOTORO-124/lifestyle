@@ -7,7 +7,7 @@ import { LIAR_TOPICS } from './data/topics';
 import { BINGO_TOPICS } from './data/bingoTopics';
 import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy } from 'lucide-react';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send } from 'lucide-react';
 
 export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -418,6 +418,132 @@ export default function App() {
           <div className="flex-1" />
           <div className="px-4 text-[10px] text-[#999]">100% 준비됨</div>
         </footer>
+      </div>
+    );
+  }
+
+  // Timer effect for Draw Game
+  useEffect(() => {
+    if (!session || session.gameType !== GameType.DRAW || session.status !== SessionStatus.PLAYING) return;
+    if (!session.drawGame) return;
+
+    // Only host manages the timer
+    if (isHost) {
+      const timerId = setInterval(() => {
+        if (session.drawGame && session.drawGame.timer > 0) {
+          sessionService.updateDrawTimer(session.id, session.drawGame.timer - 1);
+        } else if (session.drawGame && session.drawGame.timer === 0) {
+          // Time's up!
+          sessionService.nextDrawTurn(session.id, session);
+        }
+      }, 1000);
+
+      return () => clearInterval(timerId);
+    }
+  }, [session?.id, session?.gameType, session?.status, session?.drawGame?.timer, isHost]);
+
+  const [chatMessage, setChatMessage] = useState('');
+  const chatContainerRef = React.useRef<HTMLDivElement>(null);
+
+  const handleSendMessage = async () => {
+    if (!chatMessage.trim() || !session || !currentUser) return;
+    await sessionService.sendMessage(session.id, currentUser.uid, nickname, chatMessage);
+    setChatMessage('');
+  };
+
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [session?.messages]);
+
+  // Handle spectator mode
+  if (me?.isSpectator) {
+    return (
+      <div className="min-h-screen bg-[#f3f2f1] font-sans text-[#333] flex flex-col">
+        <header className="bg-[#217346] text-white px-4 py-3 shadow-md flex items-center justify-between z-10">
+          <div className="flex items-center gap-2">
+            <Grid size={18} />
+            <h1 className="font-bold text-sm tracking-wide">Office Games - 관전 모드</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 px-3 py-1 rounded text-xs flex items-center gap-2">
+              <Eye size={12} />
+              <span>{session?.players[currentUser.uid]?.nickname} (관전 중)</span>
+            </div>
+          </div>
+        </header>
+        <main className="flex-1 p-4 overflow-y-auto">
+          {/* Render game view based on type, but without interaction controls */}
+          {session?.gameType === GameType.DRAW && session.drawGame ? (
+             <div className="max-w-3xl mx-auto space-y-6">
+                <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
+                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                      <span className="text-[10px] font-bold text-[#666]">비주얼_브리핑_진행 (관전)</span>
+                      <div className="h-3 w-px bg-[#d1d1d1]" />
+                      <div className="text-[10px] text-[#666]">라운드: <span className="font-bold text-[#217346]">{session.drawGame.round} / {session.drawGame.maxRounds}</span></div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-bold text-red-600">
+                      <Timer size={14} />
+                      <span>{session.drawGame.timer}s</span>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <Canvas 
+                      isPresenter={false}
+                      onDraw={() => {}}
+                      initialData={session.drawGame.canvasData}
+                      readOnly={true}
+                    />
+                  </div>
+                </div>
+                {/* Chat for spectators */}
+                <div className="bg-white border border-[#d1d1d1] rounded shadow-sm flex flex-col h-64">
+                   <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-3 py-2 text-[10px] font-bold text-[#666] flex items-center gap-2">
+                      <MessageSquare size={10} />
+                      실시간_채팅
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-white" ref={chatContainerRef}>
+                      {(Object.values(session.messages || {}) as any[]).sort((a, b) => a.timestamp - b.timestamp).map((msg) => (
+                        <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser.uid ? 'items-end' : 'items-start'}`}>
+                          <div className="flex items-baseline gap-1 mb-0.5">
+                            <span className="text-[9px] font-bold text-[#333]">{msg.senderName}</span>
+                            <span className="text-[8px] text-[#999]">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          <div className={`px-2 py-1.5 rounded text-xs max-w-[80%] break-words ${
+                            msg.isSystem ? 'bg-gray-100 text-gray-600 w-full text-center italic' :
+                            msg.senderId === currentUser.uid ? 'bg-[#e8f0fe] text-[#1a73e8]' : 'bg-[#f1f3f4] text-[#202124]'
+                          }`}>
+                            {msg.content}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-2 bg-[#f8f9fa] border-t border-[#d1d1d1]">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={chatMessage}
+                          onChange={(e) => setChatMessage(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                          placeholder="메시지를 입력하세요..."
+                          className="office-input flex-1"
+                        />
+                        <button onClick={handleSendMessage} className="office-btn px-3">
+                          <Send size={12} />
+                        </button>
+                      </div>
+                    </div>
+                </div>
+             </div>
+          ) : (
+            <div className="text-center py-10">
+              <p className="text-gray-500">현재 진행 중인 게임을 관전하고 있습니다.</p>
+              <p className="text-sm text-gray-400 mt-2">게임 종류: {session?.gameType}</p>
+            </div>
+          )}
+        </main>
       </div>
     );
   }
@@ -1293,12 +1419,23 @@ export default function App() {
                           const timer = session.drawGame?.timer || 0;
                           const maxTime = session.settings.drawTime || 60;
                           if (session.drawGame?.presenterId === currentUser.uid) return word;
-                          let hint = word.split('').map(() => '_').join(' ');
+                          
+                          // Hint logic:
+                          // 50% time left: Show first char
+                          // 25% time left: Show first two chars
+                          let hint = '';
+                          for (let i = 0; i < word.length; i++) {
+                             if (word[i] === ' ') hint += '  '; // Double space for word separation
+                             else hint += '_ ';
+                          }
+
                           if (timer < maxTime * 0.5 && word.length > 0) {
-                            hint = word[0] + hint.substring(1);
+                            // Reveal first char
+                            hint = word[0] + hint.substring(2);
                           }
                           if (timer < maxTime * 0.25 && word.length > 1) {
-                            hint = hint.substring(0, 2) + word[1] + hint.substring(3);
+                            // Reveal second char
+                            hint = word[0] + ' ' + word[1] + hint.substring(4);
                           }
                           return hint;
                         })()}
@@ -1320,9 +1457,9 @@ export default function App() {
                           initialData={session.drawGame?.canvasData}
                         />
                         {session.drawGame?.presenterId === currentUser.uid && (
-                          <div className="absolute top-2 left-2 flex flex-col gap-2">
-                            <div className="bg-[#217346] text-white px-3 py-1 rounded text-xs font-bold shadow-md flex items-center gap-2">
-                              <Palette size={12} />
+                          <div className="absolute top-2 left-2 flex flex-col gap-2 z-10">
+                            <div className="bg-[#217346] text-white px-4 py-2 rounded-md text-lg font-black shadow-lg flex items-center gap-2 animate-pulse border-2 border-white/30">
+                              <Palette size={20} />
                               <span>제시어: {session.drawGame?.word}</span>
                             </div>
                             <button 

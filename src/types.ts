@@ -42,6 +42,7 @@ export interface Player {
   isAlive: boolean;
   isReady: boolean;
   isConnected: boolean;
+  isSpectator?: boolean;
   role?: string;
   voteTarget?: string;
   hasConfirmedRole?: boolean;
