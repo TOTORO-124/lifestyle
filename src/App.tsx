@@ -935,49 +935,48 @@ export default function App() {
                   </div>
 
                   <div className="w-full md:w-64 space-y-4">
-                    <div className="bg-[#f8f9fa] border border-[#d1d1d1] rounded p-3">
-                      <div className="flex justify-between items-center mb-2">
-                        <h4 className="text-[9px] font-bold text-[#999] uppercase">추천 단어 리스트</h4>
-                        <button 
-                          onClick={() => setShowBingoWords(!showBingoWords)}
-                          className="text-[9px] text-[#217346] hover:underline"
-                        >
-                          {showBingoWords ? '숨기기' : '보기'}
-                        </button>
+                    <div className="bg-[#f8f9fa] border border-[#d1d1d1] rounded p-3 h-full flex flex-col">
+                      <div className="flex justify-between items-center mb-2 shrink-0">
+                        <h4 className="text-[9px] font-bold text-[#999] uppercase flex items-center gap-1">
+                          <ListOrdered size={10} />
+                          추천 단어 ({session.bingoGame?.category || '랜덤'})
+                        </h4>
                       </div>
                       
-                      {showBingoWords && (
-                        <div className="max-h-64 overflow-y-auto grid grid-cols-2 gap-1">
-                          {(session.bingoGame?.category === '랜덤' 
-                            ? BINGO_TOPICS.flatMap(t => t.words) 
-                            : BINGO_TOPICS.find(t => t.category === session.bingoGame?.category)?.words || []
-                          ).map(word => (
-                            <button
-                              key={word}
-                              onClick={() => {
-                                if (bingoSubmitted) return;
-                                // Find first empty cell
-                                const newBoard = [...bingoBoard.map(row => [...row])];
-                                let found = false;
-                                for (let r = 0; r < 5; r++) {
-                                  for (let c = 0; c < 5; c++) {
-                                    if (!newBoard[r][c]) {
-                                      newBoard[r][c] = word;
-                                      found = true;
-                                      break;
-                                    }
+                      <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-1 max-h-[300px] content-start">
+                        {(session.bingoGame?.category === '랜덤' 
+                          ? BINGO_TOPICS.flatMap(t => t.words) 
+                          : BINGO_TOPICS.find(t => t.category === session.bingoGame?.category)?.words || []
+                        ).map(word => (
+                          <button
+                            key={word}
+                            onClick={() => {
+                              if (bingoSubmitted) return;
+                              // Find first empty cell
+                              const newBoard = [...bingoBoard.map(row => [...row])];
+                              let found = false;
+                              for (let r = 0; r < 5; r++) {
+                                for (let c = 0; c < 5; c++) {
+                                  if (!newBoard[r][c]) {
+                                    newBoard[r][c] = word;
+                                    found = true;
+                                    break;
                                   }
-                                  if (found) break;
                                 }
-                                if (found) setBingoBoard(newBoard);
-                              }}
-                              className="text-[10px] p-1 bg-white border border-[#d1d1d1] hover:bg-[#e8f0fe] truncate text-left"
-                            >
-                              {word}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                                if (found) break;
+                              }
+                              if (found) setBingoBoard(newBoard);
+                            }}
+                            className="text-[10px] p-1.5 bg-white border border-[#d1d1d1] hover:bg-[#e8f0fe] hover:border-[#217346] hover:text-[#217346] truncate text-left rounded transition-colors"
+                            title="클릭하여 빈 칸에 추가"
+                          >
+                            {word}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mt-2 text-[9px] text-[#999] text-center shrink-0">
+                        단어를 클릭하면 빈 칸에 자동으로 채워집니다.
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1003,7 +1002,7 @@ export default function App() {
                         onClick={() => {
                           const isComplete = bingoBoard.every(row => row.every(cell => cell.trim() !== ''));
                           if (!isComplete && !confirm('빈 칸이 있습니다. 그대로 제출하시겠습니까?')) return;
-                          sessionService.submitBingoBoard(session.id, currentUser.uid, bingoBoard);
+                          sessionService.submitBingoBoard(session.id, currentUser.uid, bingoBoard, Object.keys(session.players).length);
                           setBingoSubmitted(true);
                         }}
                         className="office-btn-primary px-12 py-2"
@@ -1136,7 +1135,13 @@ export default function App() {
                 </div>
               </div>
             ) : session.gameType === GameType.BINGO ? (
-              <div className="max-w-2xl mx-auto space-y-6">
+              !session.bingoGame ? (
+                <div className="flex flex-col items-center justify-center p-10">
+                  <RefreshCw className="animate-spin text-[#217346] mb-4" size={32} />
+                  <p className="text-sm text-gray-500">빙고 게임 데이터를 불러오는 중입니다...</p>
+                </div>
+              ) : (
+                <div className="max-w-2xl mx-auto space-y-6">
                 <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
                   <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
                     <span className="text-[10px] font-bold text-[#666]">빙고_감사_진행</span>
@@ -1272,6 +1277,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
+              )
             ) : session.gameType === GameType.DRAW ? (
               <div className="max-w-3xl mx-auto space-y-6">
                 <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">

@@ -653,20 +653,45 @@ export const sessionService = {
     await this.addLog(sessionId, `빙고 게임 준비 단계가 시작되었습니다.`, 'success');
   },
 
-  async submitBingoBoard(sessionId: string, playerId: string, board: string[][]) {
+  async submitBingoBoard(sessionId: string, playerId: string, board: string[][], totalPlayers: number) {
     if (!db) return;
     await set(ref(db, `sessions/${sessionId}/bingoGame/boards/${playerId}`), board);
+
+    // Check if all players have submitted
+    const snapshot = await get(ref(db, `sessions/${sessionId}/bingoGame/boards`));
+    const boards = snapshot.val() || {};
+    const submittedCount = Object.keys(boards).length;
+
+    if (submittedCount >= totalPlayers) {
+      // Fetch current session data to get players and turnOrder
+      const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
+      const sessionData = sessionSnap.val();
+      if (sessionData) {
+        const players = sessionData.players;
+        // Generate turn order if not exists
+        let turnOrder = sessionData.turnOrder;
+        if (!turnOrder) {
+          turnOrder = Object.keys(players).sort(() => Math.random() - 0.5);
+          await update(ref(db, `sessions/${sessionId}`), { turnOrder });
+        }
+        await this.startBingoGame(sessionId, players, turnOrder);
+      }
+    }
   },
 
   async startBingoGame(sessionId: string, players: Record<string, Player>, turnOrder: string[]) {
     if (!db) return;
     
+    // Ensure turnOrder is valid
+    const validTurnOrder = turnOrder && turnOrder.length > 0 ? turnOrder : Object.keys(players);
+    
     const updates: any = {
       status: SessionStatus.PLAYING,
-      'bingoGame/currentPlayerId': turnOrder[0]
+      'bingoGame/currentPlayerId': validTurnOrder[0]
     };
 
     await update(ref(db, `sessions/${sessionId}`), updates);
+    await this.addLog(sessionId, `모든 플레이어가 준비를 마쳤습니다. 빙고 게임을 시작합니다!`, 'success');
   },
 
   async pickBingoWord(sessionId: string, playerId: string, word: string, session: Session) {
