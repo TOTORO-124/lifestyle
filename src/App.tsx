@@ -33,6 +33,13 @@ export default function App() {
   const me = session?.players?.[currentUser?.uid];
 
   useEffect(() => {
+    if (session?.gameType === GameType.BINGO && session.bingoGame?.boards?.[currentUser?.uid]) {
+      setBingoBoard(session.bingoGame.boards[currentUser.uid]);
+      setBingoSubmitted(true);
+    }
+  }, [session?.gameType, session?.bingoGame?.boards, currentUser?.uid]);
+
+  useEffect(() => {
     setSelectedVoteTarget(null);
     setSelectedNightTarget(null);
   }, [session?.status]);
