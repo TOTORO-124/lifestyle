@@ -950,7 +950,7 @@ export default function App() {
                     <span className="text-[10px] font-bold text-[#999] uppercase tracking-widest">배정된 역할</span>
                     <div className="text-4xl font-black text-[#217346]">
                       {session.gameType === GameType.LIAR ? (
-                        session.liarGame?.mode === LiarMode.FOOL ? '시민' : (
+                        session.liarGame?.mode === LiarMode.FOOL && session.liarGame?.liarPlayerId === currentUser?.uid ? '시민' : (
                           session.liarGame?.liarPlayerId === currentUser?.uid ? '라이어' : 
                           session.liarGame?.spyPlayerId === currentUser?.uid ? '스파이' : '시민'
                         )
@@ -1020,7 +1020,7 @@ export default function App() {
                         const category = session.bingoGame?.category || '랜덤';
                         let words: string[] = [];
                         if (category === '랜덤') {
-                          words = BINGO_TOPICS.flatMap(t => t.words);
+                          words = Array.from(new Set(BINGO_TOPICS.flatMap(t => t.words)));
                         } else {
                           words = BINGO_TOPICS.find(t => t.category === category)?.words || [];
                         }
@@ -1069,9 +1069,9 @@ export default function App() {
                         </h4>
                       </div>
                       
-                      <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-1 max-h-[300px] content-start">
+                      <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-2 max-h-[300px] content-start pr-1">
                         {(session.bingoGame?.category === '랜덤' 
-                          ? BINGO_TOPICS.flatMap(t => t.words) 
+                          ? Array.from(new Set(BINGO_TOPICS.flatMap(t => t.words)))
                           : BINGO_TOPICS.find(t => t.category === session.bingoGame?.category)?.words || []
                         ).map(word => (
                           <button
@@ -1093,10 +1093,10 @@ export default function App() {
                               }
                               if (found) setBingoBoard(newBoard);
                             }}
-                            className="text-[10px] p-1.5 bg-white border border-[#d1d1d1] hover:bg-[#e8f0fe] hover:border-[#217346] hover:text-[#217346] truncate text-left rounded transition-colors"
+                            className="text-[10px] p-2 bg-white border border-[#d1d1d1] hover:bg-[#e8f0fe] hover:border-[#217346] hover:text-[#217346] text-left rounded transition-colors flex items-center h-8"
                             title="클릭하여 빈 칸에 추가"
                           >
-                            {word}
+                            <span className="truncate w-full">{word}</span>
                           </button>
                         ))}
                       </div>
@@ -1274,7 +1274,7 @@ export default function App() {
                     <div className="flex items-center gap-3">
                       <div className="text-[10px] text-[#666]">목표: <span className="font-bold text-[#217346]">{session.bingoGame?.targetLines}줄</span></div>
                       <div className="h-3 w-px bg-[#d1d1d1]" />
-                      <div className="text-[10px] text-[#666]">현재: <span className="font-bold text-[#217346]">{session.bingoGame?.boards[currentUser.uid] ? sessionService.countBingoLines(session.bingoGame.boards[currentUser.uid], session.bingoGame.markedWords) : 0}줄</span></div>
+                      <div className="text-[10px] text-[#666]">현재: <span className="font-bold text-[#217346]">{session.bingoGame?.boards[currentUser.uid] ? sessionService.countBingoLines(session.bingoGame.boards[currentUser.uid], session.bingoGame.markedWords || []) : 0}줄</span></div>
                     </div>
                   </div>
 
@@ -1286,7 +1286,7 @@ export default function App() {
                         <div className="grid grid-cols-5 gap-1 bg-[#d1d1d1] p-1 border border-[#d1d1d1]">
                           {session.bingoGame?.boards[currentUser.uid]?.map((row, r) => (
                             row.map((word, c) => {
-                              const isMarked = session.bingoGame?.markedWords.includes(word);
+                              const isMarked = (session.bingoGame?.markedWords || []).includes(word);
                               const isMyTurn = session.bingoGame?.currentPlayerId === currentUser.uid;
                               return (
                                 <button
@@ -1353,7 +1353,7 @@ export default function App() {
                         </h4>
                         <div className="space-y-3">
                           {(Object.values(session.players) as Player[]).map(p => {
-                            const lines = session.bingoGame?.boards[p.id] ? sessionService.countBingoLines(session.bingoGame.boards[p.id], session.bingoGame.markedWords) : 0;
+                            const lines = session.bingoGame?.boards[p.id] ? sessionService.countBingoLines(session.bingoGame.boards[p.id], session.bingoGame.markedWords || []) : 0;
                             return (
                               <div key={p.id} className="flex flex-col gap-1">
                                 <div className="flex justify-between items-center text-xs">
@@ -1377,9 +1377,9 @@ export default function App() {
                       <div className="bg-white border border-[#d1d1d1] p-3 rounded">
                         <h4 className="text-[9px] font-bold text-[#999] uppercase mb-2">최근 선택된 단어</h4>
                         <div className="space-y-1 max-h-48 overflow-y-auto">
-                          {[...session.bingoGame!.markedWords].reverse().map((word, i) => (
+                          {[...(session.bingoGame?.markedWords || [])].reverse().map((word, i) => (
                             <div key={i} className="text-[10px] py-1 border-b border-[#f1f1f1] last:border-0 flex items-center gap-2">
-                              <span className="text-[#999] font-mono">{session.bingoGame!.markedWords.length - i}.</span>
+                              <span className="text-[#999] font-mono">{(session.bingoGame?.markedWords || []).length - i}.</span>
                               <span className="font-medium">{word}</span>
                             </div>
                           ))}
@@ -1447,37 +1447,37 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-6 flex flex-col lg:flex-row gap-8">
+                  <div className="p-4 md:p-6 flex flex-col lg:flex-row gap-6">
                     {/* Canvas Area */}
-                    <div className="flex-1 space-y-4">
-                      <div className="relative">
+                    <div className="flex-1 flex flex-col gap-4 min-w-0">
+                      <div className="relative bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                        {session.drawGame?.presenterId === currentUser.uid && (
+                          <div className="absolute top-0 left-0 right-0 bg-[#217346]/90 text-white px-4 py-2 z-10 flex justify-between items-center backdrop-blur-sm">
+                            <div className="flex items-center gap-2 font-bold text-sm md:text-base animate-pulse">
+                              <Palette size={18} />
+                              <span>제시어: {session.drawGame?.word}</span>
+                            </div>
+                            <button 
+                              onClick={() => sessionService.passDrawTurn(session.id, session)}
+                              className="bg-white/20 hover:bg-white/30 text-white border border-white/40 px-3 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1"
+                            >
+                              <RefreshCw size={12} /> 패스
+                            </button>
+                          </div>
+                        )}
                         <Canvas 
                           isPresenter={session.drawGame?.presenterId === currentUser.uid}
                           onDraw={(data) => sessionService.updateDrawCanvas(session.id, data)}
                           initialData={session.drawGame?.canvasData}
                         />
-                        {session.drawGame?.presenterId === currentUser.uid && (
-                          <div className="absolute top-2 left-2 flex flex-col gap-2 z-10">
-                            <div className="bg-[#217346] text-white px-4 py-2 rounded-md text-lg font-black shadow-lg flex items-center gap-2 animate-pulse border-2 border-white/30">
-                              <Palette size={20} />
-                              <span>제시어: {session.drawGame?.word}</span>
-                            </div>
-                            <button 
-                              onClick={() => sessionService.passDrawTurn(session.id, session)}
-                              className="bg-white hover:bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1"
-                            >
-                              <RefreshCw size={10} /> 패스하기
-                            </button>
-                          </div>
-                        )}
                       </div>
                       
                       {session.drawGame?.presenterId !== currentUser.uid && (
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 w-full max-w-2xl mx-auto">
                           <input 
                             type="text"
                             placeholder="정답을 입력하세요..."
-                            className="office-input flex-1"
+                            className="office-input flex-1 h-12 text-base shadow-sm"
                             value={drawGuess}
                             onChange={(e) => setDrawGuess(e.target.value)}
                             onKeyDown={(e) => {
@@ -1494,7 +1494,7 @@ export default function App() {
                                 setDrawGuess('');
                               }
                             }}
-                            className="office-btn-primary px-6"
+                            className="office-btn-primary px-6 h-12 font-bold shadow-sm whitespace-nowrap"
                           >
                             제출
                           </button>
@@ -1503,36 +1503,33 @@ export default function App() {
                     </div>
 
                     {/* Sidebar */}
-                    <div className="w-full lg:w-56 space-y-6">
-                      <div className="bg-[#f8f9fa] border border-[#d1d1d1] p-4 rounded">
-                        <h4 className="text-[9px] font-bold text-[#999] uppercase mb-3 flex items-center gap-2">
-                          <Trophy size={10} /> 실시간 스코어보드
+                    <div className="w-full lg:w-64 space-y-4 shrink-0">
+                      <div className="bg-[#f8f9fa] border border-[#d1d1d1] p-4 rounded shadow-sm">
+                        <h4 className="text-[10px] font-bold text-[#999] uppercase mb-3 flex items-center gap-2">
+                          <Trophy size={12} /> 실시간 스코어보드
                         </h4>
-                        <div className="space-y-2">
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                           {Object.entries(session.drawGame?.scores || {}).sort((a, b) => (b[1] as number) - (a[1] as number)).map(([pid, score]) => (
-                            <div key={pid} className="flex justify-between items-center text-xs">
-                              <div className="flex items-center gap-2 truncate">
-                                {pid === session.drawGame?.presenterId && <Palette size={10} className="text-[#217346]" />}
-                                <span className={pid === currentUser.uid ? 'font-bold text-[#217346]' : ''}>
+                            <div key={pid} className="flex justify-between items-center text-xs p-1 hover:bg-gray-100 rounded">
+                              <div className="flex items-center gap-2 truncate flex-1">
+                                {pid === session.drawGame?.presenterId && <Palette size={12} className="text-[#217346]" />}
+                                <span className={`truncate ${pid === currentUser.uid ? 'font-bold text-[#217346]' : 'text-gray-700'}`}>
                                   {session.players[pid]?.nickname}
                                 </span>
                               </div>
-                              <span className="font-mono font-bold">{score}</span>
+                              <span className="font-mono font-bold bg-gray-200 px-1.5 py-0.5 rounded text-[10px]">{score}</span>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      <div className="bg-white border border-[#d1d1d1] p-4 rounded">
-                        <h4 className="text-[9px] font-bold text-[#999] uppercase mb-2">발표자</h4>
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-[#e8f0fe] rounded-full flex items-center justify-center text-[#217346]">
-                            <User size={16} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-bold truncate">{session.players[session.drawGame!.presenterId]?.nickname}</div>
-                            <div className="text-[9px] text-[#999]">브리핑 중...</div>
-                          </div>
+                      <div className="bg-white border border-[#d1d1d1] p-4 rounded shadow-sm flex items-center gap-3">
+                        <div className="w-10 h-10 bg-[#e8f0fe] rounded-full flex items-center justify-center text-[#217346] shrink-0">
+                          <User size={20} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] font-bold text-[#999] uppercase mb-0.5">현재 발표자</div>
+                          <div className="text-sm font-bold truncate text-gray-800">{session.players[session.drawGame!.presenterId]?.nickname}</div>
                         </div>
                       </div>
                     </div>

@@ -713,15 +713,17 @@ export const sessionService = {
     
     const game = session.bingoGame;
     if (game.currentPlayerId !== playerId) return;
-    if (game.markedWords.includes(word)) return;
+    
+    const currentMarkedWords = game.markedWords || [];
+    if (currentMarkedWords.includes(word)) return;
 
-    const newMarkedWords = [...game.markedWords, word];
+    const newMarkedWords = [...currentMarkedWords, word];
     const updates: any = {};
     updates['bingoGame/markedWords'] = newMarkedWords;
 
     // Check for winners
     const winners: string[] = [];
-    Object.entries(game.boards).forEach(([pid, board]) => {
+    Object.entries(game.boards || {}).forEach(([pid, board]) => {
       const lines = this.countBingoLines(board, newMarkedWords);
       if (lines >= game.targetLines) {
         winners.push(pid);
@@ -731,21 +733,23 @@ export const sessionService = {
     if (winners.length > 0) {
       updates['bingoGame/winner'] = winners[0]; // First one detected
       updates['status'] = SessionStatus.SUMMARY;
+      
+      const player = session.players[playerId].nickname;
+      await this.addLog(sessionId, `${player}님이 [${word}] 단어를 선택했습니다.`);
+      await this.addLog(sessionId, `${session.players[winners[0]].nickname}님이 빙고를 완성하여 승리했습니다!`, 'success');
+      await this.updateStats(sessionId, winners[0]);
     } else {
       // Next turn
       const turnOrder = session.turnOrder || Object.keys(session.players);
       const currentIndex = turnOrder.indexOf(playerId);
       const nextIndex = (currentIndex + 1) % turnOrder.length;
       updates['bingoGame/currentPlayerId'] = turnOrder[nextIndex];
+      
+      const player = session.players[playerId].nickname;
+      await this.addLog(sessionId, `${player}님이 [${word}] 단어를 선택했습니다.`);
     }
 
     await update(ref(db, `sessions/${sessionId}`), updates);
-    const player = session.players[playerId].nickname;
-    await this.addLog(sessionId, `${player}님이 [${word}] 단어를 선택했습니다.`);
-    if (updates['bingoGame/winner']) {
-      await this.addLog(sessionId, `${player}님이 빙고를 완성하여 승리했습니다!`, 'success');
-      await this.updateStats(sessionId, updates['bingoGame/winner']);
-    }
   },
 
   async startDrawGame(sessionId: string, players: Record<string, Player>, settings: any, turnOrder: string[]) {
