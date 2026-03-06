@@ -34,11 +34,15 @@ export default function App() {
   const me = session?.players?.[currentUser?.uid];
 
   useEffect(() => {
-    if (session?.gameType === GameType.BINGO && session.bingoGame?.boards?.[currentUser?.uid]) {
-      setBingoBoard(session.bingoGame.boards[currentUser.uid]);
-      setBingoSubmitted(true);
+    if (session?.gameType === GameType.BINGO) {
+      if (session.bingoGame?.boards?.[currentUser?.uid]) {
+        setBingoBoard(session.bingoGame.boards[currentUser.uid]);
+        setBingoSubmitted(true);
+      } else if (session.status === SessionStatus.PREPARING) {
+        setBingoSubmitted(false);
+      }
     }
-  }, [session?.gameType, session?.bingoGame?.boards, currentUser?.uid]);
+  }, [session?.gameType, session?.bingoGame?.boards, currentUser?.uid, session?.status]);
 
   useEffect(() => {
     setSelectedVoteTarget(null);
