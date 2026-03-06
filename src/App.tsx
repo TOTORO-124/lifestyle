@@ -40,6 +40,7 @@ export default function App() {
         setBingoSubmitted(true);
       } else if (session.status === SessionStatus.PREPARING) {
         setBingoSubmitted(false);
+        setBingoBoard(Array(5).fill(null).map(() => Array(5).fill('')));
       }
     }
   }, [session?.gameType, session?.bingoGame?.boards, currentUser?.uid, session?.status]);
