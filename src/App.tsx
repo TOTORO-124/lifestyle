@@ -499,7 +499,7 @@ export default function App() {
             <div className="bg-white p-1 rounded-sm">
               <Grid className="text-[#217346]" size={16} />
             </div>
-            <h1 className="text-sm font-bold tracking-tight">오피스_시트_v1.xlsx</h1>
+            <h1 className="text-sm font-bold tracking-tight">전사_명예의_전당_통합_보고서.xlsx</h1>
           </div>
           <div className="flex items-center gap-4 text-[10px] opacity-90">
             <span className="hidden sm:inline">자동 저장: 켬</span>
@@ -513,7 +513,7 @@ export default function App() {
           <div className="h-4 w-px bg-[#d1d1d1]" />
           <div className="flex-1 bg-white border border-[#d1d1d1] px-2 py-0.5 flex items-center gap-2">
             <span className="text-[#217346] font-bold italic">fx</span>
-            <span className="font-mono truncate">=IF(사용자_인증, "오피스_시트_준비완료", "본인_확인_대기중")</span>
+            <span className="font-mono truncate">=IF(사용자_인증, "전사_명예의_전당_준비완료", "본인_확인_대기중")</span>
           </div>
         </div>
 
@@ -730,7 +730,7 @@ export default function App() {
         <header className="bg-[#217346] text-white px-4 py-3 shadow-md flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <Grid size={18} />
-            <h1 className="font-bold text-sm tracking-wide">오피스 시트 (Office Sheets) - 관전 모드</h1>
+            <h1 className="font-bold text-sm tracking-wide">전사_명예의_전당_통합_보고서.xlsx - 관전 모드</h1>
           </div>
           <div className="flex items-center gap-3">
             <div className="bg-white/20 px-3 py-1 rounded text-xs flex items-center gap-2">
