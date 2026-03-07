@@ -11,24 +11,44 @@ import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, Ale
 
 const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], title: string, sessionId?: string | null, gameType?: string }) => {
   const rankNames = ['사장', '부사장', '전무', '상무', '이사', '부장', '차장', '과장', '대리', '사원'];
+  const [deleteTarget, setDeleteTarget] = useState<{index: number, nickname: string} | null>(null);
+  const [password, setPassword] = useState('');
+  const [deleteError, setDeleteError] = useState(false);
   
-  // Ensure entries is an array (Firebase can return objects for small integer keys)
+  // Ensure entries is an array
   const safeEntries = Array.isArray(entries) ? entries : (entries ? Object.values(entries) : []);
+  
+  // Fill up to 10 entries for a consistent "Top 10" look
+  const displayEntries = [...safeEntries];
+  while (displayEntries.length < 10) {
+    displayEntries.push(null);
+  }
 
-  const handleDelete = async (index: number, nickname: string) => {
+  const handleDeleteClick = (e: React.MouseEvent, index: number, nickname: string) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (!sessionId || !gameType) return;
+    setDeleteTarget({ index, nickname });
+    setPassword('');
+    setDeleteError(false);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || !sessionId || !gameType) return;
     
-    const password = prompt(`'${nickname}'님의 기록을 삭제하시겠습니까?\n관리자 비밀번호를 입력하세요:`);
     if (password === 'ad0419**') {
-      await sessionService.removeLeaderboardEntry(sessionId, gameType, index);
-      alert('기록이 삭제되었습니다.');
-    } else if (password !== null) {
-      alert('비밀번호가 일치하지 않습니다.');
+      await sessionService.removeLeaderboardEntry(sessionId, gameType, deleteTarget.index);
+      setDeleteTarget(null);
+      setPassword('');
+      // We don't use alert here as it might also be blocked, but it's usually less problematic than prompt.
+      // Still, let's just close the modal.
+    } else {
+      setDeleteError(true);
     }
   };
   
   return (
-    <div className="w-full bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden mt-6">
+    <div className="w-full bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden mt-6 relative">
       <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Trophy size={14} className="text-yellow-500" />
@@ -36,43 +56,92 @@ const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], 
         </div>
         {sessionId && <span className="text-[8px] text-[#999] italic">Moderation Active</span>}
       </div>
+
+      {/* Custom Delete Modal Overlay */}
+      {deleteTarget && (
+        <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center">
+          <div className="mb-3">
+            <AlertTriangle size={24} className="text-red-500 mx-auto mb-2" />
+            <p className="text-xs font-bold text-gray-800">'{deleteTarget.nickname}'님의 기록 삭제</p>
+            <p className="text-[10px] text-gray-500">관리자 비밀번호를 입력하세요.</p>
+          </div>
+          <input
+            type="password"
+            autoFocus
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setDeleteError(false);
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && confirmDelete()}
+            placeholder="비밀번호 입력"
+            className={`w-full max-w-[160px] px-3 py-1.5 text-xs border rounded mb-2 text-center outline-none transition-all ${
+              deleteError ? 'border-red-500 bg-red-50 animate-shake' : 'border-gray-300 focus:border-[#217346]'
+            }`}
+          />
+          {deleteError && <p className="text-[9px] text-red-500 mb-2 font-bold">비밀번호가 일치하지 않습니다.</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setDeleteTarget(null)}
+              className="px-3 py-1 text-[10px] font-bold text-gray-500 hover:bg-gray-100 rounded transition-colors"
+            >
+              취소
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="px-3 py-1 text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 rounded shadow-sm transition-colors"
+            >
+              삭제 확인
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="divide-y divide-[#f1f1f1]">
-        {safeEntries && safeEntries.length > 0 ? (
-          safeEntries.map((entry: any, i: number) => (
-            <div key={i} className="group px-4 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3">
-                <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold ${
-                  i === 0 ? 'bg-yellow-400 text-white' : 
-                  i === 1 ? 'bg-gray-300 text-white' : 
-                  i === 2 ? 'bg-orange-400 text-white' : 'text-[#999]'
-                }`}>
+        {displayEntries.map((entry: any, i: number) => (
+          <div key={i} className="group px-4 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors min-h-[45px]">
+            {entry ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold ${
+                    i === 0 ? 'bg-yellow-400 text-white' : 
+                    i === 1 ? 'bg-gray-300 text-white' : 
+                    i === 2 ? 'bg-orange-400 text-white' : 'text-[#999] bg-gray-100'
+                  }`}>
+                    {i + 1}
+                  </span>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-800">{entry.nickname}</span>
+                    <span className="text-[9px] text-[#217346] font-bold">{rankNames[i] || '인턴'}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <span className="text-xs font-mono font-bold text-[#217346]">{entry.score.toLocaleString()}</span>
+                    <p className="text-[8px] text-gray-400">{new Date(entry.timestamp).toLocaleDateString()}</p>
+                  </div>
+                  {sessionId && gameType && (
+                    <button 
+                      type="button"
+                      onClick={(e) => handleDeleteClick(e, i, entry.nickname)}
+                      className="p-1.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
+                      title="기록 삭제"
+                    >
+                      <AlertTriangle size={14} />
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-3 opacity-30">
+                <span className="w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold text-[#999] bg-gray-50">
                   {i + 1}
                 </span>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-gray-800">{entry.nickname}</span>
-                  <span className="text-[9px] text-[#217346] font-bold">{rankNames[i] || '인턴'}</span>
-                </div>
+                <span className="text-[10px] text-gray-400 italic">{rankNames[i] || '인턴'} 대기 중...</span>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <span className="text-xs font-mono font-bold text-[#217346]">{entry.score.toLocaleString()}</span>
-                  <p className="text-[8px] text-gray-400">{new Date(entry.timestamp).toLocaleDateString()}</p>
-                </div>
-                {sessionId && gameType && (
-                  <button 
-                    onClick={() => handleDelete(i, entry.nickname)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-600 transition-all"
-                    title="기록 삭제"
-                  >
-                    <AlertTriangle size={12} />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="p-4 text-center text-xs text-gray-400">아직 등록된 기록이 없습니다.</div>
-        )}
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -99,6 +168,7 @@ export default function App() {
   const [showBingoWords, setShowBingoWords] = useState(false);
   const [showLiarKeyword, setShowLiarKeyword] = useState(false);
   const [selectedSudokuCell, setSelectedSudokuCell] = useState<{r: number, c: number} | null>(null);
+  const [globalLeaderboards, setGlobalLeaderboards] = useState<Record<string, any[]>>({});
 
   const isHost = session?.hostId === currentUser?.uid;
   const me = session?.players?.[currentUser?.uid];
@@ -192,6 +262,13 @@ export default function App() {
 
   useEffect(() => {
     sessionService.authenticate().then(setCurrentUser);
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = sessionService.subscribeToGlobalLeaderboards((data) => {
+      setGlobalLeaderboards(data);
+    });
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -422,7 +499,7 @@ export default function App() {
             <div className="bg-white p-1 rounded-sm">
               <Grid className="text-[#217346]" size={16} />
             </div>
-            <h1 className="text-sm font-bold tracking-tight">프로젝트_감사_v2.xlsx</h1>
+            <h1 className="text-sm font-bold tracking-tight">오피스_시트_v1.xlsx</h1>
           </div>
           <div className="flex items-center gap-4 text-[10px] opacity-90">
             <span className="hidden sm:inline">자동 저장: 켬</span>
@@ -436,7 +513,7 @@ export default function App() {
           <div className="h-4 w-px bg-[#d1d1d1]" />
           <div className="flex-1 bg-white border border-[#d1d1d1] px-2 py-0.5 flex items-center gap-2">
             <span className="text-[#217346] font-bold italic">fx</span>
-            <span className="font-mono truncate">=IF(사용자_인증, "로그인_성공", "본인_확인_대기중")</span>
+            <span className="font-mono truncate">=IF(사용자_인증, "오피스_시트_준비완료", "본인_확인_대기중")</span>
           </div>
         </div>
 
@@ -485,14 +562,14 @@ export default function App() {
 
                   {menuMode === 'create' ? (
                     <div className="space-y-3 pt-2">
-                      <p className="text-[10px] text-[#999]">새로운 감사 세션을 생성하고 팀원들을 초대합니다.</p>
+                      <p className="text-[10px] text-[#999]">새로운 오피스 시트 세션을 생성하고 팀원들을 초대합니다.</p>
                       <div className="grid grid-cols-2 gap-3">
                         <button 
                           onClick={() => handleCreateSession(GameType.LIAR)} 
                           className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
                           disabled={loading}
                         >
-                          <span className="font-bold">라이어 게임</span>
+                          <span className="font-bold">라이어 시트</span>
                           <span className="text-[9px] font-normal opacity-80">거짓말쟁이 찾기</span>
                         </button>
                         <button 
@@ -500,7 +577,7 @@ export default function App() {
                           className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
                           disabled={loading}
                         >
-                          <span className="font-bold">마피아 게임</span>
+                          <span className="font-bold">마피아 시트</span>
                           <span className="text-[9px] font-normal opacity-80">범인 색출 작전</span>
                         </button>
                         <button 
@@ -509,7 +586,7 @@ export default function App() {
                           disabled={loading}
                         >
                           <span className="font-bold">오목 (1:1)</span>
-                          <span className="text-[9px] font-normal opacity-80">전략 보드 게임</span>
+                          <span className="text-[9px] font-normal opacity-80">전략 보드 시트</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.BINGO)} 
@@ -585,11 +662,11 @@ export default function App() {
                 전사_명예의_전당_통합_보고서 (글로벌)
               </div>
               <div className="p-6">
-                <p className="text-xs text-gray-500 mb-6 italic">* 세션에 참여하면 해당 세션의 실시간 순위를 확인할 수 있습니다. 현재는 샘플 데이터를 표시합니다.</p>
+                <p className="text-xs text-gray-500 mb-6 italic">* 전사 시트에서 기록된 실시간 순위입니다. (글로벌 통합)</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <Leaderboard entries={[]} title="직급 승진 (2048)" />
-                  <Leaderboard entries={[]} title="데이터 검수 (지뢰찾기)" />
-                  <Leaderboard entries={[]} title="데이터 무결성 (스도쿠)" />
+                  <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
+                  <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
+                  <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
                 </div>
               </div>
             </div>
@@ -601,7 +678,7 @@ export default function App() {
               <div className="p-8 text-center space-y-4">
                 <HelpCircle size={48} className="mx-auto text-[#217346] opacity-20" />
                 <h3 className="text-lg font-bold text-gray-800">도움말 및 설정</h3>
-                <p className="text-sm text-gray-500">세션에 입장한 후 상세한 게임 매뉴얼과 설정을 확인하실 수 있습니다.</p>
+                <p className="text-sm text-gray-500">세션에 입장한 후 상세한 시트 매뉴얼과 설정을 확인하실 수 있습니다.</p>
                 <button 
                   onClick={() => setActiveSheet('GAME')}
                   className="office-btn-primary px-6 py-2"
@@ -653,7 +730,7 @@ export default function App() {
         <header className="bg-[#217346] text-white px-4 py-3 shadow-md flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <Grid size={18} />
-            <h1 className="font-bold text-sm tracking-wide">Office Games - 관전 모드</h1>
+            <h1 className="font-bold text-sm tracking-wide">오피스 시트 (Office Sheets) - 관전 모드</h1>
           </div>
           <div className="flex items-center gap-3">
             <div className="bg-white/20 px-3 py-1 rounded text-xs flex items-center gap-2">
@@ -728,8 +805,8 @@ export default function App() {
              </div>
           ) : (
             <div className="text-center py-10">
-              <p className="text-gray-500">현재 진행 중인 게임을 관전하고 있습니다.</p>
-              <p className="text-sm text-gray-400 mt-2">게임 종류: {session?.gameType}</p>
+              <p className="text-gray-500">현재 진행 중인 시트를 관전하고 있습니다.</p>
+              <p className="text-sm text-gray-400 mt-2">시트 종류: {session?.gameType}</p>
             </div>
           )}
         </main>
@@ -748,11 +825,11 @@ export default function App() {
             <Grid className="text-[#217346]" size={16} />
           </div>
           <h1 className="text-sm font-bold tracking-tight truncate max-w-[200px] sm:max-w-none">
-            {session.gameType === GameType.LIAR ? '감사_라이어_게임.xlsx' : 
-             session.gameType === GameType.MAFIA ? '감사_마피아_게임.xlsx' : 
-             session.gameType === GameType.OMOK ? '감사_오목_대전.xlsx' :
-             session.gameType === GameType.BINGO ? '데이터_매칭_감사.xlsx' : 
-             session.gameType === GameType.DRAW ? '비주얼_브리핑_보고.xlsx' :
+            {session.gameType === GameType.LIAR ? '오피스_라이어_시트.xlsx' : 
+             session.gameType === GameType.MAFIA ? '오피스_마피아_시트.xlsx' : 
+             session.gameType === GameType.OMOK ? '오피스_오목_대전.xlsx' :
+             session.gameType === GameType.BINGO ? '오피스_빙고_매칭.xlsx' : 
+             session.gameType === GameType.DRAW ? '오피스_캐치마인드.xlsx' :
              session.gameType === GameType.MINESWEEPER ? '데이터_오류_검수.xlsx' :
              session.gameType === GameType.OFFICE_2048 ? '직급_승진_프로세스.xlsx' : '데이터_무결성_검증.xlsx'}
           </h1>
@@ -922,7 +999,7 @@ export default function App() {
                       {session.gameType === GameType.LIAR && (
                         <div className="space-y-3">
                           <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-[#999]">게임_모드</label>
+                            <label className="text-[9px] font-bold text-[#999]">시트_모드</label>
                             <select 
                               className="office-input text-xs"
                               value={session.settings.liarMode}
@@ -1490,7 +1567,7 @@ export default function App() {
               !session.bingoGame ? (
                 <div className="flex flex-col items-center justify-center p-10">
                   <RefreshCw className="animate-spin text-[#217346] mb-4" size={32} />
-                  <p className="text-sm text-gray-500">빙고 게임 데이터를 불러오는 중입니다...</p>
+                  <p className="text-sm text-gray-500">빙고 시트 데이터를 불러오는 중입니다...</p>
                 </div>
               ) : (
                 <div className="max-w-2xl mx-auto space-y-6">
@@ -1860,7 +1937,7 @@ export default function App() {
                         onClick={() => sessionService.startSudokuGame(session.id, session.sudokuGame?.difficulty || 'EASY')}
                         className="office-btn-primary py-2 text-xs font-bold"
                       >
-                        새 게임
+                        새 시트
                       </button>
                     </div>
                     {session.sudokuGame?.status === 'WON' && (
@@ -2313,7 +2390,7 @@ export default function App() {
                                 onClick={() => sessionService.advanceStatus(session.id, SessionStatus.PLAYING)}
                                 className="office-btn-primary w-full py-3 shadow-md hover:shadow-lg transition-all"
                               >
-                                게임_계속하기 (다음 라운드)
+                                시트_계속하기 (다음 라운드)
                               </button>
                             )}
                             <p className="text-[10px] text-[#999]">관리자만 진행할 수 있습니다.</p>
@@ -2351,7 +2428,7 @@ export default function App() {
                           
                           <div className="py-4 border-y border-[#d1d1d1] bg-[#f8f9fa] rounded">
                             <p className="text-sm text-[#666]">
-                              <span className="font-bold">{session.players[session.mafiaGame.eliminatedPlayerId]?.nickname}</span>님이 게임에서 제외되었습니다.
+                              <span className="font-bold">{session.players[session.mafiaGame.eliminatedPlayerId]?.nickname}</span>님이 시트에서 제외되었습니다.
                             </p>
                             {/* Optional: Reveal role */}
                             <p className="text-xs text-[#999] mt-2">
@@ -2499,7 +2576,7 @@ export default function App() {
                   ) : (
                     <div className="text-center py-8 text-slate-500">
                       <p>당신은 이미 사망했습니다.</p>
-                      <p className="text-xs mt-2">게임 진행을 지켜봐주세요.</p>
+                      <p className="text-xs mt-2">시트 진행을 지켜봐주세요.</p>
                     </div>
                   )}
 
@@ -2806,7 +2883,7 @@ export default function App() {
                     <div className="text-2xl font-black text-[#333]">{Object.keys(session.players).length}</div>
                   </div>
                   <div className="bg-[#f8f9fa] border border-[#d1d1d1] p-4 rounded">
-                    <div className="text-[9px] text-[#666] font-bold uppercase mb-1">현재 게임</div>
+                    <div className="text-[9px] text-[#666] font-bold uppercase mb-1">현재 시트</div>
                     <div className="text-2xl font-black text-[#333]">{session.gameType}</div>
                   </div>
                 </div>
@@ -2856,21 +2933,21 @@ export default function App() {
               </div>
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <Leaderboard entries={session.leaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId={session.id} gameType="OFFICE_2048" />
-                  <Leaderboard entries={session.leaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId={session.id} gameType="MINESWEEPER" />
-                  <Leaderboard entries={session.leaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId={session.id} gameType="SUDOKU" />
+                  <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
+                  <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
+                  <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
                 </div>
               </div>
             </div>
           ) : (
             <div className="bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden">
               <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
-                게임_운영_매뉴얼_v1.0
+                시트_운영_매뉴얼_v1.0
               </div>
               <div className="p-8 space-y-10">
                 <section>
                   <h3 className="text-lg font-bold text-[#217346] border-b-2 border-[#217346] pb-1 mb-4 flex items-center gap-2">
-                    <Shield size={20} /> 라이어 게임 (LIAR)
+                    <Shield size={20} /> 라이어 시트 (LIAR)
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                     <div className="space-y-2">
@@ -2889,7 +2966,7 @@ export default function App() {
 
                 <section>
                   <h3 className="text-lg font-bold text-red-700 border-b-2 border-red-700 pb-1 mb-4 flex items-center gap-2">
-                    <Siren size={20} /> 마피아 게임 (MAFIA)
+                    <Siren size={20} /> 마피아 시트 (MAFIA)
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                     <div className="space-y-2">

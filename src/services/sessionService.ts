@@ -1,7 +1,7 @@
 import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
-import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState } from '../types';
+import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry } from '../types';
 import { LIAR_TOPICS } from '../data/topics';
 import { DRAW_TOPICS } from '../data/drawTopics';
 
@@ -194,7 +194,7 @@ export const sessionService = {
     });
 
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, `라이어 게임이 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, `라이어 시트가 시작되었습니다.`, 'success');
   },
 
   async confirmRole(sessionId: string, playerId: string) {
@@ -281,7 +281,7 @@ export const sessionService = {
     updates['turnOrder'] = finalTurnOrder;
 
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, `마피아 게임이 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, `마피아 시트가 시작되었습니다.`, 'success');
   },
 
   async shuffleTurnOrder(sessionId: string, players: Record<string, Player>) {
@@ -670,7 +670,7 @@ export const sessionService = {
     };
 
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, `빙고 게임 준비 단계가 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, `빙고 시트 준비 단계가 시작되었습니다.`, 'success');
   },
 
   async submitBingoBoard(sessionId: string, playerId: string, board: string[][], totalPlayers: number) {
@@ -711,7 +711,7 @@ export const sessionService = {
     };
 
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, `모든 플레이어가 준비를 마쳤습니다. 빙고 게임을 시작합니다!`, 'success');
+    await this.addLog(sessionId, `모든 플레이어가 준비를 마쳤습니다. 빙고 시트를 시작합니다!`, 'success');
   },
 
   async pickBingoWord(sessionId: string, playerId: string, word: string, session: Session) {
@@ -792,7 +792,7 @@ export const sessionService = {
     };
 
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, `비주얼 브리핑(캐치마인드) 게임이 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, `비주얼 브리핑(캐치마인드) 시트가 시작되었습니다.`, 'success');
   },
 
   async updateDrawCanvas(sessionId: string, canvasData: string) {
@@ -1127,23 +1127,41 @@ export const sessionService = {
       status: SessionStatus.PLAYING,
       minesweeperGame
     });
-    await this.addLog(sessionId, `지뢰 찾기(데이터 오류 검수) 게임이 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, `지뢰 찾기(데이터 오류 검수) 시트가 시작되었습니다.`, 'success');
   },
 
   async recordLeaderboard(sessionId: string, gameType: string, playerId: string, nickname: string, score: number) {
     if (!db) return;
-    const sessionRef = ref(db, `sessions/${sessionId}/leaderboards/${gameType}`);
-    const snapshot = await get(sessionRef);
+    const leaderboardRef = ref(db, `leaderboards/${gameType}`);
+    const snapshot = await get(leaderboardRef);
     let leaderboard = snapshot.val() || [];
     if (!Array.isArray(leaderboard)) leaderboard = Object.values(leaderboard);
 
-    // Add new entry
-    leaderboard.push({
-      playerId,
-      nickname,
-      score,
-      timestamp: Date.now()
-    });
+    // Check if player already exists
+    const existingIndex = leaderboard.findIndex((e: any) => e.playerId === playerId);
+    
+    if (existingIndex !== -1) {
+      // Only update if the new score is better
+      if (score > leaderboard[existingIndex].score) {
+        leaderboard[existingIndex] = {
+          playerId,
+          nickname,
+          score,
+          timestamp: Date.now()
+        };
+      } else {
+        // No need to update if score is not better
+        return;
+      }
+    } else {
+      // Add new entry
+      leaderboard.push({
+        playerId,
+        nickname,
+        score,
+        timestamp: Date.now()
+      });
+    }
 
     // Sort by score descending
     leaderboard.sort((a: any, b: any) => b.score - a.score);
@@ -1151,20 +1169,28 @@ export const sessionService = {
     // Keep top 10
     leaderboard = leaderboard.slice(0, 10);
 
-    await set(sessionRef, leaderboard);
+    await set(leaderboardRef, leaderboard);
   },
 
   async removeLeaderboardEntry(sessionId: string, gameType: string, index: number) {
     if (!db) return;
-    const sessionRef = ref(db, `sessions/${sessionId}/leaderboards/${gameType}`);
-    const snapshot = await get(sessionRef);
+    const leaderboardRef = ref(db, `leaderboards/${gameType}`);
+    const snapshot = await get(leaderboardRef);
     let leaderboard = snapshot.val() || [];
     if (!Array.isArray(leaderboard)) leaderboard = Object.values(leaderboard);
 
     if (index >= 0 && index < leaderboard.length) {
       leaderboard.splice(index, 1);
-      await set(sessionRef, leaderboard);
+      await set(leaderboardRef, leaderboard);
     }
+  },
+
+  subscribeToGlobalLeaderboards(callback: (leaderboards: Record<string, LeaderboardEntry[]>) => void) {
+    if (!isConfigured || !db) return () => {};
+    const leaderboardsRef = ref(db, 'leaderboards');
+    return onValue(leaderboardsRef, (snapshot) => {
+      callback(snapshot.val() || {});
+    });
   },
 
   async revealMinesweeperCell(sessionId: string, r: number, c: number, session: Session) {
@@ -1183,7 +1209,7 @@ export const sessionService = {
       game.status = 'LOST';
       // Reveal all mines
       board.forEach((row: any) => row.forEach((cell: any) => { if (cell.isMine) cell.isRevealed = true; }));
-      await this.addLog(sessionId, `지뢰(데이터 오류)를 밟았습니다! 게임 오버.`, 'warning');
+      await this.addLog(sessionId, `지뢰(데이터 오류)를 밟았습니다! 시트 오버.`, 'warning');
     } else {
       const reveal = (row: number, col: number) => {
         if (row < 0 || row >= board.length || col < 0 || col >= board[0].length || board[row][col].isRevealed || board[row][col].isFlagged) return;
@@ -1245,7 +1271,7 @@ export const sessionService = {
       status: SessionStatus.PLAYING,
       office2048Game
     });
-    await this.addLog(sessionId, `직급 승진 2048 게임이 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, `직급 승진 2048 시트가 시작되었습니다.`, 'success');
   },
 
   addRandomTile(board: number[][]) {
@@ -1283,7 +1309,7 @@ export const sessionService = {
     };
 
     let tempBoard = board;
-    const rotations = { 'LEFT': 0, 'UP': 1, 'RIGHT': 2, 'DOWN': 3 }[direction];
+    const rotations = { 'LEFT': 0, 'UP': 3, 'RIGHT': 2, 'DOWN': 1 }[direction];
     for (let i = 0; i < rotations; i++) tempBoard = rotate(tempBoard);
 
     for (let r = 0; r < 4; r++) {
@@ -1385,7 +1411,7 @@ export const sessionService = {
       status: SessionStatus.PLAYING,
       sudokuGame
     });
-    await this.addLog(sessionId, `스도쿠(데이터 검증) 게임이 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, `스도쿠(데이터 검증) 시트가 시작되었습니다.`, 'success');
   },
 
   isSudokuSafe(board: number[][], r: number, c: number, num: number) {
