@@ -2111,26 +2111,43 @@ export default function App() {
                           </div>
                         </div>
                       ) : session.gameType === GameType.LIAR ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           {session.liarGame?.winner === 'LIAR' ? (
-                            <>
+                            <div className="space-y-2">
                               <div className="text-xs text-[#666]">승리:</div>
                               <div className="text-4xl font-black text-red-600">라이어 승리!</div>
                               <div className="text-sm text-[#666]">
                                 라이어는 <span className="font-bold text-[#333]">{session.players[session.liarGame!.liarPlayerId].nickname}</span> 였습니다.
                               </div>
-                            </>
+                            </div>
                           ) : (
-                            <>
+                            <div className="space-y-2">
                               <div className="text-xs text-[#666]">식별된 라이어:</div>
                               <div className="text-3xl font-black text-[#217346]">
                                 {session.players[session.liarGame!.liarPlayerId].nickname}
                               </div>
-                              <div className="text-[10px] text-[#666] bg-[#f8f9fa] p-2 inline-block rounded">
-                                정답 데이터: <span className="font-bold text-[#333]">{session.liarGame?.commonWord}</span>
-                              </div>
-                            </>
+                            </div>
                           )}
+                          
+                          <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col items-center gap-2">
+                            {session.liarGame?.mode === LiarMode.FOOL ? (
+                              <div className="w-full space-y-2">
+                                <div className="text-[10px] text-[#666] bg-[#f8f9fa] p-2 rounded flex justify-between items-center border border-[#d1d1d1]">
+                                  <span className="font-bold uppercase tracking-tighter">시민 제시어</span>
+                                  <span className="text-sm font-black text-[#217346]">{session.liarGame?.commonWord}</span>
+                                </div>
+                                <div className="text-[10px] text-[#666] bg-[#fff1f2] p-2 rounded flex justify-between items-center border border-red-100">
+                                  <span className="font-bold uppercase tracking-tighter">바보 제시어</span>
+                                  <span className="text-sm font-black text-red-600">{session.liarGame?.liarWord}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-[#666] bg-[#f8f9fa] p-2 w-full rounded flex justify-between items-center border border-[#d1d1d1]">
+                                <span className="font-bold uppercase tracking-tighter">정답 제시어</span>
+                                <span className="text-sm font-black text-[#333]">{session.liarGame?.commonWord}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-3">
