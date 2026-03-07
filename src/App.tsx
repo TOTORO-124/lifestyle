@@ -38,7 +38,7 @@ export default function App() {
       if (session.bingoGame?.boards?.[currentUser?.uid]) {
         setBingoBoard(session.bingoGame.boards[currentUser.uid]);
         setBingoSubmitted(true);
-      } else if (session.status === SessionStatus.PREPARING) {
+      } else if (session.status === SessionStatus.PREPARING || session.status === SessionStatus.LOBBY) {
         setBingoSubmitted(false);
         setBingoBoard(Array(5).fill(null).map(() => Array(5).fill('')));
       }
@@ -1455,26 +1455,28 @@ export default function App() {
                   <div className="p-4 md:p-6 flex flex-col lg:flex-row gap-6">
                     {/* Canvas Area */}
                     <div className="flex-1 flex flex-col gap-4 min-w-0">
-                      <div className="relative bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                      <div className="flex flex-col gap-3">
                         {session.drawGame?.presenterId === currentUser.uid && (
-                          <div className="absolute top-0 left-0 right-0 bg-[#217346]/90 text-white px-4 py-2 z-10 flex justify-between items-center backdrop-blur-sm">
-                            <div className="flex items-center gap-2 font-bold text-sm md:text-base animate-pulse">
-                              <Palette size={18} />
-                              <span>제시어: {session.drawGame?.word}</span>
+                          <div className="bg-[#217346] text-white px-4 py-3 rounded-lg flex justify-between items-center shadow-md border-b-4 border-[#1a5a36]">
+                            <div className="flex items-center gap-3 font-bold text-base md:text-lg">
+                              <Palette size={20} className="text-yellow-300" />
+                              <span>제시어: <span className="text-yellow-300 font-black ml-1">{session.drawGame?.word}</span></span>
                             </div>
                             <button 
                               onClick={() => sessionService.passDrawTurn(session.id, session)}
-                              className="bg-white/20 hover:bg-white/30 text-white border border-white/40 px-3 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1"
+                              className="bg-white/10 hover:bg-white/20 text-white border border-white/30 px-4 py-1.5 rounded-md text-sm font-bold transition-all flex items-center gap-2 active:scale-95"
                             >
-                              <RefreshCw size={12} /> 패스
+                              <RefreshCw size={14} /> 패스하기
                             </button>
                           </div>
                         )}
-                        <Canvas 
-                          isPresenter={session.drawGame?.presenterId === currentUser.uid}
-                          onDraw={(data) => sessionService.updateDrawCanvas(session.id, data)}
-                          initialData={session.drawGame?.canvasData}
-                        />
+                        <div className="relative bg-white border-2 border-gray-200 rounded-xl overflow-hidden shadow-lg">
+                          <Canvas 
+                            isPresenter={session.drawGame?.presenterId === currentUser.uid}
+                            onDraw={(data) => sessionService.updateDrawCanvas(session.id, data)}
+                            initialData={session.drawGame?.canvasData}
+                          />
+                        </div>
                       </div>
                       
                       {session.drawGame?.presenterId !== currentUser.uid && (
