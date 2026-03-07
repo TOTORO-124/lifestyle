@@ -147,7 +147,47 @@ const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], 
   );
 };
 
+const DisclaimerModal = ({ onAccept }: { onAccept: () => void }) => {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white border border-[#d1d1d1] rounded-lg shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-300">
+        <div className="bg-[#217346] text-white px-6 py-4 flex items-center gap-3">
+          <AlertTriangle size={24} />
+          <h2 className="text-lg font-bold">서비스 이용 안내 및 고지사항</h2>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+            <p className="font-bold text-gray-900 border-b border-gray-100 pb-2">
+              본 사이트는 개인이 제작한 비공식 오락용 프로젝트입니다.
+            </p>
+            <ul className="list-disc list-inside space-y-2 text-[13px]">
+              <li>본 서비스는 실제 회사 또는 특정 조직과 아무런 관련이 없습니다.</li>
+              <li>사이트 내 모든 결과 및 콘텐츠는 재미와 오락을 위한 용도로만 이용해 주세요.</li>
+              <li>업무 시간 내 사용으로 인해 발생하는 개인의 피해나 불이익에 대해 개발자는 어떠한 책임도 지지 않습니다.</li>
+              <li>모든 데이터는 실시간으로 동기화되나, 비공식 프로젝트 특성상 데이터 보존을 보장하지 않습니다.</li>
+            </ul>
+          </div>
+          <div className="pt-4">
+            <button
+              onClick={onAccept}
+              className="w-full office-btn-primary py-3 text-sm font-bold rounded-md shadow-md hover:scale-[1.02] transition-transform"
+            >
+              위 내용을 확인하였으며, 동의합니다
+            </button>
+          </div>
+        </div>
+        <div className="bg-gray-50 px-6 py-3 border-t border-gray-100 text-center">
+          <p className="text-[10px] text-gray-400">© 2026 Office Sheets Project. All rights reserved.</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
+  const [showDisclaimer, setShowDisclaimer] = useState(() => {
+    return !localStorage.getItem('disclaimer_accepted');
+  });
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [activeSheet, setActiveSheet] = useState<'GAME' | 'ROLES' | 'LOGS' | 'STATS' | 'HELP' | 'LEADERBOARD'>('GAME');
@@ -474,6 +514,12 @@ export default function App() {
   if (!isConfigured) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        {showDisclaimer && (
+          <DisclaimerModal onAccept={() => {
+            localStorage.setItem('disclaimer_accepted', 'true');
+            setShowDisclaimer(false);
+          }} />
+        )}
         <div className="max-w-md w-full space-y-6 bg-white p-8 border border-red-200 rounded-lg shadow-sm">
           <div className="text-center space-y-4">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100 text-red-600">
@@ -493,6 +539,12 @@ export default function App() {
   if (!sessionId) {
     return (
       <div className="min-h-screen spreadsheet-bg flex flex-col">
+        {showDisclaimer && (
+          <DisclaimerModal onAccept={() => {
+            localStorage.setItem('disclaimer_accepted', 'true');
+            setShowDisclaimer(false);
+          }} />
+        )}
         {/* Excel-style Header */}
         <header className="bg-[#217346] text-white px-4 py-1.5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -727,6 +779,12 @@ export default function App() {
   if (me?.isSpectator) {
     return (
       <div className="min-h-screen bg-[#f3f2f1] font-sans text-[#333] flex flex-col">
+        {showDisclaimer && (
+          <DisclaimerModal onAccept={() => {
+            localStorage.setItem('disclaimer_accepted', 'true');
+            setShowDisclaimer(false);
+          }} />
+        )}
         <header className="bg-[#217346] text-white px-4 py-3 shadow-md flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <Grid size={18} />
@@ -818,6 +876,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen spreadsheet-bg flex flex-col font-sans">
+      {showDisclaimer && (
+        <DisclaimerModal onAccept={() => {
+          localStorage.setItem('disclaimer_accepted', 'true');
+          setShowDisclaimer(false);
+        }} />
+      )}
       {/* Header */}
       <header className="bg-[#217346] text-white px-4 py-1.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
