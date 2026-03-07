@@ -1208,7 +1208,12 @@ export const sessionService = {
         const timeTaken = Date.now() - (game.startTime || Date.now());
         const difficultyBonus = { 'EASY': 1000, 'MEDIUM': 5000, 'HARD': 15000 }[game.difficulty as 'EASY' | 'MEDIUM' | 'HARD'];
         const score = Math.max(0, difficultyBonus + 100000 - Math.floor(timeTaken / 10));
-        await this.recordLeaderboard(sessionId, 'MINESWEEPER', session.players[session.hostId].id, session.players[session.hostId].nickname, score);
+        const user = auth?.currentUser;
+        if (user && session.players[user.uid]) {
+          await this.recordLeaderboard(sessionId, 'MINESWEEPER', user.uid, session.players[user.uid].nickname, score);
+        } else {
+          await this.recordLeaderboard(sessionId, 'MINESWEEPER', session.players[session.hostId].id, session.players[session.hostId].nickname, score);
+        }
       }
     }
 
@@ -1313,12 +1318,22 @@ export const sessionService = {
       if (!canMove) {
         game.status = 'LOST';
         await this.addLog(sessionId, `더 이상 움직일 수 없습니다. 최종 점수: ${game.score}점`, 'warning');
-        await this.recordLeaderboard(sessionId, 'OFFICE_2048', session.players[session.hostId].id, session.players[session.hostId].nickname, game.score);
+        const user = auth?.currentUser;
+        if (user && session.players[user.uid]) {
+          await this.recordLeaderboard(sessionId, 'OFFICE_2048', user.uid, session.players[user.uid].nickname, game.score);
+        } else {
+          await this.recordLeaderboard(sessionId, 'OFFICE_2048', session.players[session.hostId].id, session.players[session.hostId].nickname, game.score);
+        }
       }
       if (game.board.some((row: any) => row.includes(2048))) {
         game.status = 'WON';
         await this.addLog(sessionId, `축하합니다! 사장(2048)으로 승진했습니다!`, 'success');
-        await this.recordLeaderboard(sessionId, 'OFFICE_2048', session.players[session.hostId].id, session.players[session.hostId].nickname, game.score);
+        const user = auth?.currentUser;
+        if (user && session.players[user.uid]) {
+          await this.recordLeaderboard(sessionId, 'OFFICE_2048', user.uid, session.players[user.uid].nickname, game.score);
+        } else {
+          await this.recordLeaderboard(sessionId, 'OFFICE_2048', session.players[session.hostId].id, session.players[session.hostId].nickname, game.score);
+        }
       }
       
       await update(ref(db, `sessions/${sessionId}`), { office2048Game: game });
@@ -1410,16 +1425,25 @@ export const sessionService = {
     if (num !== 0 && num !== game.solution[r][c]) {
       game.mistakes++;
       await this.addLog(sessionId, `잘못된 숫자를 입력했습니다. (실수: ${game.mistakes}/3)`, 'warning');
+      if (game.mistakes >= 3) {
+        game.status = 'LOST';
+        await this.addLog(sessionId, `실수 횟수 초과로 데이터 검증에 실패했습니다.`, 'error');
+      }
     }
     
     game.currentBoard[r][c] = num;
     
     let won = true;
-    for (let i = 0; i < 9; i++) {
-      for (let j = 0; j < 9; j++) {
-        if (game.currentBoard[i][j] !== game.solution[i][j]) won = false;
+    if (game.status !== 'LOST') {
+      for (let i = 0; i < 9; i++) {
+        for (let j = 0; j < 9; j++) {
+          if (game.currentBoard[i][j] !== game.solution[i][j]) won = false;
+        }
       }
+    } else {
+      won = false;
     }
+
     if (won) {
       game.status = 'WON';
       await this.addLog(sessionId, `스도쿠를 완벽하게 해결했습니다!`, 'success');
@@ -1427,7 +1451,12 @@ export const sessionService = {
       // Record leaderboard
       const difficultyBonus = { 'EASY': 1000, 'MEDIUM': 5000, 'HARD': 15000 }[game.difficulty as 'EASY' | 'MEDIUM' | 'HARD'];
       const score = Math.max(0, difficultyBonus + 10000 - (game.mistakes * 1000));
-      await this.recordLeaderboard(sessionId, 'SUDOKU', session.players[session.hostId].id, session.players[session.hostId].nickname, score);
+      const user = auth?.currentUser;
+      if (user && session.players[user.uid]) {
+        await this.recordLeaderboard(sessionId, 'SUDOKU', user.uid, session.players[user.uid].nickname, score);
+      } else {
+        await this.recordLeaderboard(sessionId, 'SUDOKU', session.players[session.hostId].id, session.players[session.hostId].nickname, score);
+      }
     }
 
     await update(ref(db, `sessions/${sessionId}`), { sudokuGame: game });

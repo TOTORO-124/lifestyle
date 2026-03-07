@@ -12,6 +12,9 @@ import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, Ale
 const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], title: string, sessionId?: string | null, gameType?: string }) => {
   const rankNames = ['사장', '부사장', '전무', '상무', '이사', '부장', '차장', '과장', '대리', '사원'];
   
+  // Ensure entries is an array (Firebase can return objects for small integer keys)
+  const safeEntries = Array.isArray(entries) ? entries : (entries ? Object.values(entries) : []);
+
   const handleDelete = async (index: number, nickname: string) => {
     if (!sessionId || !gameType) return;
     
@@ -34,8 +37,8 @@ const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], 
         {sessionId && <span className="text-[8px] text-[#999] italic">Moderation Active</span>}
       </div>
       <div className="divide-y divide-[#f1f1f1]">
-        {entries && entries.length > 0 ? (
-          entries.map((entry, i) => (
+        {safeEntries && safeEntries.length > 0 ? (
+          safeEntries.map((entry: any, i: number) => (
             <div key={i} className="group px-4 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors">
               <div className="flex items-center gap-3">
                 <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold ${
@@ -286,6 +289,7 @@ export default function App() {
     try {
       const id = await sessionService.createSession(trimmedNickname, gameType);
       setSessionId(id);
+      setActiveSheet('GAME');
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -310,6 +314,7 @@ export default function App() {
     try {
       await sessionService.joinSession(trimmedJoinCode, trimmedNickname);
       setSessionId(trimmedJoinCode);
+      setActiveSheet('GAME');
     } catch (err: any) {
       setError(err.message);
     } finally {
