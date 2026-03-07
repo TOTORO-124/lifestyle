@@ -7,12 +7,78 @@ import { LIAR_TOPICS } from './data/topics';
 import { BINGO_TOPICS } from './data/bingoTopics';
 import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send } from 'lucide-react';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid } from 'lucide-react';
+
+const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], title: string, sessionId?: string | null, gameType?: string }) => {
+  const rankNames = ['사장', '부사장', '전무', '상무', '이사', '부장', '차장', '과장', '대리', '사원'];
+  
+  const handleDelete = async (index: number, nickname: string) => {
+    if (!sessionId || !gameType) return;
+    
+    const password = prompt(`'${nickname}'님의 기록을 삭제하시겠습니까?\n관리자 비밀번호를 입력하세요:`);
+    if (password === 'ad0419**') {
+      await sessionService.removeLeaderboardEntry(sessionId, gameType, index);
+      alert('기록이 삭제되었습니다.');
+    } else if (password !== null) {
+      alert('비밀번호가 일치하지 않습니다.');
+    }
+  };
+  
+  return (
+    <div className="w-full bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden mt-6">
+      <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Trophy size={14} className="text-yellow-500" />
+          <span className="text-[10px] font-bold text-[#666] uppercase tracking-wider">{title} 명예의 전당</span>
+        </div>
+        {sessionId && <span className="text-[8px] text-[#999] italic">Moderation Active</span>}
+      </div>
+      <div className="divide-y divide-[#f1f1f1]">
+        {entries && entries.length > 0 ? (
+          entries.map((entry, i) => (
+            <div key={i} className="group px-4 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors">
+              <div className="flex items-center gap-3">
+                <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold ${
+                  i === 0 ? 'bg-yellow-400 text-white' : 
+                  i === 1 ? 'bg-gray-300 text-white' : 
+                  i === 2 ? 'bg-orange-400 text-white' : 'text-[#999]'
+                }`}>
+                  {i + 1}
+                </span>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-gray-800">{entry.nickname}</span>
+                  <span className="text-[9px] text-[#217346] font-bold">{rankNames[i] || '인턴'}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <span className="text-xs font-mono font-bold text-[#217346]">{entry.score.toLocaleString()}</span>
+                  <p className="text-[8px] text-gray-400">{new Date(entry.timestamp).toLocaleDateString()}</p>
+                </div>
+                {sessionId && gameType && (
+                  <button 
+                    onClick={() => handleDelete(i, entry.nickname)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-600 transition-all"
+                    title="기록 삭제"
+                  >
+                    <AlertTriangle size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="p-4 text-center text-xs text-gray-400">아직 등록된 기록이 없습니다.</div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [activeSheet, setActiveSheet] = useState<'GAME' | 'ROLES' | 'LOGS' | 'STATS' | 'HELP'>('GAME');
+  const [activeSheet, setActiveSheet] = useState<'GAME' | 'ROLES' | 'LOGS' | 'STATS' | 'HELP' | 'LEADERBOARD'>('GAME');
   const [nickname, setNickname] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [menuMode, setMenuMode] = useState<'create' | 'join'>('create');
@@ -29,6 +95,7 @@ export default function App() {
   const [drawGuess, setDrawGuess] = useState('');
   const [showBingoWords, setShowBingoWords] = useState(false);
   const [showLiarKeyword, setShowLiarKeyword] = useState(false);
+  const [selectedSudokuCell, setSelectedSudokuCell] = useState<{r: number, c: number} | null>(null);
 
   const isHost = session?.hostId === currentUser?.uid;
   const me = session?.players?.[currentUser?.uid];
@@ -165,6 +232,34 @@ export default function App() {
     }
   }, [session?.id, session?.gameType, session?.status, session?.drawGame?.timer, isHost]);
 
+  // Keyboard support for 2048 and Sudoku
+  useEffect(() => {
+    if (!session || session.status !== SessionStatus.PLAYING) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent scrolling with arrow keys when playing 2048
+      if (session.gameType === GameType.OFFICE_2048 && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+      }
+
+      if (session.gameType === GameType.OFFICE_2048) {
+        if (e.key === 'ArrowUp') sessionService.moveOffice2048(session.id, 'UP', session);
+        if (e.key === 'ArrowDown') sessionService.moveOffice2048(session.id, 'DOWN', session);
+        if (e.key === 'ArrowLeft') sessionService.moveOffice2048(session.id, 'LEFT', session);
+        if (e.key === 'ArrowRight') sessionService.moveOffice2048(session.id, 'RIGHT', session);
+      } else if (session.gameType === GameType.SUDOKU && selectedSudokuCell) {
+        if (e.key >= '1' && e.key <= '9') {
+          sessionService.updateSudokuCell(session.id, selectedSudokuCell.r, selectedSudokuCell.c, parseInt(e.key), session);
+        } else if (e.key === 'Backspace' || e.key === 'Delete') {
+          sessionService.updateSudokuCell(session.id, selectedSudokuCell.r, selectedSudokuCell.c, null, session);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [session, selectedSudokuCell]);
+
   const [chatMessage, setChatMessage] = useState('');
   const chatContainerRef = React.useRef<HTMLDivElement>(null);
 
@@ -245,6 +340,12 @@ export default function App() {
       await sessionService.startBingoSetup(session.id, session.settings);
     } else if (session.gameType === GameType.DRAW) {
       await sessionService.startDrawGame(session.id, session.players, session.settings, session.turnOrder || Object.keys(session.players));
+    } else if (session.gameType === GameType.MINESWEEPER) {
+      await sessionService.startMinesweeperGame(session.id, session.settings.minesweeperDifficulty || 'EASY');
+    } else if (session.gameType === GameType.OFFICE_2048) {
+      await sessionService.startOffice2048Game(session.id);
+    } else if (session.gameType === GameType.SUDOKU) {
+      await sessionService.startSudokuGame(session.id, session.settings.sudokuDifficulty || 'EASY');
     }
   };
 
@@ -335,126 +436,204 @@ export default function App() {
         </div>
 
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white border border-[#d1d1d1] shadow-md rounded">
-            <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666] flex justify-between items-center">
-              <span>사용자_인증_프롬프트</span>
-              <MoreVertical size={12} />
-            </div>
-            
-            {/* Tabs */}
-            <div className="flex border-b border-[#d1d1d1]">
-              <button 
-                className={`flex-1 py-3 text-xs font-bold transition-colors ${menuMode === 'create' ? 'bg-white border-b-2 border-b-[#217346] text-[#217346]' : 'bg-[#f8f9fa] text-[#999] hover:bg-[#f1f1f1]'}`}
-                onClick={() => setMenuMode('create')}
-              >
-                새 세션 만들기
-              </button>
-              <button 
-                className={`flex-1 py-3 text-xs font-bold transition-colors ${menuMode === 'join' ? 'bg-white border-b-2 border-b-[#217346] text-[#217346]' : 'bg-[#f8f9fa] text-[#999] hover:bg-[#f1f1f1]'}`}
-                onClick={() => setMenuMode('join')}
-              >
-                코드로 참여하기
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#666] uppercase">사용자 이름</label>
-                  <input
-                    type="text"
-                    className="office-input border-[#d1d1d1]"
-                    placeholder="닉네임을 입력하세요..."
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        if (menuMode === 'join') handleJoinSession();
-                        else handleCreateSession(GameType.LIAR);
-                      }
-                    }}
-                  />
-                </div>
-
-                {menuMode === 'create' ? (
-                  <div className="space-y-3 pt-2">
-                    <p className="text-[10px] text-[#999]">새로운 감사 세션을 생성하고 팀원들을 초대합니다.</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button 
-                        onClick={() => handleCreateSession(GameType.LIAR)} 
-                        className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
-                        disabled={loading}
-                      >
-                        <span className="font-bold">라이어 게임</span>
-                        <span className="text-[9px] font-normal opacity-80">거짓말쟁이 찾기</span>
-                      </button>
-                      <button 
-                        onClick={() => handleCreateSession(GameType.MAFIA)} 
-                        className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
-                        disabled={loading}
-                      >
-                        <span className="font-bold">마피아 게임</span>
-                        <span className="text-[9px] font-normal opacity-80">범인 색출 작전</span>
-                      </button>
-                      <button 
-                        onClick={() => handleCreateSession(GameType.OMOK)} 
-                        className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
-                        disabled={loading}
-                      >
-                        <span className="font-bold">오목 (1:1)</span>
-                        <span className="text-[9px] font-normal opacity-80">전략 보드 게임</span>
-                      </button>
-                      <button 
-                        onClick={() => handleCreateSession(GameType.BINGO)} 
-                        className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
-                        disabled={loading}
-                      >
-                        <span className="font-bold">빙고 (다수)</span>
-                        <span className="text-[9px] font-normal opacity-80">데이터 매칭 감사</span>
-                      </button>
-                      <button 
-                        onClick={() => handleCreateSession(GameType.DRAW)} 
-                        className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
-                        disabled={loading}
-                      >
-                        <span className="font-bold">캐치마인드</span>
-                        <span className="text-[9px] font-normal opacity-80">비주얼 브리핑</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3 pt-2">
-                    <p className="text-[10px] text-[#999]">공유받은 세션 코드를 입력하여 참여합니다.</p>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        className="office-input flex-1"
-                        placeholder="세션_코드 (예: -Nxyz...)"
-                        value={joinCode}
-                        onChange={(e) => setJoinCode(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleJoinSession()}
-                      />
-                      <button 
-                        onClick={handleJoinSession} 
-                        className="office-btn px-6 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
-                        disabled={loading}
-                      >
-                        {loading ? '참여 중...' : '입장'}
-                      </button>
-                    </div>
-                  </div>
-                )}
+          {activeSheet === 'GAME' ? (
+            <div className="max-w-md w-full bg-white border border-[#d1d1d1] shadow-md rounded">
+              <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666] flex justify-between items-center">
+                <span>사용자_인증_프롬프트</span>
+                <MoreVertical size={12} />
               </div>
-              {error && <p className="text-[10px] text-red-600 font-mono bg-red-50 p-2 rounded border border-red-100">#오류: {error}</p>}
+              
+              {/* Tabs */}
+              <div className="flex border-b border-[#d1d1d1]">
+                <button 
+                  className={`flex-1 py-3 text-xs font-bold transition-colors ${menuMode === 'create' ? 'bg-white border-b-2 border-b-[#217346] text-[#217346]' : 'bg-[#f8f9fa] text-[#999] hover:bg-[#f1f1f1]'}`}
+                  onClick={() => setMenuMode('create')}
+                >
+                  새 세션 만들기
+                </button>
+                <button 
+                  className={`flex-1 py-3 text-xs font-bold transition-colors ${menuMode === 'join' ? 'bg-white border-b-2 border-b-[#217346] text-[#217346]' : 'bg-[#f8f9fa] text-[#999] hover:bg-[#f1f1f1]'}`}
+                  onClick={() => setMenuMode('join')}
+                >
+                  코드로 참여하기
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-[#666] uppercase">사용자 이름</label>
+                    <input
+                      type="text"
+                      className="office-input border-[#d1d1d1]"
+                      placeholder="닉네임을 입력하세요..."
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          if (menuMode === 'join') handleJoinSession();
+                          else handleCreateSession(GameType.LIAR);
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {menuMode === 'create' ? (
+                    <div className="space-y-3 pt-2">
+                      <p className="text-[10px] text-[#999]">새로운 감사 세션을 생성하고 팀원들을 초대합니다.</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button 
+                          onClick={() => handleCreateSession(GameType.LIAR)} 
+                          className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">라이어 게임</span>
+                          <span className="text-[9px] font-normal opacity-80">거짓말쟁이 찾기</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.MAFIA)} 
+                          className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">마피아 게임</span>
+                          <span className="text-[9px] font-normal opacity-80">범인 색출 작전</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.OMOK)} 
+                          className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">오목 (1:1)</span>
+                          <span className="text-[9px] font-normal opacity-80">전략 보드 게임</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.BINGO)} 
+                          className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">빙고 (다수)</span>
+                          <span className="text-[9px] font-normal opacity-80">데이터 매칭 감사</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.DRAW)} 
+                          className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">캐치마인드</span>
+                          <span className="text-[9px] font-normal opacity-80">비주얼 브리핑</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.MINESWEEPER)} 
+                          className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">지뢰 찾기</span>
+                          <span className="text-[9px] font-normal opacity-80">데이터 오류 검수</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.OFFICE_2048)} 
+                          className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">2048</span>
+                          <span className="text-[9px] font-normal opacity-80">직급 승진 대작전</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.SUDOKU)} 
+                          className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">스도쿠</span>
+                          <span className="text-[9px] font-normal opacity-80">데이터 무결성 검증</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 pt-2">
+                      <p className="text-[10px] text-[#999]">공유받은 세션 코드를 입력하여 참여합니다.</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          className="office-input flex-1"
+                          placeholder="세션_코드 (예: -Nxyz...)"
+                          value={joinCode}
+                          onChange={(e) => setJoinCode(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleJoinSession()}
+                        />
+                        <button 
+                          onClick={handleJoinSession} 
+                          className="office-btn px-6 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+                          disabled={loading}
+                        >
+                          {loading ? '참여 중...' : '입장'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {error && <p className="text-[10px] text-red-600 font-mono bg-red-50 p-2 rounded border border-red-100">#오류: {error}</p>}
+              </div>
             </div>
-          </div>
+          ) : activeSheet === 'LEADERBOARD' ? (
+            <div className="max-w-4xl w-full bg-white border border-[#d1d1d1] shadow-md rounded overflow-hidden">
+              <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
+                전사_명예의_전당_통합_보고서 (글로벌)
+              </div>
+              <div className="p-6">
+                <p className="text-xs text-gray-500 mb-6 italic">* 세션에 참여하면 해당 세션의 실시간 순위를 확인할 수 있습니다. 현재는 샘플 데이터를 표시합니다.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Leaderboard entries={[]} title="직급 승진 (2048)" />
+                  <Leaderboard entries={[]} title="데이터 검수 (지뢰찾기)" />
+                  <Leaderboard entries={[]} title="데이터 무결성 (스도쿠)" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-2xl w-full bg-white border border-[#d1d1d1] shadow-md rounded overflow-hidden">
+              <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
+                시스템_설정_및_도움말
+              </div>
+              <div className="p-8 text-center space-y-4">
+                <HelpCircle size={48} className="mx-auto text-[#217346] opacity-20" />
+                <h3 className="text-lg font-bold text-gray-800">도움말 및 설정</h3>
+                <p className="text-sm text-gray-500">세션에 입장한 후 상세한 게임 매뉴얼과 설정을 확인하실 수 있습니다.</p>
+                <button 
+                  onClick={() => setActiveSheet('GAME')}
+                  className="office-btn-primary px-6 py-2"
+                >
+                  메인으로 돌아가기
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sheet Tabs */}
         <footer className="bg-[#f8f9fa] border-t border-[#d1d1d1] flex items-center h-8 shrink-0">
-          <div className="office-tab active">메인_입력</div>
-          <div className="office-tab">로그_시트</div>
-          <div className="office-tab">설정</div>
+          <button 
+            onClick={() => setActiveSheet('GAME')}
+            className={`office-tab ${activeSheet === 'GAME' ? 'active' : ''}`}
+          >
+            메인_입력
+          </button>
+          <button 
+            className="office-tab opacity-30 cursor-not-allowed"
+            disabled
+          >
+            로그_시트
+          </button>
+          <button 
+            onClick={() => setActiveSheet('LEADERBOARD')}
+            className={`office-tab ${activeSheet === 'LEADERBOARD' ? 'active' : ''}`}
+          >
+            명예의_전당
+          </button>
+          <button 
+            onClick={() => setActiveSheet('HELP')}
+            className={`office-tab ${activeSheet === 'HELP' ? 'active' : ''}`}
+          >
+            설정
+          </button>
           <div className="flex-1" />
           <div className="px-4 text-[10px] text-[#999]">100% 준비됨</div>
         </footer>
@@ -567,7 +746,10 @@ export default function App() {
             {session.gameType === GameType.LIAR ? '감사_라이어_게임.xlsx' : 
              session.gameType === GameType.MAFIA ? '감사_마피아_게임.xlsx' : 
              session.gameType === GameType.OMOK ? '감사_오목_대전.xlsx' :
-             session.gameType === GameType.BINGO ? '데이터_매칭_감사.xlsx' : '비주얼_브리핑_보고.xlsx'}
+             session.gameType === GameType.BINGO ? '데이터_매칭_감사.xlsx' : 
+             session.gameType === GameType.DRAW ? '비주얼_브리핑_보고.xlsx' :
+             session.gameType === GameType.MINESWEEPER ? '데이터_오류_검수.xlsx' :
+             session.gameType === GameType.OFFICE_2048 ? '직급_승진_프로세스.xlsx' : '데이터_무결성_검증.xlsx'}
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -917,6 +1099,40 @@ export default function App() {
                         </div>
                       )}
 
+                      {session.gameType === GameType.MINESWEEPER && (
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-[#999]">난이도</label>
+                            <select 
+                              className="office-input text-xs"
+                              value={session.settings.minesweeperDifficulty || 'EASY'}
+                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, minesweeperDifficulty: e.target.value })}
+                            >
+                              <option value="EASY">쉬움 (9x9, 지뢰 10개)</option>
+                              <option value="MEDIUM">보통 (16x16, 지뢰 40개)</option>
+                              <option value="HARD">어려움 (16x30, 지뢰 99개)</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {session.gameType === GameType.SUDOKU && (
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-[#999]">난이도</label>
+                            <select 
+                              className="office-input text-xs"
+                              value={session.settings.sudokuDifficulty || 'EASY'}
+                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, sudokuDifficulty: e.target.value })}
+                            >
+                              <option value="EASY">쉬움</option>
+                              <option value="MEDIUM">보통</option>
+                              <option value="HARD">어려움</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
                       <button 
                         onClick={() => sessionService.shuffleTurnOrder(session.id, session.players)}
                         className="office-btn w-full py-2 flex items-center justify-center gap-2"
@@ -1164,13 +1380,13 @@ export default function App() {
                     </div>
                   </div>
                   
-                  <div className="p-4 flex justify-center bg-[#e6b06e]">
+                  <div className="p-8 md:p-12 flex justify-center bg-white">
                     <div 
-                      className="grid grid-cols-[repeat(15,minmax(0,1fr))] bg-[#e6b06e] border-2 border-black p-1 shadow-inner"
-                      style={{ width: 'min(100%, 450px)', aspectRatio: '1/1' }}
+                      className="grid grid-cols-[repeat(15,minmax(0,1fr))] bg-[#e6b06e] border-2 border-[#8b4513] p-1 shadow-2xl rounded-sm"
+                      style={{ width: 'min(100%, 500px)', aspectRatio: '1/1' }}
                     >
-                      {session.omokGame?.board.map((row, y) => (
-                        row.map((cell, x) => {
+                      {(Array.isArray(session.omokGame?.board) ? session.omokGame.board : Object.values(session.omokGame?.board || {})).map((row: any, y: number) => (
+                        (Array.isArray(row) ? row : Object.values(row || {})).map((cell: any, x: number) => {
                           const isWinningStone = session.omokGame?.winningLine?.some(pos => pos.x === x && pos.y === y);
                           return (
                             <div 
@@ -1283,14 +1499,14 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-6 flex flex-col md:flex-row gap-8">
+                  <div className="p-8 md:p-12 flex flex-col md:flex-row gap-12">
                     {/* My Board */}
-                    <div className="flex-1 space-y-3">
-                      <h3 className="text-[10px] font-bold text-[#666] uppercase">나의 감사 시트</h3>
-                      <div className="relative">
-                        <div className="grid grid-cols-5 gap-1 bg-[#d1d1d1] p-1 border border-[#d1d1d1]">
-                          {session.bingoGame?.boards[currentUser.uid]?.map((row, r) => (
-                            row.map((word, c) => {
+                    <div className="flex-1 space-y-4">
+                      <h3 className="text-[10px] font-bold text-[#999] uppercase tracking-wider">나의 감사 시트</h3>
+                      <div className="relative shadow-xl rounded-lg overflow-hidden border border-[#d1d1d1]">
+                        <div className="grid grid-cols-5 gap-1 bg-[#d1d1d1] p-1">
+                          {(Array.isArray(session.bingoGame?.boards?.[currentUser.uid]) ? session.bingoGame.boards[currentUser.uid] : Object.values(session.bingoGame?.boards?.[currentUser.uid] || {})).map((row: any, r: number) => (
+                            (Array.isArray(row) ? row : Object.values(row || {})).map((word: any, c: number) => {
                               const isMarked = (session.bingoGame?.markedWords || []).includes(word);
                               const isMyTurn = session.bingoGame?.currentPlayerId === currentUser.uid;
                               return (
@@ -1409,6 +1625,258 @@ export default function App() {
                 </div>
               </div>
               )
+            ) : session.gameType === GameType.MINESWEEPER ? (
+              <div className="max-w-4xl mx-auto space-y-6">
+                <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
+                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                      <span className="text-[10px] font-bold text-[#666]">데이터_오류_검수_진행</span>
+                      <div className="h-3 w-px bg-[#d1d1d1]" />
+                      <div className="text-[10px] text-[#666]">난이도: <span className="font-bold text-[#217346]">{session.minesweeperGame?.difficulty}</span></div>
+                      <div className="h-3 w-px bg-[#d1d1d1]" />
+                      <div className="text-[10px] text-[#666]">남은 지뢰: <span className="font-bold text-red-600">{session.minesweeperGame?.mineCount}</span></div>
+                    </div>
+                    {session.minesweeperGame?.status !== 'PLAYING' && (
+                      <button 
+                        onClick={() => sessionService.startMinesweeperGame(session.id, session.minesweeperGame?.difficulty || 'EASY')}
+                        className="office-btn-primary px-3 py-1 text-[10px] font-bold"
+                      >
+                        재시작
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-10 md:p-16 flex flex-col items-center gap-10">
+                    <div 
+                      className="grid gap-1 bg-[#d1d1d1] p-1 rounded shadow-2xl border border-[#d1d1d1]"
+                      style={{ 
+                        gridTemplateColumns: `repeat(${session.minesweeperGame?.board?.[0]?.length || (session.minesweeperGame?.board && (Object.values(session.minesweeperGame.board)[0] as any)?.length) || 0}, minmax(0, 1fr))`,
+                        width: 'fit-content'
+                      }}
+                    >
+                      {(Array.isArray(session.minesweeperGame?.board) ? session.minesweeperGame.board : Object.values(session.minesweeperGame?.board || {})).map((row: any, r: number) => (
+                        (Array.isArray(row) ? row : Object.values(row || {})).map((cell: any, c: number) => (
+                          <button
+                            key={`${r}-${c}`}
+                            onClick={() => sessionService.revealMinesweeperCell(session.id, r, c, session)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              sessionService.flagMinesweeperCell(session.id, r, c, session);
+                            }}
+                            className={`w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-xs font-bold transition-all ${
+                              cell.isRevealed 
+                                ? 'bg-[#f1f1f1] text-[#333]' 
+                                : 'bg-[#e0e0e0] hover:bg-[#d5d5d5] shadow-[inset_2px_2px_0_rgba(255,255,255,0.5),inset_-2px_-2px_0_rgba(0,0,0,0.1)] active:shadow-none'
+                            } ${cell.isMine && cell.isRevealed ? 'bg-red-500 text-white' : ''}`}
+                          >
+                            {cell.isRevealed ? (
+                              cell.isMine ? <Bomb size={14} /> : (cell.neighborMines > 0 ? cell.neighborMines : '')
+                            ) : (
+                              cell.isFlagged ? <Shield size={14} className="text-red-600" /> : ''
+                            )}
+                          </button>
+                        ))
+                      ))}
+                    </div>
+
+                    {session.minesweeperGame?.status !== 'PLAYING' && (
+                      <div className="w-full max-w-sm space-y-4">
+                        {session.minesweeperGame?.status === 'WON' ? (
+                          <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-center animate-bounce">
+                            <Trophy className="mx-auto text-green-600 mb-2" />
+                            <p className="text-green-800 font-bold">모든 데이터 오류를 찾아냈습니다! 완벽한 검수입니다.</p>
+                          </div>
+                        ) : (
+                          <div className="bg-red-50 border border-red-200 p-4 rounded-lg text-center">
+                            <AlertTriangle className="mx-auto text-red-600 mb-2" />
+                            <p className="text-red-800 font-bold">치명적인 데이터 오류를 발견하지 못했습니다. 시스템이 충돌했습니다!</p>
+                          </div>
+                        )}
+                        <Leaderboard 
+                          entries={session.minesweeperGame?.status === 'WON' || session.minesweeperGame?.status === 'LOST' ? session.leaderboards?.MINESWEEPER || [] : []} 
+                          title="데이터 검수" 
+                          sessionId={session.id}
+                          gameType="MINESWEEPER"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : session.gameType === GameType.OFFICE_2048 ? (
+              <div className="max-w-md mx-auto space-y-6">
+                <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
+                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-[#666]">직급_승진_프로세스</span>
+                    <div className="flex gap-4">
+                      <div className="text-[10px] text-[#666]">현재 점수: <span className="font-bold text-[#217346]">{session.office2048Game?.score}</span></div>
+                      <div className="text-[10px] text-[#666]">최고 기록: <span className="font-bold text-[#217346]">{session.office2048Game?.bestScore}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="p-10 md:p-16 flex flex-col items-center gap-10">
+                    <div className="grid grid-cols-4 gap-3 bg-[#bbada0] p-3 rounded-xl w-full aspect-square shadow-2xl border-4 border-[#bbada0]">
+                      {(Array.isArray(session.office2048Game?.board) ? session.office2048Game.board : Object.values(session.office2048Game?.board || {})).map((row: any, r: number) => (
+                        (Array.isArray(row) ? row : Object.values(row || {})).map((val: any, c: number) => {
+                          const getRank = (v: number) => {
+                            if (v === 0) return '';
+                            const ranks: Record<number, string> = {
+                              2: '인턴', 4: '사원', 8: '주임', 16: '대리', 32: '과장', 64: '차장',
+                              128: '팀장', 256: '부장', 512: '상무', 1024: '전무', 2048: '사장'
+                            };
+                            return ranks[v] || '고문';
+                          };
+                          const getColor = (v: number) => {
+                            const colors: Record<number, string> = {
+                              2: 'bg-[#eee4da] text-[#776e65]',
+                              4: 'bg-[#ede0c8] text-[#776e65]',
+                              8: 'bg-[#f2b179] text-white',
+                              16: 'bg-[#f59563] text-white',
+                              32: 'bg-[#f67c5f] text-white',
+                              64: 'bg-[#f65e3b] text-white',
+                              128: 'bg-[#edcf72] text-white',
+                              256: 'bg-[#edcc61] text-white',
+                              512: 'bg-[#edc850] text-white',
+                              1024: 'bg-[#edc53f] text-white',
+                              2048: 'bg-[#edc22e] text-white',
+                            };
+                            return colors[v] || 'bg-[#cdc1b4]';
+                          };
+                          return (
+                            <div 
+                              key={`${r}-${c}`}
+                              className={`flex flex-col items-center justify-center rounded transition-all duration-100 ${getColor(val)} shadow-sm`}
+                            >
+                              <span className="text-lg font-black">{val || ''}</span>
+                              <span className="text-[8px] font-bold opacity-80">{getRank(val)}</span>
+                            </div>
+                          );
+                        })
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 w-full">
+                      <div />
+                      <button onClick={() => sessionService.moveOffice2048(session.id, 'UP', session)} className="office-btn py-2 flex justify-center"><ArrowUp size={16} /></button>
+                      <div />
+                      <button onClick={() => sessionService.moveOffice2048(session.id, 'LEFT', session)} className="office-btn py-2 flex justify-center"><ArrowDown className="-rotate-90" size={16} /></button>
+                      <button onClick={() => sessionService.moveOffice2048(session.id, 'DOWN', session)} className="office-btn py-2 flex justify-center"><ArrowDown size={16} /></button>
+                      <button onClick={() => sessionService.moveOffice2048(session.id, 'RIGHT', session)} className="office-btn py-2 flex justify-center"><ArrowUp className="rotate-90" size={16} /></button>
+                    </div>
+
+                    {session.office2048Game?.status !== 'PLAYING' && (
+                      <div className="w-full space-y-4">
+                        <div className={`w-full p-4 rounded-lg text-center ${session.office2048Game?.status === 'WON' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                          <p className={`font-bold ${session.office2048Game?.status === 'WON' ? 'text-green-800' : 'text-red-800'}`}>
+                            {session.office2048Game?.status === 'WON' ? '축하합니다! 사장으로 승진하셨습니다!' : '승진에 실패했습니다. 다음 기회를 노려보세요.'}
+                          </p>
+                          <button 
+                            onClick={() => sessionService.startOffice2048Game(session.id)}
+                            className="mt-2 office-btn-primary px-4 py-1 text-xs"
+                          >
+                            다시 도전
+                          </button>
+                        </div>
+                        <Leaderboard 
+                          entries={session.leaderboards?.OFFICE_2048 || []} 
+                          title="직급 승진" 
+                          sessionId={session.id}
+                          gameType="OFFICE_2048"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : session.gameType === GameType.SUDOKU ? (
+              <div className="max-w-2xl mx-auto space-y-6">
+                <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
+                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-[#666]">데이터_무결성_검증_진행</span>
+                    <div className="flex gap-4">
+                      <div className="text-[10px] text-[#666]">난이도: <span className="font-bold text-[#217346]">{session.sudokuGame?.difficulty}</span></div>
+                      <div className="text-[10px] text-[#666]">실수: <span className="font-bold text-red-600">{session.sudokuGame?.mistakes}/3</span></div>
+                    </div>
+                  </div>
+
+                  <div className="p-10 md:p-16 flex flex-col md:flex-row items-center justify-center gap-12">
+                    <div className="grid grid-cols-9 border-4 border-[#333] w-fit shadow-2xl rounded-sm overflow-hidden">
+                      {(Array.isArray(session.sudokuGame?.currentBoard) ? session.sudokuGame.currentBoard : Object.values(session.sudokuGame?.currentBoard || {})).map((row: any, r: number) => (
+                        (Array.isArray(row) ? row : Object.values(row || {})).map((val: any, c: number) => {
+                          const isInitial = session.sudokuGame?.initialBoard?.[r]?.[c] !== 0 && session.sudokuGame?.initialBoard?.[r]?.[c] !== undefined;
+                          const isWrong = val !== 0 && val !== undefined && val !== session.sudokuGame?.solution?.[r]?.[c];
+                          const isSelected = selectedSudokuCell?.r === r && selectedSudokuCell?.c === c;
+                          return (
+                            <button 
+                              key={`${r}-${c}`}
+                              onClick={() => !isInitial && setSelectedSudokuCell({r, c})}
+                              className={`w-8 h-8 md:w-10 md:h-10 border border-[#ccc] flex items-center justify-center text-sm md:text-base font-bold transition-all
+                                ${r % 3 === 2 && r !== 8 ? 'border-b-2 border-b-[#333]' : ''}
+                                ${c % 3 === 2 && c !== 8 ? 'border-r-2 border-r-[#333]' : ''}
+                                ${isInitial ? 'bg-[#f8f9fa] text-[#333]' : 'bg-white text-[#217346]'}
+                                ${isWrong ? 'bg-red-100 text-red-600' : ''}
+                                ${isSelected ? 'ring-2 ring-inset ring-[#217346] bg-[#e8f0fe] z-10' : ''}
+                              `}
+                            >
+                              {val || ''}
+                            </button>
+                          );
+                        })
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col gap-4">
+                      <div className="grid grid-cols-3 gap-2">
+                        {[1,2,3,4,5,6,7,8,9].map(num => (
+                          <button 
+                            key={num}
+                            onClick={() => {
+                              if (selectedSudokuCell) {
+                                sessionService.updateSudokuCell(session.id, selectedSudokuCell.r, selectedSudokuCell.c, num, session);
+                              }
+                            }}
+                            className="office-btn w-10 h-10 font-bold"
+                          >
+                            {num}
+                          </button>
+                        ))}
+                        <button 
+                          onClick={() => {
+                            if (selectedSudokuCell) {
+                              sessionService.updateSudokuCell(session.id, selectedSudokuCell.r, selectedSudokuCell.c, 0, session);
+                            }
+                          }}
+                          className="office-btn w-10 h-10 font-bold text-red-600"
+                        >
+                          X
+                        </button>
+                      </div>
+                      <button 
+                        onClick={() => sessionService.startSudokuGame(session.id, session.sudokuGame?.difficulty || 'EASY')}
+                        className="office-btn-primary py-2 text-xs font-bold"
+                      >
+                        새 게임
+                      </button>
+                    </div>
+                    {session.sudokuGame?.status === 'WON' && (
+                      <div className="w-full max-w-xs space-y-4">
+                        <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-center animate-bounce">
+                          <Trophy className="mx-auto text-green-600 mb-2" />
+                          <p className="text-green-800 font-bold">데이터 무결성 검증 완료! 완벽한 보고서입니다.</p>
+                        </div>
+                        <Leaderboard 
+                          entries={session.leaderboards?.SUDOKU || []} 
+                          title="데이터 무결성" 
+                          sessionId={session.id}
+                          gameType="SUDOKU"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <p className="text-center text-[10px] text-[#999] pb-4">빈 칸을 클릭하고 숫자를 입력하여 데이터를 검증하세요.</p>
+                </div>
+              </div>
             ) : session.gameType === GameType.DRAW ? (
               <div className="max-w-3xl mx-auto space-y-6">
                 <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
@@ -1452,7 +1920,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-4 md:p-6 flex flex-col lg:flex-row gap-6">
+                  <div className="p-6 md:p-10 flex flex-col lg:flex-row gap-10">
                     {/* Canvas Area */}
                     <div className="flex-1 flex flex-col gap-4 min-w-0">
                       <div className="flex flex-col gap-3">
@@ -2376,6 +2844,19 @@ export default function App() {
                 </div>
               </div>
             </div>
+          ) : activeSheet === 'LEADERBOARD' ? (
+            <div className="bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden">
+              <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
+                전사_명예의_전당_통합_보고서
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Leaderboard entries={session.leaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId={session.id} gameType="OFFICE_2048" />
+                  <Leaderboard entries={session.leaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId={session.id} gameType="MINESWEEPER" />
+                  <Leaderboard entries={session.leaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId={session.id} gameType="SUDOKU" />
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden">
               <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
@@ -2483,7 +2964,7 @@ export default function App() {
           onClick={() => setActiveSheet('GAME')}
           className={`office-tab ${activeSheet === 'GAME' ? 'active' : ''}`}
         >
-          감사_시트
+          메인_입력
         </button>
         <button 
           onClick={() => setActiveSheet('ROLES')}
@@ -2504,10 +2985,16 @@ export default function App() {
           통계_보고서
         </button>
         <button 
+          onClick={() => setActiveSheet('LEADERBOARD')}
+          className={`office-tab ${activeSheet === 'LEADERBOARD' ? 'active' : ''}`}
+        >
+          명예의_전당
+        </button>
+        <button 
           onClick={() => setActiveSheet('HELP')}
           className={`office-tab ${activeSheet === 'HELP' ? 'active' : ''}`}
         >
-          도움말_매뉴얼
+          설정
         </button>
         <div className="flex-1" />
         <div className="px-4 text-[9px] text-[#999] flex items-center gap-3 whitespace-nowrap">

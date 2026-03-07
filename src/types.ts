@@ -4,6 +4,9 @@ export enum GameType {
   OMOK = 'OMOK',
   BINGO = 'BINGO',
   DRAW = 'DRAW',
+  MINESWEEPER = 'MINESWEEPER',
+  OFFICE_2048 = 'OFFICE_2048',
+  SUDOKU = 'SUDOKU',
 }
 
 export enum SessionStatus {
@@ -116,6 +119,43 @@ export interface GameLog {
   timestamp: number;
 }
 
+export interface MinesweeperGameState {
+  board: {
+    isMine: boolean;
+    isRevealed: boolean;
+    isFlagged: boolean;
+    neighborMines: number;
+  }[][];
+  status: 'PLAYING' | 'WON' | 'LOST';
+  difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+  mineCount: number;
+  revealedCount: number;
+  startTime?: number;
+}
+
+export interface Office2048GameState {
+  board: number[][];
+  score: number;
+  bestScore: number;
+  status: 'PLAYING' | 'WON' | 'LOST';
+}
+
+export interface SudokuGameState {
+  initialBoard: (number | null)[][];
+  currentBoard: (number | null)[][];
+  solution: number[][];
+  difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+  status: 'PLAYING' | 'WON';
+  mistakes: number;
+}
+
+export interface LeaderboardEntry {
+  playerId: string;
+  nickname: string;
+  score: number;
+  timestamp: number;
+}
+
 export interface Session {
   id: string;
   gameType: GameType;
@@ -129,6 +169,10 @@ export interface Session {
   omokGame?: OmokGameState;
   bingoGame?: BingoGameState;
   drawGame?: DrawGameState;
+  minesweeperGame?: MinesweeperGameState;
+  office2048Game?: Office2048GameState;
+  sudokuGame?: SudokuGameState;
+  leaderboards?: Record<string, LeaderboardEntry[]>;
   settings: {
     maxPlayers: number;
     liarMode?: LiarMode;
@@ -140,6 +184,8 @@ export interface Session {
     bingoCategory?: string;
     drawRounds?: number;
     drawTime?: number;
+    minesweeperDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+    sudokuDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
   };
   turnOrder?: string[];
   messages?: Record<string, ChatMessage>;

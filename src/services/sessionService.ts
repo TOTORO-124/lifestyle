@@ -458,6 +458,12 @@ export const sessionService = {
       status: SessionStatus.LOBBY,
       liarGame: null,
       mafiaGame: null,
+      bingoGame: null,
+      omokGame: null,
+      drawGame: null,
+      minesweeperGame: null,
+      office2048Game: null,
+      sudokuGame: null,
     };
     
     Object.keys(players).forEach(pid => {
@@ -880,19 +886,26 @@ export const sessionService = {
     }
   },
 
-  countBingoLines(board: string[][], markedWords: string[]) {
+  countBingoLines(board: any, markedWords: string[]) {
     let lines = 0;
+    if (!board) return 0;
+    
+    // Ensure board is 2D array
+    const b = (Array.isArray(board) ? board : Object.values(board)).map((row: any) => 
+      Array.isArray(row) ? row : Object.values(row)
+    );
+    const marked = markedWords || [];
 
     // Rows
     for (let i = 0; i < 5; i++) {
-      if (board[i].every(word => markedWords.includes(word))) lines++;
+      if (b[i] && b[i].every(word => marked.includes(word))) lines++;
     }
 
     // Columns
     for (let i = 0; i < 5; i++) {
       let colMarked = true;
       for (let j = 0; j < 5; j++) {
-        if (!markedWords.includes(board[j][i])) {
+        if (!b[j] || !marked.includes(b[j][i])) {
           colMarked = false;
           break;
         }
@@ -904,8 +917,8 @@ export const sessionService = {
     let diag1Marked = true;
     let diag2Marked = true;
     for (let i = 0; i < 5; i++) {
-      if (!markedWords.includes(board[i][i])) diag1Marked = false;
-      if (!markedWords.includes(board[i][4 - i])) diag2Marked = false;
+      if (!b[i] || !marked.includes(b[i][i])) diag1Marked = false;
+      if (!b[i] || !marked.includes(b[i][4 - i])) diag2Marked = false;
     }
     if (diag1Marked) lines++;
     if (diag2Marked) lines++;
@@ -928,8 +941,9 @@ export const sessionService = {
     const isBlack = playerId === game.blackPlayerId;
     const stone = isBlack ? 1 : 2;
     
-    // Update local board copy for win check
-    const newBoard = game.board.map((row: any) => [...row]);
+    // Ensure board is array
+    const boardArray = Array.isArray(game.board) ? game.board : Object.values(game.board);
+    const newBoard = boardArray.map((row: any) => Array.isArray(row) ? [...row] : Object.values(row));
     newBoard[y][x] = stone;
     
     // Check for forbidden moves (Black only)
@@ -1053,5 +1067,369 @@ export const sessionService = {
       }
     }
     return null;
-  }
+  },
+
+  // --- Minesweeper ---
+  async startMinesweeperGame(sessionId: string, difficulty: 'EASY' | 'MEDIUM' | 'HARD') {
+    if (!db) return;
+    
+    let rows = 9, cols = 9, mines = 10;
+    if (difficulty === 'MEDIUM') { rows = 16; cols = 16; mines = 40; }
+    if (difficulty === 'HARD') { rows = 16; cols = 30; mines = 99; }
+
+    const board = Array(rows).fill(null).map(() => 
+      Array(cols).fill(null).map(() => ({
+        isMine: false,
+        isRevealed: false,
+        isFlagged: false,
+        neighborMines: 0
+      }))
+    );
+
+    // Place mines
+    let placed = 0;
+    while (placed < mines) {
+      const r = Math.floor(Math.random() * rows);
+      const c = Math.floor(Math.random() * cols);
+      if (!board[r][c].isMine) {
+        board[r][c].isMine = true;
+        placed++;
+      }
+    }
+
+    // Calculate neighbors
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (board[r][c].isMine) continue;
+        let count = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && board[nr][nc].isMine) {
+              count++;
+            }
+          }
+        }
+        board[r][c].neighborMines = count;
+      }
+    }
+
+    const minesweeperGame: any = {
+      board,
+      status: 'PLAYING',
+      difficulty,
+      mineCount: mines,
+      revealedCount: 0,
+      startTime: Date.now()
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), {
+      status: SessionStatus.PLAYING,
+      minesweeperGame
+    });
+    await this.addLog(sessionId, `지뢰 찾기(데이터 오류 검수) 게임이 시작되었습니다.`, 'success');
+  },
+
+  async recordLeaderboard(sessionId: string, gameType: string, playerId: string, nickname: string, score: number) {
+    if (!db) return;
+    const sessionRef = ref(db, `sessions/${sessionId}/leaderboards/${gameType}`);
+    const snapshot = await get(sessionRef);
+    let leaderboard = snapshot.val() || [];
+    if (!Array.isArray(leaderboard)) leaderboard = Object.values(leaderboard);
+
+    // Add new entry
+    leaderboard.push({
+      playerId,
+      nickname,
+      score,
+      timestamp: Date.now()
+    });
+
+    // Sort by score descending
+    leaderboard.sort((a: any, b: any) => b.score - a.score);
+
+    // Keep top 10
+    leaderboard = leaderboard.slice(0, 10);
+
+    await set(sessionRef, leaderboard);
+  },
+
+  async removeLeaderboardEntry(sessionId: string, gameType: string, index: number) {
+    if (!db) return;
+    const sessionRef = ref(db, `sessions/${sessionId}/leaderboards/${gameType}`);
+    const snapshot = await get(sessionRef);
+    let leaderboard = snapshot.val() || [];
+    if (!Array.isArray(leaderboard)) leaderboard = Object.values(leaderboard);
+
+    if (index >= 0 && index < leaderboard.length) {
+      leaderboard.splice(index, 1);
+      await set(sessionRef, leaderboard);
+    }
+  },
+
+  async revealMinesweeperCell(sessionId: string, r: number, c: number, session: Session) {
+    if (!db || !session.minesweeperGame || session.minesweeperGame.status !== 'PLAYING') return;
+    
+    const game = JSON.parse(JSON.stringify(session.minesweeperGame));
+    // Ensure board is 2D array
+    game.board = (Array.isArray(game.board) ? game.board : Object.values(game.board)).map((row: any) => 
+      Array.isArray(row) ? row : Object.values(row)
+    );
+    const board = game.board;
+    
+    if (board[r][c].isRevealed || board[r][c].isFlagged) return;
+
+    if (board[r][c].isMine) {
+      game.status = 'LOST';
+      // Reveal all mines
+      board.forEach((row: any) => row.forEach((cell: any) => { if (cell.isMine) cell.isRevealed = true; }));
+      await this.addLog(sessionId, `지뢰(데이터 오류)를 밟았습니다! 게임 오버.`, 'warning');
+    } else {
+      const reveal = (row: number, col: number) => {
+        if (row < 0 || row >= board.length || col < 0 || col >= board[0].length || board[row][col].isRevealed || board[row][col].isFlagged) return;
+        board[row][col].isRevealed = true;
+        game.revealedCount++;
+        if (board[row][col].neighborMines === 0) {
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              reveal(row + dr, col + dc);
+            }
+          }
+        }
+      };
+      reveal(r, c);
+
+      const totalCells = board.length * board[0].length;
+      if (game.revealedCount === totalCells - game.mineCount) {
+        game.status = 'WON';
+        await this.addLog(sessionId, `모든 지뢰를 성공적으로 찾아냈습니다!`, 'success');
+        
+        // Record leaderboard
+        const timeTaken = Date.now() - (game.startTime || Date.now());
+        const difficultyBonus = { 'EASY': 1000, 'MEDIUM': 5000, 'HARD': 15000 }[game.difficulty as 'EASY' | 'MEDIUM' | 'HARD'];
+        const score = Math.max(0, difficultyBonus + 100000 - Math.floor(timeTaken / 10));
+        await this.recordLeaderboard(sessionId, 'MINESWEEPER', session.players[session.hostId].id, session.players[session.hostId].nickname, score);
+      }
+    }
+
+    await update(ref(db, `sessions/${sessionId}`), { minesweeperGame: game });
+  },
+
+  async flagMinesweeperCell(sessionId: string, r: number, c: number, session: Session) {
+    if (!db || !session.minesweeperGame || session.minesweeperGame.status !== 'PLAYING') return;
+    const game = JSON.parse(JSON.stringify(session.minesweeperGame));
+    game.board[r][c].isFlagged = !game.board[r][c].isFlagged;
+    await update(ref(db, `sessions/${sessionId}`), { minesweeperGame: game });
+  },
+
+  // --- Office 2048 ---
+  async startOffice2048Game(sessionId: string) {
+    if (!db) return;
+    const board = Array(4).fill(null).map(() => Array(4).fill(0));
+    this.addRandomTile(board);
+    this.addRandomTile(board);
+
+    const office2048Game: any = {
+      board,
+      score: 0,
+      bestScore: 0,
+      status: 'PLAYING'
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), {
+      status: SessionStatus.PLAYING,
+      office2048Game
+    });
+    await this.addLog(sessionId, `직급 승진 2048 게임이 시작되었습니다.`, 'success');
+  },
+
+  addRandomTile(board: number[][]) {
+    const empty = [];
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (board[r][c] === 0) empty.push({r, c});
+      }
+    }
+    if (empty.length > 0) {
+      const {r, c} = empty[Math.floor(Math.random() * empty.length)];
+      board[r][c] = Math.random() < 0.9 ? 2 : 4;
+    }
+  },
+
+  async moveOffice2048(sessionId: string, direction: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', session: Session) {
+    if (!db || !session.office2048Game || session.office2048Game.status !== 'PLAYING') return;
+    
+    const game = JSON.parse(JSON.stringify(session.office2048Game));
+    // Ensure board is 2D array
+    game.board = (Array.isArray(game.board) ? game.board : Object.values(game.board)).map((row: any) => 
+      Array.isArray(row) ? row : Object.values(row)
+    );
+    const board = game.board;
+    let moved = false;
+
+    const rotate = (b: number[][]) => {
+      const newB = Array(4).fill(null).map(() => Array(4).fill(0));
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          newB[c][3-r] = b[r][c];
+        }
+      }
+      return newB;
+    };
+
+    let tempBoard = board;
+    const rotations = { 'LEFT': 0, 'UP': 1, 'RIGHT': 2, 'DOWN': 3 }[direction];
+    for (let i = 0; i < rotations; i++) tempBoard = rotate(tempBoard);
+
+    for (let r = 0; r < 4; r++) {
+      const row = tempBoard[r].filter((v: number) => v !== 0);
+      for (let i = 0; i < row.length - 1; i++) {
+        if (row[i] === row[i+1]) {
+          row[i] *= 2;
+          game.score += row[i];
+          row.splice(i+1, 1);
+          moved = true;
+        }
+      }
+      const newRow = [...row, ...Array(4 - row.length).fill(0)];
+      if (JSON.stringify(tempBoard[r]) !== JSON.stringify(newRow)) moved = true;
+      tempBoard[r] = newRow;
+    }
+
+    for (let i = 0; i < (4 - rotations) % 4; i++) tempBoard = rotate(tempBoard);
+    game.board = tempBoard;
+
+    if (moved) {
+      this.addRandomTile(game.board);
+      // Check for game over
+      let canMove = false;
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (game.board[r][c] === 0) canMove = true;
+          if (c < 3 && game.board[r][c] === game.board[r][c+1]) canMove = true;
+          if (r < 3 && game.board[r][c] === game.board[r+1][c]) canMove = true;
+        }
+      }
+      if (!canMove) {
+        game.status = 'LOST';
+        await this.addLog(sessionId, `더 이상 움직일 수 없습니다. 최종 점수: ${game.score}점`, 'warning');
+        await this.recordLeaderboard(sessionId, 'OFFICE_2048', session.players[session.hostId].id, session.players[session.hostId].nickname, game.score);
+      }
+      if (game.board.some((row: any) => row.includes(2048))) {
+        game.status = 'WON';
+        await this.addLog(sessionId, `축하합니다! 사장(2048)으로 승진했습니다!`, 'success');
+        await this.recordLeaderboard(sessionId, 'OFFICE_2048', session.players[session.hostId].id, session.players[session.hostId].nickname, game.score);
+      }
+      
+      await update(ref(db, `sessions/${sessionId}`), { office2048Game: game });
+    }
+  },
+
+  // --- Sudoku ---
+  async startSudokuGame(sessionId: string, difficulty: 'EASY' | 'MEDIUM' | 'HARD') {
+    if (!db) return;
+    
+    const solution = Array(9).fill(null).map(() => Array(9).fill(0));
+    const fill = (r: number, c: number): boolean => {
+      if (c === 9) { r++; c = 0; }
+      if (r === 9) return true;
+      const nums = [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
+      for (const num of nums) {
+        if (this.isSudokuSafe(solution, r, c, num)) {
+          solution[r][c] = num;
+          if (fill(r, c + 1)) return true;
+          solution[r][c] = 0;
+        }
+      }
+      return false;
+    };
+    fill(0, 0);
+
+    const initialBoard = solution.map(row => [...row]);
+    const removeCount = { 'EASY': 30, 'MEDIUM': 45, 'HARD': 60 }[difficulty];
+    let removed = 0;
+    while (removed < removeCount) {
+      const r = Math.floor(Math.random() * 9);
+      const c = Math.floor(Math.random() * 9);
+      if (initialBoard[r][c] !== 0) {
+        initialBoard[r][c] = 0;
+        removed++;
+      }
+    }
+
+    const sudokuGame: any = {
+      initialBoard,
+      currentBoard: initialBoard.map(row => [...row]),
+      solution,
+      difficulty,
+      status: 'PLAYING',
+      mistakes: 0
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), {
+      status: SessionStatus.PLAYING,
+      sudokuGame
+    });
+    await this.addLog(sessionId, `스도쿠(데이터 검증) 게임이 시작되었습니다.`, 'success');
+  },
+
+  isSudokuSafe(board: number[][], r: number, c: number, num: number) {
+    for (let i = 0; i < 9; i++) if (board[r][i] === num || board[i][c] === num) return false;
+    const br = Math.floor(r / 3) * 3, bc = Math.floor(c / 3) * 3;
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if (board[br + i][bc + j] === num) return false;
+    return true;
+  },
+
+  async updateSudokuCell(sessionId: string, r: number, c: number, num: number, session: Session) {
+    if (!db || !session.sudokuGame || session.sudokuGame.status !== 'PLAYING') return;
+    
+    const game = JSON.parse(JSON.stringify(session.sudokuGame));
+    
+    // Helper to ensure 9x9 matrix from Firebase object/array
+    const ensureSudokuMatrix = (data: any) => {
+      const matrix = Array(9).fill(0).map(() => Array(9).fill(0));
+      if (!data) return matrix;
+      const rows = Array.isArray(data) ? data : Object.values(data);
+      rows.forEach((row: any, ri: number) => {
+        if (ri >= 9) return;
+        const cells = Array.isArray(row) ? row : Object.values(row);
+        cells.forEach((cell: any, ci: number) => {
+          if (ci >= 9) return;
+          matrix[ri][ci] = cell || 0;
+        });
+      });
+      return matrix;
+    };
+
+    game.initialBoard = ensureSudokuMatrix(game.initialBoard);
+    game.currentBoard = ensureSudokuMatrix(game.currentBoard);
+    game.solution = ensureSudokuMatrix(game.solution);
+    
+    if (game.initialBoard[r][c] !== 0) return;
+
+    if (num !== 0 && num !== game.solution[r][c]) {
+      game.mistakes++;
+      await this.addLog(sessionId, `잘못된 숫자를 입력했습니다. (실수: ${game.mistakes}/3)`, 'warning');
+    }
+    
+    game.currentBoard[r][c] = num;
+    
+    let won = true;
+    for (let i = 0; i < 9; i++) {
+      for (let j = 0; j < 9; j++) {
+        if (game.currentBoard[i][j] !== game.solution[i][j]) won = false;
+      }
+    }
+    if (won) {
+      game.status = 'WON';
+      await this.addLog(sessionId, `스도쿠를 완벽하게 해결했습니다!`, 'success');
+      
+      // Record leaderboard
+      const difficultyBonus = { 'EASY': 1000, 'MEDIUM': 5000, 'HARD': 15000 }[game.difficulty as 'EASY' | 'MEDIUM' | 'HARD'];
+      const score = Math.max(0, difficultyBonus + 10000 - (game.mistakes * 1000));
+      await this.recordLeaderboard(sessionId, 'SUDOKU', session.players[session.hostId].id, session.players[session.hostId].nickname, score);
+    }
+
+    await update(ref(db, `sessions/${sessionId}`), { sudokuGame: game });
+  },
 };
