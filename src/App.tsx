@@ -7,7 +7,7 @@ import { LIAR_TOPICS } from './data/topics';
 import { BINGO_TOPICS } from './data/bingoTopics';
 import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid } from 'lucide-react';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid, Cpu } from 'lucide-react';
 
 const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], title: string, sessionId?: string | null, gameType?: string }) => {
   const rankNames = ['사장', '부사장', '전무', '상무', '이사', '부장', '차장', '과장', '대리', '사원'];
@@ -202,6 +202,7 @@ export default function App() {
   const [selectedNightTarget, setSelectedNightTarget] = useState<string | null>(null);
   const [omokBlackId, setOmokBlackId] = useState<string>('');
   const [omokWhiteId, setOmokWhiteId] = useState<string>('');
+  const [omokDifficulty, setOmokDifficulty] = useState<number>(1);
   const [bingoBoard, setBingoBoard] = useState<string[][]>(Array(5).fill(null).map(() => Array(5).fill('')));
   const [bingoSubmitted, setBingoSubmitted] = useState(false);
   const [drawGuess, setDrawGuess] = useState('');
@@ -715,10 +716,11 @@ export default function App() {
               </div>
               <div className="p-6">
                 <p className="text-xs text-gray-500 mb-6 italic">* 전사 시트에서 기록된 실시간 순위입니다. (글로벌 통합)</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
+                  <Leaderboard entries={globalLeaderboards?.OMOK_HOF || []} title="오목 (최고난도)" sessionId="GLOBAL" gameType="OMOK_HOF" />
                 </div>
               </div>
             </div>
@@ -1146,34 +1148,72 @@ export default function App() {
 
                       {session.gameType === GameType.OMOK && (
                         <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <div className="flex-1 space-y-1">
+                              <label className="text-[9px] font-bold text-[#999]">흑돌 (선공)</label>
+                              <select 
+                                className="office-input text-xs"
+                                value={omokBlackId}
+                                onChange={(e) => setOmokBlackId(e.target.value)}
+                              >
+                                <option value="">선택하세요</option>
+                                {getSortedPlayers().map(p => (
+                                  <option key={p.id} value={p.id} disabled={p.id === omokWhiteId}>{p.nickname}</option>
+                                ))}
+                                <option value="AI_PLAYER" disabled={"AI_PLAYER" === omokWhiteId}>알파고 (AI)</option>
+                              </select>
+                            </div>
+                            <div className="flex-1 space-y-1">
+                              <label className="text-[9px] font-bold text-[#999]">백돌 (후공)</label>
+                              <select 
+                                className="office-input text-xs"
+                                value={omokWhiteId}
+                                onChange={(e) => setOmokWhiteId(e.target.value)}
+                              >
+                                <option value="">선택하세요</option>
+                                {getSortedPlayers().map(p => (
+                                  <option key={p.id} value={p.id} disabled={p.id === omokBlackId}>{p.nickname}</option>
+                                ))}
+                                <option value="AI_PLAYER" disabled={"AI_PLAYER" === omokBlackId}>알파고 (AI)</option>
+                              </select>
+                            </div>
+                          </div>
+
                           <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-[#999]">흑돌 (선공)</label>
+                            <label className="text-[9px] font-bold text-[#999]">AI 난이도 (AI 대전 시)</label>
                             <select 
                               className="office-input text-xs"
-                              value={omokBlackId}
-                              onChange={(e) => setOmokBlackId(e.target.value)}
+                              value={omokDifficulty}
+                              onChange={(e) => setOmokDifficulty(parseInt(e.target.value))}
+                              disabled={omokBlackId !== 'AI_PLAYER' && omokWhiteId !== 'AI_PLAYER'}
                             >
-                              <option value="">선택하세요</option>
-                              {getSortedPlayers().map(p => (
-                                <option key={p.id} value={p.id} disabled={p.id === omokWhiteId}>{p.nickname}</option>
-                              ))}
+                              <option value={1}>인턴 (Lv.1)</option>
+                              <option value={2}>사원 (Lv.2)</option>
+                              <option value={3}>주임 (Lv.3)</option>
+                              <option value={4}>대리 (Lv.4)</option>
+                              <option value={5}>과장 (Lv.5 - 명예의 전당 도전)</option>
                             </select>
                           </div>
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-[#999]">백돌 (후공)</label>
-                            <select 
-                              className="office-input text-xs"
-                              value={omokWhiteId}
-                              onChange={(e) => setOmokWhiteId(e.target.value)}
+                          
+                          <div className="pt-2 border-t border-[#d1d1d1] mt-2">
+                            <button 
+                              onClick={() => {
+                                if (!omokBlackId || !omokWhiteId) {
+                                  alert('플레이어를 선택해주세요.');
+                                  return;
+                                }
+                                const isAIMatch = omokBlackId === 'AI_PLAYER' || omokWhiteId === 'AI_PLAYER';
+                                sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId, isAIMatch, omokDifficulty);
+                              }}
+                              className="w-full office-btn-primary py-2 text-[10px] font-bold flex items-center justify-center gap-2"
                             >
-                              <option value="">선택하세요</option>
-                              {getSortedPlayers().map(p => (
-                                <option key={p.id} value={p.id} disabled={p.id === omokBlackId}>{p.nickname}</option>
-                              ))}
-                            </select>
+                              <Play size={14} />
+                              <span>오목 대전 시작</span>
+                            </button>
                           </div>
+
                           <p className="text-[10px] text-[#999]">
-                            * 오목은 두 명의 플레이어가 진행하며, 나머지는 관전합니다.
+                            * 오목은 두 명의 플레이어가 진행하거나, AI와 대결할 수 있습니다.
                           </p>
                         </div>
                       )}
@@ -1514,74 +1554,154 @@ export default function App() {
                 <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
                   <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
                     <span className="text-[10px] font-bold text-[#666]">오목_대전_보드</span>
-                    <div className="flex items-center gap-2 text-xs">
-                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded ${session.omokGame?.currentPlayerId === session.omokGame?.blackPlayerId ? 'bg-black text-white font-bold shadow-sm' : 'bg-gray-100 text-gray-400'}`}>
-                        <div className="w-2 h-2 rounded-full bg-black border border-white/20"></div>
-                        <span>{session.players[session.omokGame!.blackPlayerId].nickname}</span>
+                    <div className="flex items-center gap-3 text-xs">
+                      {/* Black Player Indicator */}
+                      <div 
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border-2 ${String(session.omokGame?.currentPlayerId) === String(session.omokGame?.blackPlayerId) ? 'border-black shadow-lg scale-105' : 'border-transparent opacity-60'}`}
+                        style={{ 
+                          backgroundColor: '#222222',
+                          color: '#ffffff',
+                          filter: 'none',
+                          colorScheme: 'light'
+                        }}
+                      >
+                        <div className="w-3 h-3 rounded-full bg-black border border-white/40 shadow-inner" style={{ filter: 'none' }}></div>
+                        <span className="font-bold whitespace-nowrap">{session.players[session.omokGame!.blackPlayerId].nickname}</span>
+                        {String(session.omokGame!.blackPlayerId) === String(currentUser.uid) && <span className="text-[8px] opacity-70">(나)</span>}
+                        {String(session.omokGame?.currentPlayerId) === String(session.omokGame?.blackPlayerId) && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse ml-1"></div>
+                        )}
                       </div>
-                      <div className={`flex items-center gap-1 px-2 py-0.5 rounded ${session.omokGame?.currentPlayerId === session.omokGame?.whitePlayerId ? 'bg-white border border-gray-300 text-black font-bold shadow-sm' : 'bg-gray-100 text-gray-400'}`}>
-                        <div className="w-2 h-2 rounded-full bg-white border border-gray-300"></div>
-                        <span>{session.players[session.omokGame!.whitePlayerId].nickname}</span>
+                      
+                      <div className="text-gray-400 font-black italic">VS</div>
+                      
+                      {/* White Player Indicator */}
+                      <div 
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border-2 ${String(session.omokGame?.currentPlayerId) === String(session.omokGame?.whitePlayerId) ? 'border-gray-400 shadow-lg scale-105' : 'border-transparent opacity-60'}`}
+                        style={{ 
+                          backgroundColor: '#ffffff',
+                          color: '#333333',
+                          filter: 'none',
+                          colorScheme: 'light'
+                        }}
+                      >
+                        <div className="w-3 h-3 rounded-full bg-white border border-gray-300 shadow-sm" style={{ filter: 'none' }}></div>
+                        <span className="font-bold whitespace-nowrap">{session.players[session.omokGame!.whitePlayerId].nickname}</span>
+                        {String(session.omokGame!.whitePlayerId) === String(currentUser.uid) && <span className="text-[8px] opacity-70">(나)</span>}
+                        {String(session.omokGame?.currentPlayerId) === String(session.omokGame?.whitePlayerId) && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse ml-1"></div>
+                        )}
                       </div>
                     </div>
                   </div>
                   
-                  <div className="p-8 md:p-12 flex justify-center bg-white">
+                  <div className="p-4 md:p-8 flex justify-center bg-white" style={{ filter: 'none', colorScheme: 'light' }}>
                     <div 
-                      className="grid grid-cols-[repeat(15,minmax(0,1fr))] bg-[#e6b06e] border-2 border-[#8b4513] p-1 shadow-2xl rounded-sm"
-                      style={{ width: 'min(100%, 500px)', aspectRatio: '1/1' }}
+                      className="bg-[#dcb35c] border-[3px] border-[#5d4037] shadow-2xl rounded-sm relative"
+                      style={{ 
+                        width: 'min(100%, 500px)', 
+                        aspectRatio: '1/1', 
+                        filter: 'none', 
+                        colorScheme: 'light',
+                        padding: '3.33%' // Margin around the grid
+                      }}
                     >
-                      {(Array.isArray(session.omokGame?.board) ? session.omokGame.board : Object.values(session.omokGame?.board || {})).map((row: any, y: number) => (
-                        (Array.isArray(row) ? row : Object.values(row || {})).map((cell: any, x: number) => {
-                          const isWinningStone = session.omokGame?.winningLine?.some(pos => pos.x === x && pos.y === y);
-                          return (
+                      {/* Grid Lines Layer */}
+                      <div className="absolute inset-0 pointer-events-none z-0" style={{ filter: 'none', padding: '3.33%' }}>
+                        <div className="relative w-full h-full">
+                          {/* Horizontal lines */}
+                          {Array.from({ length: 15 }).map((_, i) => (
                             <div 
-                              key={`${x}-${y}`} 
-                              onClick={() => {
-                                if (session.omokGame?.currentPlayerId === currentUser.uid && cell === 0) {
-                                  sessionService.placeOmokStone(session.id, currentUser.uid, x, y);
-                                }
+                              key={`h-${i}`} 
+                              className="absolute w-full h-[1.5px] bg-[#3e2723]/80" 
+                              style={{ top: `${(i / 14) * 100}%`, transform: 'translateY(-50%)' }} 
+                            />
+                          ))}
+                          {/* Vertical lines */}
+                          {Array.from({ length: 15 }).map((_, i) => (
+                            <div 
+                              key={`v-${i}`} 
+                              className="absolute h-full w-[1.5px] bg-[#3e2723]/80" 
+                              style={{ left: `${(i / 14) * 100}%`, transform: 'translateX(-50%)' }} 
+                            />
+                          ))}
+                          
+                          {/* Star points (Hwajeom) */}
+                          {[3, 7, 11].map(ty => [3, 7, 11].map(tx => (
+                            <div 
+                              key={`star-${tx}-${ty}`}
+                              className="absolute w-2 h-2 bg-[#3e2723] rounded-full"
+                              style={{ 
+                                left: `${(tx / 14) * 100}%`, 
+                                top: `${(ty / 14) * 100}%`,
+                                transform: 'translate(-50%, -50%)'
                               }}
-                              className={`relative flex items-center justify-center cursor-pointer hover:bg-black/5 ${isWinningStone ? 'bg-yellow-200/50' : ''}`}
-                            >
-                              {/* Grid lines */}
-                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div className="w-full h-px bg-black/40"></div>
-                                <div className="h-full w-px bg-black/40 absolute"></div>
+                            />
+                          )))}
+                        </div>
+                      </div>
+
+                      {/* Interaction & Stones Layer */}
+                      <div className="absolute inset-0 z-10 grid grid-cols-[repeat(15,minmax(0,1fr))] grid-rows-[repeat(15,minmax(0,1fr))]" style={{ padding: '0%' }}>
+                        {Array.from({ length: 15 }).map((_, y) => (
+                          Array.from({ length: 15 }).map((_, x) => {
+                            const row = session.omokGame?.board ? (Array.isArray(session.omokGame.board) ? session.omokGame.board[y] : (session.omokGame.board as any)[y]) : null;
+                            const cell = row ? (Array.isArray(row) ? row[x] : (row as any)[x]) : 0;
+                            const stoneValue = parseInt(String(cell)) || 0;
+                            const isWinningStone = session.omokGame?.winningLine?.some(pos => pos.x === x && pos.y === y);
+                            
+                            return (
+                              <div 
+                                key={`${x}-${y}`} 
+                                onClick={() => {
+                                  if (session.omokGame?.currentPlayerId === currentUser.uid && stoneValue === 0) {
+                                    sessionService.placeOmokStone(session.id, currentUser.uid, x, y);
+                                  }
+                                }}
+                                className={`relative flex items-center justify-center cursor-pointer hover:bg-black/5 transition-colors ${isWinningStone ? 'bg-yellow-400/20' : ''}`}
+                              >
+                                {/* Stone */}
+                                {stoneValue > 0 && (
+                                  <div className="w-[90%] h-[90%] z-20 relative flex items-center justify-center pointer-events-none" style={{ filter: 'none', colorScheme: 'light' }}>
+                                    <svg width="100%" height="100%" viewBox="0 0 100 100" className="drop-shadow-md" style={{ filter: 'none' }}>
+                                      <circle 
+                                        cx="50" cy="50" r="46" 
+                                        fill={String(stoneValue) === '1' ? "#000000" : "#ffffff"} 
+                                        stroke={String(stoneValue) === '1' ? "#000000" : "#cccccc"} 
+                                        strokeWidth="1"
+                                        style={{ 
+                                          filter: 'none',
+                                          fill: String(stoneValue) === '1' ? '#000000' : '#ffffff',
+                                          stroke: String(stoneValue) === '1' ? '#000000' : '#cccccc'
+                                        }}
+                                      />
+                                      {/* Subtle shine for stones */}
+                                      <circle 
+                                        cx="35" cy="35" r="15" 
+                                        fill="white" 
+                                        fillOpacity={String(stoneValue) === '1' ? "0.15" : "0.5"} 
+                                        style={{ filter: 'none' }}
+                                      />
+                                      
+                                      {session.omokGame?.lastMove?.x === x && session.omokGame?.lastMove?.y === y && (
+                                        <circle cx="50" cy="50" r="10" fill="#ff4444" className="animate-pulse" style={{ filter: 'none' }} />
+                                      )}
+                                    </svg>
+                                    {isWinningStone && (
+                                      <div className="absolute inset-0 rounded-full ring-4 ring-yellow-400 animate-pulse z-30" />
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {/* Hover preview */}
+                                {stoneValue === 0 && session.omokGame?.currentPlayerId === currentUser.uid && (
+                                  <div className="absolute w-[40%] h-[40%] rounded-full opacity-0 hover:opacity-30 transition-opacity z-20 bg-black/20" />
+                                )}
                               </div>
-                              
-                              {/* Stone */}
-                              {cell === 1 && (
-                                <div className={`w-[85%] h-[85%] rounded-full bg-black shadow-md z-10 relative transform transition-transform duration-200 scale-100 flex items-center justify-center ${isWinningStone ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}>
-                                  {session.omokGame?.lastMove?.x === x && session.omokGame?.lastMove?.y === y && (
-                                    <div className="w-[30%] h-[30%] rounded-full bg-red-500 animate-pulse" />
-                                  )}
-                                  {isWinningStone && (
-                                    <div className="absolute inset-0 rounded-full animate-ping bg-yellow-400 opacity-20" />
-                                  )}
-                                </div>
-                              )}
-                              {cell === 2 && (
-                                <div className={`w-[85%] h-[85%] rounded-full bg-white border border-gray-300 shadow-md z-10 relative transform transition-transform duration-200 scale-100 flex items-center justify-center ${isWinningStone ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}>
-                                  {session.omokGame?.lastMove?.x === x && session.omokGame?.lastMove?.y === y && (
-                                    <div className="w-[30%] h-[30%] rounded-full bg-red-500 animate-pulse" />
-                                  )}
-                                  {isWinningStone && (
-                                    <div className="absolute inset-0 rounded-full animate-ping bg-yellow-400 opacity-20" />
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Hover preview for current player */}
-                              {cell === 0 && session.omokGame?.currentPlayerId === currentUser.uid && (
-                                <div className={`absolute w-[40%] h-[40%] rounded-full opacity-0 hover:opacity-50 transition-opacity z-20 ${
-                                  session.omokGame.blackPlayerId === currentUser.uid ? 'bg-black' : 'bg-white border border-gray-300'
-                                }`} />
-                              )}
-                            </div>
-                          );
-                        })
-                      ))}
+                            );
+                          })
+                        ))}
+                      </div>
                     </div>
                   </div>
                   
@@ -1839,9 +1959,9 @@ export default function App() {
                           </div>
                         )}
                         <Leaderboard 
-                          entries={session.minesweeperGame?.status === 'WON' || session.minesweeperGame?.status === 'LOST' ? session.leaderboards?.MINESWEEPER || [] : []} 
+                          entries={session.minesweeperGame?.status === 'WON' || session.minesweeperGame?.status === 'LOST' ? globalLeaderboards?.MINESWEEPER || [] : []} 
                           title="데이터 검수" 
-                          sessionId={session.id}
+                          sessionId="GLOBAL"
                           gameType="MINESWEEPER"
                         />
                       </div>
@@ -1924,9 +2044,9 @@ export default function App() {
                           </button>
                         </div>
                         <Leaderboard 
-                          entries={session.leaderboards?.OFFICE_2048 || []} 
+                          entries={globalLeaderboards?.OFFICE_2048 || []} 
                           title="직급 승진" 
-                          sessionId={session.id}
+                          sessionId="GLOBAL"
                           gameType="OFFICE_2048"
                         />
                       </div>
@@ -2011,9 +2131,9 @@ export default function App() {
                           <p className="text-green-800 font-bold">데이터 무결성 검증 완료! 완벽한 보고서입니다.</p>
                         </div>
                         <Leaderboard 
-                          entries={session.leaderboards?.SUDOKU || []} 
+                          entries={globalLeaderboards?.SUDOKU || []} 
                           title="데이터 무결성" 
-                          sessionId={session.id}
+                          sessionId="GLOBAL"
                           gameType="SUDOKU"
                         />
                       </div>
@@ -2715,15 +2835,34 @@ export default function App() {
                           
                           <div className="flex justify-center gap-8 mt-6">
                             <div className={`text-center p-4 rounded border ${session.omokGame?.winner === session.omokGame?.blackPlayerId ? 'bg-black/5 border-black' : 'border-transparent'}`}>
-                              <div className="w-12 h-12 rounded-full bg-black mx-auto mb-2 shadow-lg flex items-center justify-center text-white font-bold text-xs border-2 border-white/20">흑</div>
+                              <div className="w-12 h-12 mx-auto mb-2 shadow-lg flex items-center justify-center">
+                                <svg width="48" height="48" viewBox="0 0 48 48">
+                                  <circle cx="24" cy="24" r="22" fill="#000000" stroke="#ffffff" strokeWidth="1" />
+                                  <text x="24" y="28" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold">흑</text>
+                                </svg>
+                              </div>
                               <div className="text-sm font-bold">{session.players[session.omokGame!.blackPlayerId].nickname}</div>
                               {session.omokGame?.winner === session.omokGame?.blackPlayerId && <div className="text-[10px] text-[#217346] font-bold mt-1">WINNER</div>}
                             </div>
                             <div className={`text-center p-4 rounded border ${session.omokGame?.winner === session.omokGame?.whitePlayerId ? 'bg-gray-100 border-gray-400' : 'border-transparent'}`}>
-                              <div className="w-12 h-12 rounded-full bg-white border-2 border-gray-300 mx-auto mb-2 shadow-lg flex items-center justify-center text-black font-bold text-xs">백</div>
+                              <div className="w-12 h-12 mx-auto mb-2 shadow-lg flex items-center justify-center">
+                                <svg width="48" height="48" viewBox="0 0 48 48">
+                                  <circle cx="24" cy="24" r="22" fill="#ffffff" stroke="#cccccc" strokeWidth="1" />
+                                  <text x="24" y="28" textAnchor="middle" fill="#000000" fontSize="12" fontWeight="bold">백</text>
+                                </svg>
+                              </div>
                               <div className="text-sm font-bold">{session.players[session.omokGame!.whitePlayerId].nickname}</div>
                               {session.omokGame?.winner === session.omokGame?.whitePlayerId && <div className="text-[10px] text-[#217346] font-bold mt-1">WINNER</div>}
                             </div>
+                          </div>
+                          
+                          <div className="w-full max-w-sm mx-auto mt-8">
+                            <Leaderboard 
+                              entries={globalLeaderboards?.OMOK_HOF || []} 
+                              title="오목" 
+                              sessionId="GLOBAL"
+                              gameType="OMOK_HOF"
+                            />
                           </div>
                         </div>
                       ) : session.gameType === GameType.LIAR ? (
@@ -2810,8 +2949,8 @@ export default function App() {
                               <td className="excel-cell text-xs">{p.nickname}</td>
                               <td className={`excel-cell text-xs font-bold text-center ${
                                 session.gameType === GameType.OMOK ? (
-                                  p.id === session.omokGame?.blackPlayerId ? 'text-black' : 
-                                  p.id === session.omokGame?.whitePlayerId ? 'text-gray-500' : 'text-[#999]'
+                                  String(p.id) === String(session.omokGame?.blackPlayerId) ? 'text-black' : 
+                                  String(p.id) === String(session.omokGame?.whitePlayerId) ? 'text-gray-400' : 'text-[#999]'
                                 ) :
                                 p.role === 'MAFIA' || p.id === session.liarGame?.liarPlayerId ? 'text-red-600' : 
                                 p.role === 'DOCTOR' ? 'text-green-600' :
@@ -2822,8 +2961,8 @@ export default function App() {
                                   p.role === 'DOCTOR' ? '의사' :
                                   p.role === 'POLICE' ? '경찰' : '시민'
                                 ) : session.gameType === GameType.OMOK ? (
-                                  p.id === session.omokGame?.blackPlayerId ? '흑돌' :
-                                  p.id === session.omokGame?.whitePlayerId ? '백돌' : '관전'
+                                  String(p.id) === String(session.omokGame?.blackPlayerId) ? '흑돌' :
+                                  String(p.id) === String(session.omokGame?.whitePlayerId) ? '백돌' : '관전'
                                 ) : (
                                   p.id === session.liarGame?.liarPlayerId ? '라이어' :
                                   p.id === session.liarGame?.spyPlayerId ? '스파이' : '시민'
@@ -2996,10 +3135,11 @@ export default function App() {
                 전사_명예의_전당_통합_보고서
               </div>
               <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
+                  <Leaderboard entries={globalLeaderboards?.OMOK_HOF || []} title="오목 (최고난도)" sessionId="GLOBAL" gameType="OMOK_HOF" />
                 </div>
               </div>
             </div>

@@ -630,7 +630,7 @@ export const sessionService = {
     });
   },
 
-  async startOmokGame(sessionId: string, blackPlayerId: string, whitePlayerId: string) {
+  async startOmokGame(sessionId: string, blackPlayerId: string, whitePlayerId: string, isAIMatch: boolean = false, difficulty: number = 1) {
     if (!db) return;
     
     // Initialize 15x15 board
@@ -643,7 +643,11 @@ export const sessionService = {
       currentPlayerId: blackPlayerId,
       winner: null,
       winningLine: null,
-      isDraw: false
+      isDraw: false,
+      isAIMatch,
+      difficulty,
+      startTime: Date.now(),
+      moveCount: 0
     };
 
     const updates: any = {
@@ -651,8 +655,30 @@ export const sessionService = {
       omokGame
     };
 
+    if (isAIMatch) {
+      // Add AI player if not exists
+      const aiNicknames = ['알파고_인턴', '알파고_사원', '알파고_주임', '알파고_대리', '알파고_과장'];
+      const aiPlayer: Player = {
+        id: 'AI_PLAYER',
+        nickname: aiNicknames[difficulty - 1] || '알파고_인턴',
+        isHost: false,
+        isAlive: true,
+        isReady: true,
+        isConnected: true,
+        isAI: true
+      };
+      updates[`players/AI_PLAYER`] = aiPlayer;
+    }
+
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, `오목 대전이 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, isAIMatch ? `AI와의 오목 대전이 시작되었습니다.` : `오목 대전이 시작되었습니다.`, 'success');
+
+    // Trigger AI move if AI is the first player
+    if (isAIMatch && blackPlayerId === 'AI_PLAYER') {
+      setTimeout(() => {
+        this.makeOmokAIMove(sessionId, 'AI_PLAYER');
+      }, 1000);
+    }
   },
 
   async startBingoSetup(sessionId: string, settings: any) {
@@ -936,58 +962,259 @@ export const sessionService = {
     
     const game = session.omokGame;
     if (game.currentPlayerId !== playerId) return;
-    if (game.board[y][x] !== 0) return;
+    
+    // Normalize board to 15x15 matrix
+    const ensureOmokMatrix = (data: any) => {
+      const matrix = Array(15).fill(0).map(() => Array(15).fill(0));
+      if (!data) return matrix;
+      const rows = Array.isArray(data) ? data : Object.values(data);
+      const rowKeys = Array.isArray(data) ? null : Object.keys(data);
+      
+      rows.forEach((row: any, ri: number) => {
+        const actualRowIdx = rowKeys ? parseInt(rowKeys[ri]) : ri;
+        if (actualRowIdx >= 15) return;
+        
+        const cells = Array.isArray(row) ? row : Object.values(row);
+        const cellKeys = Array.isArray(row) ? null : Object.keys(row);
+        
+        cells.forEach((cell: any, ci: number) => {
+          const actualCellIdx = cellKeys ? parseInt(cellKeys[ci]) : ci;
+          if (actualCellIdx >= 15) return;
+          matrix[actualRowIdx][actualCellIdx] = parseInt(String(cell)) || 0;
+        });
+      });
+      return matrix;
+    };
 
-    const isBlack = playerId === game.blackPlayerId;
+    const boardMatrix = ensureOmokMatrix(game.board);
+    if (boardMatrix[y][x] !== 0) return;
+
+    const isBlack = String(playerId).trim() === String(game.blackPlayerId).trim();
     const stone = isBlack ? 1 : 2;
     
-    // Ensure board is array
-    const boardArray = Array.isArray(game.board) ? game.board : Object.values(game.board);
-    const newBoard = boardArray.map((row: any) => Array.isArray(row) ? [...row] : Object.values(row));
-    newBoard[y][x] = stone;
+    boardMatrix[y][x] = stone;
     
     // Check for forbidden moves (Black only)
     if (isBlack) {
-      if (this.checkOmokOverline(newBoard, x, y, stone)) {
-        // Forbidden: Overline (6 or more stones)
-        // Send a system message or just return (UI won't update, which is fine for invalid move)
-        // Ideally, we should notify the user, but for now, preventing the move is key.
+      if (this.checkOmokOverline(boardMatrix, x, y, stone)) {
         return;
       }
-      // 3-3 check is complex and omitted for stability unless strictly required.
-      // Overline restriction is the most impactful "Official Rule" for casual play.
     }
     
     // Check Win
-    const winInfo = this.checkOmokWin(newBoard, x, y, stone, isBlack);
+    const winInfo = this.checkOmokWin(boardMatrix, x, y, stone, isBlack);
     
     const updates: any = {};
     updates[`omokGame/board/${y}/${x}`] = stone;
     updates['omokGame/lastMove'] = { x, y };
+    updates['omokGame/moveCount'] = (game.moveCount || 0) + 1;
     
+    const nextPlayerId = isBlack ? game.whitePlayerId : game.blackPlayerId;
+
     if (winInfo) {
       updates['omokGame/winner'] = playerId;
       updates['omokGame/winningLine'] = winInfo;
       updates['status'] = SessionStatus.SUMMARY;
     } else {
       // Check Draw (Board full)
-      const isFull = newBoard.every((row: any) => row.every((cell: any) => cell !== 0));
+      const isFull = boardMatrix.every((row: any) => row.every((cell: any) => cell !== 0));
       if (isFull) {
         updates['omokGame/isDraw'] = true;
         updates['status'] = SessionStatus.SUMMARY;
       } else {
-        updates['omokGame/currentPlayerId'] = isBlack ? game.whitePlayerId : game.blackPlayerId;
+        updates['omokGame/currentPlayerId'] = nextPlayerId;
       }
     }
 
     await update(sessionRef, updates);
     const player = session.players[playerId].nickname;
     await this.addLog(sessionId, `${player}님이 (${x}, ${y}) 위치에 돌을 놓았습니다.`);
+    
     if (updates['omokGame/winner']) {
       await this.addLog(sessionId, `${player}님이 오목 대전에서 승리했습니다!`, 'success');
       await this.updateStats(sessionId, playerId);
+      
+      // AI Match Leaderboard
+      if (game.isAIMatch && playerId !== 'AI_PLAYER') {
+        const timeTaken = (Date.now() - (game.startTime || Date.now())) / 1000;
+        const moveCount = updates['omokGame/moveCount'];
+        // Score calculation: Base 10000 - (time * 10) - (moves * 50)
+        const score = Math.max(0, 10000 - Math.floor(timeTaken * 10) - (moveCount * 50));
+        
+        // Record to general AI leaderboard
+        await this.recordLeaderboard(sessionId, 'OMOK_AI', playerId, player, score);
+        
+        // Record to Hall of Fame if difficulty is 5 (과장)
+        if (game.difficulty === 5) {
+          await this.recordLeaderboard(sessionId, 'OMOK_HOF', playerId, player, score);
+        }
+      }
     }
+    
     if (updates['omokGame/isDraw']) await this.addLog(sessionId, `오목 대전이 무승부로 종료되었습니다.`, 'warning');
+
+    // Trigger AI move if next player is AI
+    if (!updates['omokGame/winner'] && !updates['omokGame/isDraw'] && nextPlayerId === 'AI_PLAYER') {
+      setTimeout(() => {
+        this.makeOmokAIMove(sessionId, nextPlayerId);
+      }, 600);
+    }
+  },
+
+  async makeOmokAIMove(sessionId: string, aiPlayerId: string) {
+    if (!db) return;
+    const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
+    const session = sessionSnap.val();
+    if (!session || !session.omokGame || session.omokGame.currentPlayerId !== aiPlayerId) return;
+
+    const game = session.omokGame;
+    
+    // Normalize board to 15x15 matrix
+    const ensureOmokMatrix = (data: any) => {
+      const matrix = Array(15).fill(0).map(() => Array(15).fill(0));
+      if (!data) return matrix;
+      const rows = Array.isArray(data) ? data : Object.values(data);
+      const rowKeys = Array.isArray(data) ? null : Object.keys(data);
+      
+      rows.forEach((row: any, ri: number) => {
+        const actualRowIdx = rowKeys ? parseInt(rowKeys[ri]) : ri;
+        if (actualRowIdx >= 15) return;
+        
+        const cells = Array.isArray(row) ? row : Object.values(row);
+        const cellKeys = Array.isArray(row) ? null : Object.keys(row);
+        
+        cells.forEach((cell: any, ci: number) => {
+          const actualCellIdx = cellKeys ? parseInt(cellKeys[ci]) : ci;
+          if (actualCellIdx >= 15) return;
+          matrix[actualRowIdx][actualCellIdx] = parseInt(String(cell)) || 0;
+        });
+      });
+      return matrix;
+    };
+
+    const boardMatrix = ensureOmokMatrix(game.board);
+    
+    const aiStone = String(aiPlayerId).trim() === String(game.blackPlayerId).trim() ? 1 : 2;
+    const playerStone = aiStone === 1 ? 2 : 1;
+    const difficulty = game.difficulty || 1;
+
+    const bestMove = this.getOmokBestMove(boardMatrix, aiStone, playerStone, difficulty);
+    if (bestMove) {
+      await this.placeOmokStone(sessionId, aiPlayerId, bestMove.x, bestMove.y);
+    }
+  },
+
+  getOmokBestMove(board: number[][], aiStone: number, playerStone: number, difficulty: number) {
+    let bestScore = -1;
+    let bestMoves: {x: number, y: number}[] = [];
+
+    // Difficulty adjustments
+    const randomness = (6 - difficulty) * 50; // Lower difficulty = more randomness
+    const searchRange = difficulty >= 3 ? 2 : 1; // Higher difficulty = search further from existing stones
+
+    for (let y = 0; y < 15; y++) {
+      for (let x = 0; x < 15; x++) {
+        if (board[y][x] === 0) {
+          // Optimization: only check squares near existing stones
+          let hasNeighbor = false;
+          for (let dy = -searchRange; dy <= searchRange; dy++) {
+            for (let dx = -searchRange; dx <= searchRange; dx++) {
+              const ny = y + dy;
+              const nx = x + dx;
+              if (ny >= 0 && ny < 15 && nx >= 0 && nx < 15 && board[ny][nx] !== 0) {
+                hasNeighbor = true;
+                break;
+              }
+            }
+            if (hasNeighbor) break;
+          }
+          
+          if (!hasNeighbor && board.some(row => row.some(cell => cell !== 0))) continue;
+
+          let score = this.evaluateOmokPosition(board, x, y, aiStone, playerStone);
+          
+          // Add randomness based on difficulty
+          if (randomness > 0) {
+            score += Math.floor(Math.random() * randomness);
+          }
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestMoves = [{x, y}];
+          } else if (score === bestScore) {
+            bestMoves.push({x, y});
+          }
+        }
+      }
+    }
+
+    if (bestMoves.length === 0) return null;
+    return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+  },
+
+  evaluateOmokPosition(board: number[][], x: number, y: number, aiStone: number, playerStone: number) {
+    let totalScore = 0;
+    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
+
+    for (const [dx, dy] of directions) {
+      totalScore += this.evaluateOmokLine(board, x, y, dx, dy, aiStone, playerStone);
+    }
+
+    return totalScore;
+  },
+
+  evaluateOmokLine(board: number[][], x: number, y: number, dx: number, dy: number, aiStone: number, playerStone: number) {
+    const getLine = (stone: number) => {
+      let count = 1;
+      let blocked = 0;
+
+      // Forward
+      for (let i = 1; i < 5; i++) {
+        const nx = x + dx * i;
+        const ny = y + dy * i;
+        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
+          blocked++;
+          break;
+        }
+        if (board[ny][nx] === stone) count++;
+        else if (board[ny][nx] === 0) break;
+        else {
+          blocked++;
+          break;
+        }
+      }
+
+      // Backward
+      for (let i = 1; i < 5; i++) {
+        const nx = x - dx * i;
+        const ny = y - dy * i;
+        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
+          blocked++;
+          break;
+        }
+        if (board[ny][nx] === stone) count++;
+        else if (board[ny][nx] === 0) break;
+        else {
+          blocked++;
+          break;
+        }
+      }
+
+      if (count >= 5) return 100000;
+      if (count === 4) return blocked === 0 ? 10000 : (blocked === 1 ? 1000 : 0);
+      if (count === 3) return blocked === 0 ? 1000 : (blocked === 1 ? 100 : 0);
+      if (count === 2) return blocked === 0 ? 100 : (blocked === 1 ? 10 : 0);
+      return count;
+    };
+
+    // Offensive score (AI)
+    const offensive = getLine(aiStone);
+    // Defensive score (Player)
+    const defensive = getLine(playerStone);
+
+    // Prioritize defense if player is about to win
+    if (defensive >= 10000) return defensive * 1.1; 
+    return offensive + defensive;
   },
 
   checkOmokOverline(board: number[][], x: number, y: number, stone: number) {

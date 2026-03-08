@@ -46,6 +46,7 @@ export interface Player {
   isReady: boolean;
   isConnected: boolean;
   isSpectator?: boolean;
+  isAI?: boolean;
   role?: string;
   voteTarget?: string;
   hasConfirmedRole?: boolean;
@@ -89,6 +90,10 @@ export interface OmokGameState {
   winningLine?: {x: number, y: number}[];
   isDraw?: boolean;
   lastMove?: { x: number; y: number };
+  isAIMatch?: boolean;
+  difficulty?: number; // 1: 인턴, 2: 사원, 3: 주임, 4: 대리, 5: 과장
+  startTime?: number;
+  moveCount?: number;
 }
 
 export interface BingoGameState {
