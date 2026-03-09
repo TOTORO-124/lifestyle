@@ -657,7 +657,7 @@ export const sessionService = {
 
     if (isAIMatch) {
       // Add AI player if not exists
-      const aiNicknames = ['알파고_인턴', '알파고_사원', '알파고_주임', '알파고_대리', '알파고_과장'];
+      const aiNicknames = ['알파고_인턴', '알파고_사원', '알파고_주임', '알파고_대리', '알파고_과장', '알파고_차장', '알파고_부장'];
       const aiPlayer: Player = {
         id: 'AI_PLAYER',
         nickname: aiNicknames[difficulty - 1] || '알파고_인턴',
@@ -996,7 +996,9 @@ export const sessionService = {
     
     // Check for forbidden moves (Black only)
     if (isBlack) {
-      if (this.checkOmokOverline(boardMatrix, x, y, stone)) {
+      const forbidden = this.checkOmokForbiddenMove(boardMatrix, x, y, stone);
+      if (forbidden) {
+        await this.addLog(sessionId, `흑돌은 ${forbidden} 금지 수입니다.`, 'error');
         return;
       }
     }
@@ -1037,16 +1039,17 @@ export const sessionService = {
       // AI Match Leaderboard
       if (game.isAIMatch && playerId !== 'AI_PLAYER') {
         const timeTaken = (Date.now() - (game.startTime || Date.now())) / 1000;
-        const moveCount = updates['omokGame/moveCount'];
+        const moveCount = (game.moveCount || 0) + 1;
         // Score calculation: Base 10000 - (time * 10) - (moves * 50)
         const score = Math.max(0, 10000 - Math.floor(timeTaken * 10) - (moveCount * 50));
         
         // Record to general AI leaderboard
         await this.recordLeaderboard(sessionId, 'OMOK_AI', playerId, player, score);
+        updates['omokGame/lastScore'] = score;
         
-        // Record to Hall of Fame if difficulty is 5 (과장)
-        if (game.difficulty === 5) {
-          await this.recordLeaderboard(sessionId, 'OMOK_HOF', playerId, player, score);
+        // Record to Hall of Fame if difficulty is 7 (부장)
+        if (game.difficulty === 7) {
+          await this.recordLeaderboard(sessionId, 'OMOK_HOF', playerId, player, score, { timeTaken, moveCount });
         }
       }
     }
@@ -1105,147 +1108,404 @@ export const sessionService = {
   },
 
   getOmokBestMove(board: number[][], aiStone: number, playerStone: number, difficulty: number) {
-    let bestScore = -1;
-    let bestMoves: {x: number, y: number}[] = [];
+    // Difficulty adjustments for 7 levels
+    // Level 1: 55% mistake chance, Level 2: 30%, Level 3: 15%, Level 4+: 0%
+    const mistakeChance = difficulty === 1 ? 0.55 : (difficulty === 2 ? 0.30 : (difficulty === 3 ? 0.15 : 0));
+    const randomness = Math.max(0, (7 - difficulty) * 1000); 
+    const searchRange = difficulty >= 6 ? 3 : (difficulty >= 4 ? 2 : 1);
 
-    // Difficulty adjustments
-    const randomness = (6 - difficulty) * 50; // Lower difficulty = more randomness
-    const searchRange = difficulty >= 3 ? 2 : 1; // Higher difficulty = search further from existing stones
-
-    for (let y = 0; y < 15; y++) {
-      for (let x = 0; x < 15; x++) {
-        if (board[y][x] === 0) {
-          // Optimization: only check squares near existing stones
-          let hasNeighbor = false;
-          for (let dy = -searchRange; dy <= searchRange; dy++) {
-            for (let dx = -searchRange; dx <= searchRange; dx++) {
-              const ny = y + dy;
-              const nx = x + dx;
-              if (ny >= 0 && ny < 15 && nx >= 0 && nx < 15 && board[ny][nx] !== 0) {
-                hasNeighbor = true;
-                break;
+    // Chance to make a completely random move near existing stones
+    if (Math.random() < mistakeChance) {
+      const validMoves: {x: number, y: number}[] = [];
+      for (let y = 0; y < 15; y++) {
+        for (let x = 0; x < 15; x++) {
+          if (board[y][x] === 0) {
+            let hasNeighbor = false;
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                const ny = y + dy, nx = x + dx;
+                if (ny >= 0 && ny < 15 && nx >= 0 && nx < 15 && board[ny][nx] !== 0) {
+                  hasNeighbor = true;
+                  break;
+                }
               }
+              if (hasNeighbor) break;
             }
-            if (hasNeighbor) break;
-          }
-          
-          if (!hasNeighbor && board.some(row => row.some(cell => cell !== 0))) continue;
-
-          let score = this.evaluateOmokPosition(board, x, y, aiStone, playerStone);
-          
-          // Add randomness based on difficulty
-          if (randomness > 0) {
-            score += Math.floor(Math.random() * randomness);
-          }
-
-          if (score > bestScore) {
-            bestScore = score;
-            bestMoves = [{x, y}];
-          } else if (score === bestScore) {
-            bestMoves.push({x, y});
+            if (hasNeighbor) {
+              if (aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, aiStone)) continue;
+              validMoves.push({x, y});
+            }
           }
         }
       }
+      if (validMoves.length > 0) return validMoves[Math.floor(Math.random() * validMoves.length)];
     }
 
-    if (bestMoves.length === 0) return null;
+    const getCandidates = (currentBoard: number[][], stone: number, opponent: number) => {
+      const candidates: {x: number, y: number, score: number}[] = [];
+      for (let y = 0; y < 15; y++) {
+        for (let x = 0; x < 15; x++) {
+          if (currentBoard[y][x] === 0) {
+            let hasNeighbor = false;
+            for (let dy = -searchRange; dy <= searchRange; dy++) {
+              for (let dx = -searchRange; dx <= searchRange; dx++) {
+                const ny = y + dy, nx = x + dx;
+                if (ny >= 0 && ny < 15 && nx >= 0 && nx < 15 && currentBoard[ny][nx] !== 0) {
+                  hasNeighbor = true;
+                  break;
+                }
+              }
+              if (hasNeighbor) break;
+            }
+            if (!hasNeighbor && currentBoard.some(row => row.some(cell => cell !== 0))) continue;
+            if (stone === 1 && this.checkOmokForbiddenMove(currentBoard, x, y, stone)) continue;
+
+            const score = this.evaluateOmokPosition(currentBoard, x, y, stone, opponent, difficulty);
+            candidates.push({x, y, score});
+          }
+        }
+      }
+      return candidates.sort((a, b) => b.score - a.score);
+    };
+
+    const aiCandidates = getCandidates(board, aiStone, playerStone);
+    if (aiCandidates.length === 0) return null;
+
+    // For Level 7, use 2-ply Minimax
+    if (difficulty === 7) {
+      let bestMinimaxScore = -Infinity;
+      let bestMove = aiCandidates[0];
+
+      // Only check top 15 candidates for performance
+      const topCandidates = aiCandidates.slice(0, 15);
+      
+      for (const move of topCandidates) {
+        // AI wins immediately
+        if (move.score >= 1000000) return move;
+
+        board[move.y][move.x] = aiStone;
+        
+        // Find player's best response
+        const playerCandidates = getCandidates(board, playerStone, aiStone);
+        let playerBestScore = 0;
+        if (playerCandidates.length > 0) {
+          playerBestScore = playerCandidates[0].score;
+        }
+        
+        // Minimax score: AI score - Player's best response score
+        const minimaxScore = move.score - playerBestScore;
+        
+        if (minimaxScore > bestMinimaxScore) {
+          bestMinimaxScore = minimaxScore;
+          bestMove = move;
+        }
+        
+        board[move.y][move.x] = 0; // Backtrack
+      }
+      return bestMove;
+    }
+
+    // For other levels, pick from best moves with randomness
+    const maxScore = aiCandidates[0].score;
+    const bestMoves = aiCandidates.filter(c => c.score >= maxScore - randomness);
     return bestMoves[Math.floor(Math.random() * bestMoves.length)];
   },
 
-  evaluateOmokPosition(board: number[][], x: number, y: number, aiStone: number, playerStone: number) {
-    let totalScore = 0;
-    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
+  evaluateOmokPosition(board: number[][], x: number, y: number, aiStone: number, playerStone: number, difficulty: number) {
+    let aiTotalScore = 0;
+    let playerTotalScore = 0;
+    let aiThreats = { fours: 0, openThrees: 0 };
+    let playerThreats = { fours: 0, openThrees: 0 };
 
+    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    
     for (const [dx, dy] of directions) {
-      totalScore += this.evaluateOmokLine(board, x, y, dx, dy, aiStone, playerStone);
+      const aiScore = this.evaluateOmokLine(board, x, y, dx, dy, aiStone, playerStone, difficulty);
+      const playerScore = this.evaluateOmokLine(board, x, y, dx, dy, playerStone, aiStone, difficulty);
+      
+      aiTotalScore += aiScore;
+      playerTotalScore += playerScore;
+
+      // Identify specific threats for combination detection
+      if (aiScore >= 100000) aiThreats.fours++; // Open 4
+      else if (aiScore >= 10000) {
+        if (this.isOpenThree(board, x, y, dx, dy, aiStone)) aiThreats.openThrees++;
+        else aiThreats.fours++; // Blocked 4
+      }
+
+      if (playerScore >= 100000) playerThreats.fours++;
+      else if (playerScore >= 10000) {
+        if (this.isOpenThree(board, x, y, dx, dy, playerStone)) playerThreats.openThrees++;
+        else playerThreats.fours++;
+      }
     }
 
-    return totalScore;
-  },
+    // Combination bonuses (Double Three, Four-Three, etc.)
+    // These are extremely powerful for White (AI if White)
+    if (aiThreats.fours >= 2 || (aiThreats.fours >= 1 && aiThreats.openThrees >= 1)) aiTotalScore += 500000;
+    if (aiThreats.openThrees >= 2) aiTotalScore += 300000;
 
-  evaluateOmokLine(board: number[][], x: number, y: number, dx: number, dy: number, aiStone: number, playerStone: number) {
-    const getLine = (stone: number) => {
-      let count = 1;
-      let blocked = 0;
-
-      // Forward
-      for (let i = 1; i < 5; i++) {
-        const nx = x + dx * i;
-        const ny = y + dy * i;
-        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
-          blocked++;
-          break;
-        }
-        if (board[ny][nx] === stone) count++;
-        else if (board[ny][nx] === 0) break;
-        else {
-          blocked++;
-          break;
-        }
-      }
-
-      // Backward
-      for (let i = 1; i < 5; i++) {
-        const nx = x - dx * i;
-        const ny = y - dy * i;
-        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
-          blocked++;
-          break;
-        }
-        if (board[ny][nx] === stone) count++;
-        else if (board[ny][nx] === 0) break;
-        else {
-          blocked++;
-          break;
-        }
-      }
-
-      if (count >= 5) return 100000;
-      if (count === 4) return blocked === 0 ? 10000 : (blocked === 1 ? 1000 : 0);
-      if (count === 3) return blocked === 0 ? 1000 : (blocked === 1 ? 100 : 0);
-      if (count === 2) return blocked === 0 ? 100 : (blocked === 1 ? 10 : 0);
-      return count;
-    };
-
-    // Offensive score (AI)
-    const offensive = getLine(aiStone);
-    // Defensive score (Player)
-    const defensive = getLine(playerStone);
+    if (playerThreats.fours >= 2 || (playerThreats.fours >= 1 && playerThreats.openThrees >= 1)) playerTotalScore += 500000;
+    if (playerThreats.openThrees >= 2) playerTotalScore += 300000;
 
     // Prioritize defense if player is about to win
-    if (defensive >= 10000) return defensive * 1.1; 
-    return offensive + defensive;
+    let defenseMultiplier = 1.1;
+    if (difficulty >= 5) defenseMultiplier = 1.5;
+    else if (difficulty <= 2) defenseMultiplier = 0.8;
+    
+    // If player is Black, their forbidden moves are not threats
+    if (playerStone === 1) {
+      board[y][x] = playerStone;
+      if (this.checkOmokForbiddenMove(board, x, y, playerStone)) {
+        playerTotalScore = 0;
+      }
+      board[y][x] = 0;
+    }
+
+    if (playerTotalScore >= 10000) return playerTotalScore * defenseMultiplier;
+    
+    if (difficulty === 7 && aiTotalScore >= 10000) return aiTotalScore * 2;
+
+    return aiTotalScore + playerTotalScore;
+  },
+
+  evaluateOmokLine(board: number[][], x: number, y: number, dx: number, dy: number, stone: number, opponent: number, difficulty: number) {
+    let count = 1;
+    let blocked = 0;
+
+    // Forward
+    for (let i = 1; i < 5; i++) {
+      const nx = x + dx * i;
+      const ny = y + dy * i;
+      if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
+        blocked++;
+        break;
+      }
+      if (board[ny][nx] === stone) count++;
+      else if (board[ny][nx] === 0) break;
+      else {
+        blocked++;
+        break;
+      }
+    }
+
+    // Backward
+    for (let i = 1; i < 5; i++) {
+      const nx = x - dx * i;
+      const ny = y - dy * i;
+      if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
+        blocked++;
+        break;
+      }
+      if (board[ny][nx] === stone) count++;
+      else if (board[ny][nx] === 0) break;
+      else {
+        blocked++;
+        break;
+      }
+    }
+
+    let score = count;
+    if (count === 5) score = 1000000; // Win
+    else if (count > 5) {
+      score = (stone === 1 ? 0 : 1000000); // Overline is win for White, forbidden for Black
+    }
+    else if (count === 4) {
+      score = (blocked === 0 ? 100000 : 10000); // Open 4 vs Blocked 4
+    }
+    else if (count === 3) {
+      score = (blocked === 0 ? 10000 : 500);    // Open 3 vs Blocked 3
+    }
+    else if (count === 2) {
+      score = (blocked === 0 ? 200 : 20);       // Open 2 vs Blocked 2
+    }
+
+    // Scale score by difficulty for levels 1-3 to make AI "blind" to some threats
+    if (difficulty <= 3) {
+      const awareness = difficulty / 4; // Lv.1: 0.25, Lv.2: 0.5, Lv.3: 0.75
+      score = Math.floor(score * awareness);
+    }
+    return score;
+  },
+
+  checkOmokForbiddenMove(board: number[][], x: number, y: number, stone: number) {
+    if (this.checkOmokOverline(board, x, y, stone)) return '장목(6목 이상)';
+    if (this.checkOmokDoubleFour(board, x, y, stone)) return '4-4';
+    if (this.checkOmokDoubleThree(board, x, y, stone)) return '3-3';
+    return null;
   },
 
   checkOmokOverline(board: number[][], x: number, y: number, stone: number) {
-    const directions = [
-      [1, 0], [0, 1], [1, 1], [1, -1]
-    ];
-
+    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
     for (const [dx, dy] of directions) {
       let count = 1;
+      // Forward
+      for (let i = 1; i < 7; i++) {
+        const nx = x + dx * i, ny = y + dy * i;
+        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== stone) break;
+        count++;
+      }
+      // Backward
+      for (let i = 1; i < 7; i++) {
+        const nx = x - dx * i, ny = y - dy * i;
+        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== stone) break;
+        count++;
+      }
+      if (count > 5) return true;
+    }
+    return false;
+  },
+
+  checkOmokDoubleFour(board: number[][], x: number, y: number, stone: number) {
+    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    let fourCount = 0;
+
+    for (const [dx, dy] of directions) {
+      // For each direction, check if placing a stone at (x,y) creates a 4
+      // A 4 is exactly 4 stones in a row (or more, but overline is checked separately)
+      // Actually, for double four, any 4 counts.
       
-      // Check forward
-      let i = 1;
-      while (true) {
-        const nx = x + dx * i;
-        const ny = y + dy * i;
-        if (ny < 0 || ny >= 15 || nx < 0 || nx >= 15 || board[ny][nx] !== stone) break;
-        count++;
-        i++;
+      // We need to check all possible 5-cell windows that include (x,y)
+      for (let startOffset = -4; startOffset <= 0; startOffset++) {
+        let stones = 0;
+        let possible = true;
+        for (let i = 0; i < 5; i++) {
+          const nx = x + dx * (startOffset + i);
+          const ny = y + dy * (startOffset + i);
+          if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
+            possible = false;
+            break;
+          }
+          if (board[ny][nx] === stone || (nx === x && ny === y)) stones++;
+          else if (board[ny][nx] !== 0) {
+            possible = false;
+            break;
+          }
+        }
+        
+        if (possible && stones === 4) {
+          // This window can become a 5. Is it a 4 right now?
+          // To be a "4", it must be able to become a 5 in ONE move.
+          // Since we just placed a stone at (x,y), we check if this line has 4 stones.
+          
+          // Count consecutive stones in this direction
+          let count = 1;
+          for (let i = 1; i < 5; i++) {
+            const nx = x + dx * i, ny = y + dy * i;
+            if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== stone) break;
+            count++;
+          }
+          for (let i = 1; i < 5; i++) {
+            const nx = x - dx * i, ny = y - dy * i;
+            if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== stone) break;
+            count++;
+          }
+          
+          if (count === 4) {
+            fourCount++;
+            break; // Found a 4 in this direction
+          }
+          
+          // Also check for "jump" fours like OO.OO
+          // This is more complex. Let's use a simpler check:
+          // If we place a stone, how many ways can we win in one more move?
+          // If there are two or more ways to win (creating a 5), it's a double four.
+        }
       }
-
-      // Check backward
-      i = 1;
-      while (true) {
-        const nx = x - dx * i;
-        const ny = y - dy * i;
-        if (ny < 0 || ny >= 15 || nx < 0 || nx >= 15 || board[ny][nx] !== stone) break;
-        count++;
-        i++;
+    }
+    
+    // Re-implementing more accurately:
+    fourCount = 0;
+    for (const [dx, dy] of directions) {
+      let createdWinPoints = 0;
+      // Check all empty spots in this line
+      for (let i = -4; i <= 4; i++) {
+        if (i === 0) continue;
+        const nx = x + dx * i, ny = y + dy * i;
+        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== 0) continue;
+        
+        // If we place a stone at (nx, ny), do we get exactly 5?
+        board[ny][nx] = stone;
+        if (this.isFive(board, nx, ny, stone)) {
+          createdWinPoints++;
+        }
+        board[ny][nx] = 0;
+        if (createdWinPoints > 0) break; 
       }
+      if (createdWinPoints > 0) fourCount++;
+    }
 
-      if (count > 5) return true; // Overline found
+    return fourCount >= 2;
+  },
+
+  checkOmokDoubleThree(board: number[][], x: number, y: number, stone: number) {
+    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    let openThreeCount = 0;
+
+    for (const [dx, dy] of directions) {
+      if (this.isOpenThree(board, x, y, dx, dy, stone)) {
+        openThreeCount++;
+      }
+    }
+    return openThreeCount >= 2;
+  },
+
+  isOpenThree(board: number[][], x: number, y: number, dx: number, dy: number, stone: number) {
+    // An Open Three is a move that creates a "Three" which can become an "Open Four"
+    // An Open Four is a 4-stone line that can become a 5 from either end.
+    
+    // Check all empty spots in this line
+    for (let i = -4; i <= 4; i++) {
+      if (i === 0) continue;
+      const nx = x + dx * i, ny = y + dy * i;
+      if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== 0) continue;
+      
+      // If we place a stone at (nx, ny), does it become an OPEN FOUR?
+      board[ny][nx] = stone;
+      if (this.isOpenFour(board, nx, ny, dx, dy, stone)) {
+        // But wait, it must not be a forbidden move itself (like 4-4 or overline)
+        // Actually, the rule is simpler: can it become a 5?
+        board[ny][nx] = 0;
+        return true;
+      }
+      board[ny][nx] = 0;
+    }
+    return false;
+  },
+
+  isOpenFour(board: number[][], x: number, y: number, dx: number, dy: number, stone: number) {
+    // Already has 4 stones including (x,y)
+    // Must have TWO win points in this direction
+    let winPoints = 0;
+    for (let i = -4; i <= 4; i++) {
+      if (i === 0) continue;
+      const nx = x + dx * i, ny = y + dy * i;
+      if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== 0) continue;
+      
+      board[ny][nx] = stone;
+      if (this.isFive(board, nx, ny, stone)) {
+        winPoints++;
+      }
+      board[ny][nx] = 0;
+    }
+    return winPoints >= 2;
+  },
+
+  isFive(board: number[][], x: number, y: number, stone: number) {
+    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    for (const [dx, dy] of directions) {
+      let count = 1;
+      for (let i = 1; i < 5; i++) {
+        const nx = x + dx * i, ny = y + dy * i;
+        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== stone) break;
+        count++;
+      }
+      for (let i = 1; i < 5; i++) {
+        const nx = x - dx * i, ny = y - dy * i;
+        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== stone) break;
+        count++;
+      }
+      if (count === 5) return true;
     }
     return false;
   },
@@ -1357,7 +1617,7 @@ export const sessionService = {
     await this.addLog(sessionId, `지뢰 찾기(데이터 오류 검수) 시트가 시작되었습니다.`, 'success');
   },
 
-  async recordLeaderboard(sessionId: string, gameType: string, playerId: string, nickname: string, score: number) {
+  async recordLeaderboard(sessionId: string, gameType: string, playerId: string, nickname: string, score: number, extraData: any = {}) {
     if (!db) return;
     const leaderboardRef = ref(db, `leaderboards/${gameType}`);
     const snapshot = await get(leaderboardRef);
@@ -1374,7 +1634,8 @@ export const sessionService = {
           playerId,
           nickname,
           score,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          ...extraData
         };
       } else {
         // No need to update if score is not better
@@ -1386,7 +1647,8 @@ export const sessionService = {
         playerId,
         nickname,
         score,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        ...extraData
       });
     }
 

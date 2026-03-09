@@ -94,6 +94,7 @@ export interface OmokGameState {
   difficulty?: number; // 1: 인턴, 2: 사원, 3: 주임, 4: 대리, 5: 과장
   startTime?: number;
   moveCount?: number;
+  lastScore?: number;
 }
 
 export interface BingoGameState {

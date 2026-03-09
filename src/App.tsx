@@ -118,7 +118,14 @@ const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], 
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     <span className="text-xs font-mono font-bold text-[#217346]">{entry.score.toLocaleString()}</span>
-                    <p className="text-[8px] text-gray-400">{new Date(entry.timestamp).toLocaleDateString()}</p>
+                    <div className="flex flex-col items-end">
+                      <p className="text-[8px] text-gray-400">{new Date(entry.timestamp).toLocaleDateString()}</p>
+                      {entry.timeTaken && (
+                        <p className="text-[7px] text-gray-400 italic">
+                          {Math.floor(entry.timeTaken / 60)}분 {Math.floor(entry.timeTaken % 60)}초 / {entry.moveCount}수
+                        </p>
+                      )}
+                    </div>
                   </div>
                   {sessionId && gameType && (
                     <button 
@@ -213,6 +220,7 @@ export default function App() {
 
   const isHost = session?.hostId === currentUser?.uid;
   const me = session?.players?.[currentUser?.uid];
+  const isSpectator = !me || me.isSpectator || (!me.isAlive && session.status !== SessionStatus.LOBBY && session.status !== SessionStatus.SUMMARY);
 
   useEffect(() => {
     if (session?.gameType === GameType.BINGO) {
@@ -777,102 +785,8 @@ export default function App() {
     );
   }
 
-  // Handle spectator mode
-  if (me?.isSpectator) {
-    return (
-      <div className="min-h-screen bg-[#f3f2f1] font-sans text-[#333] flex flex-col">
-        {showDisclaimer && (
-          <DisclaimerModal onAccept={() => {
-            localStorage.setItem('disclaimer_accepted', 'true');
-            setShowDisclaimer(false);
-          }} />
-        )}
-        <header className="bg-[#217346] text-white px-4 py-3 shadow-md flex items-center justify-between z-10">
-          <div className="flex items-center gap-2">
-            <Grid size={18} />
-            <h1 className="font-bold text-sm tracking-wide">전사_명예의_전당_통합_보고서.xlsx - 관전 모드</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="bg-white/20 px-3 py-1 rounded text-xs flex items-center gap-2">
-              <Eye size={12} />
-              <span>{session?.players[currentUser.uid]?.nickname} (관전 중)</span>
-            </div>
-          </div>
-        </header>
-        <main className="flex-1 p-4 overflow-y-auto">
-          {/* Render game view based on type, but without interaction controls */}
-          {session?.gameType === GameType.DRAW && session.drawGame ? (
-             <div className="max-w-3xl mx-auto space-y-6">
-                <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
-                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                      <span className="text-[10px] font-bold text-[#666]">비주얼_브리핑_진행 (관전)</span>
-                      <div className="h-3 w-px bg-[#d1d1d1]" />
-                      <div className="text-[10px] text-[#666]">라운드: <span className="font-bold text-[#217346]">{session.drawGame.round} / {session.drawGame.maxRounds}</span></div>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs font-bold text-red-600">
-                      <Timer size={14} />
-                      <span>{session.drawGame.timer}s</span>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    <Canvas 
-                      isPresenter={false}
-                      onDraw={() => {}}
-                      initialData={session.drawGame.canvasData}
-                      readOnly={true}
-                    />
-                  </div>
-                </div>
-                {/* Chat for spectators */}
-                <div className="bg-white border border-[#d1d1d1] rounded shadow-sm flex flex-col h-64">
-                   <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-3 py-2 text-[10px] font-bold text-[#666] flex items-center gap-2">
-                      <MessageSquare size={10} />
-                      실시간_채팅
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-white" ref={chatContainerRef}>
-                      {(Object.values(session.messages || {}) as any[]).sort((a, b) => a.timestamp - b.timestamp).map((msg) => (
-                        <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser.uid ? 'items-end' : 'items-start'}`}>
-                          <div className="flex items-baseline gap-1 mb-0.5">
-                            <span className="text-[9px] font-bold text-[#333]">{msg.senderName}</span>
-                            <span className="text-[8px] text-[#999]">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                          <div className={`px-2 py-1.5 rounded text-xs max-w-[80%] break-words ${
-                            msg.isSystem ? 'bg-gray-100 text-gray-600 w-full text-center italic' :
-                            msg.senderId === currentUser.uid ? 'bg-[#e8f0fe] text-[#1a73e8]' : 'bg-[#f1f3f4] text-[#202124]'
-                          }`}>
-                            {msg.content}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="p-2 bg-[#f8f9fa] border-t border-[#d1d1d1]">
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={chatMessage}
-                          onChange={(e) => setChatMessage(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                          placeholder="메시지를 입력하세요..."
-                          className="office-input flex-1"
-                        />
-                        <button onClick={handleSendMessage} className="office-btn px-3">
-                          <Send size={12} />
-                        </button>
-                      </div>
-                    </div>
-                </div>
-             </div>
-          ) : (
-            <div className="text-center py-10">
-              <p className="text-gray-500">현재 진행 중인 시트를 관전하고 있습니다.</p>
-              <p className="text-sm text-gray-400 mt-2">시트 종류: {session?.gameType}</p>
-            </div>
-          )}
-        </main>
-      </div>
-    );
-  }
+  // Handle spectator mode - REMOVED restrictive view to allow seeing the game board
+  // We now handle spectator state within the main render logic
 
   if (!session) return <div className="flex items-center justify-center h-screen spreadsheet-bg font-mono text-[10px] text-[#666]">#리소스_로드_중...</div>;
 
@@ -890,14 +804,17 @@ export default function App() {
           <div className="bg-white p-1 rounded-sm">
             <Grid className="text-[#217346]" size={16} />
           </div>
-          <h1 className="text-sm font-bold tracking-tight truncate max-w-[200px] sm:max-w-none">
-            {session.gameType === GameType.LIAR ? '오피스_라이어_시트.xlsx' : 
-             session.gameType === GameType.MAFIA ? '오피스_마피아_시트.xlsx' : 
-             session.gameType === GameType.OMOK ? '오피스_오목_대전.xlsx' :
-             session.gameType === GameType.BINGO ? '오피스_빙고_매칭.xlsx' : 
-             session.gameType === GameType.DRAW ? '오피스_캐치마인드.xlsx' :
-             session.gameType === GameType.MINESWEEPER ? '데이터_오류_검수.xlsx' :
-             session.gameType === GameType.OFFICE_2048 ? '직급_승진_프로세스.xlsx' : '데이터_무결성_검증.xlsx'}
+          <h1 className="text-sm font-bold tracking-tight truncate max-w-[200px] sm:max-w-none flex items-center gap-2">
+            <span>
+              {session.gameType === GameType.LIAR ? '오피스_라이어_시트.xlsx' : 
+               session.gameType === GameType.MAFIA ? '오피스_마피아_시트.xlsx' : 
+               session.gameType === GameType.OMOK ? '오피스_오목_대전.xlsx' :
+               session.gameType === GameType.BINGO ? '오피스_빙고_매칭.xlsx' : 
+               session.gameType === GameType.DRAW ? '오피스_캐치마인드.xlsx' :
+               session.gameType === GameType.MINESWEEPER ? '데이터_오류_검수.xlsx' :
+               session.gameType === GameType.OFFICE_2048 ? '직급_승진_프로세스.xlsx' : '데이터_무결성_검증.xlsx'}
+            </span>
+            {isSpectator && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-normal">(관전 모드)</span>}
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -1187,11 +1104,13 @@ export default function App() {
                               onChange={(e) => setOmokDifficulty(parseInt(e.target.value))}
                               disabled={omokBlackId !== 'AI_PLAYER' && omokWhiteId !== 'AI_PLAYER'}
                             >
-                              <option value={1}>인턴 (Lv.1)</option>
-                              <option value={2}>사원 (Lv.2)</option>
-                              <option value={3}>주임 (Lv.3)</option>
-                              <option value={4}>대리 (Lv.4)</option>
-                              <option value={5}>과장 (Lv.5 - 명예의 전당 도전)</option>
+                              <option value={1}>인턴 (Lv.1 - 매우 쉬움)</option>
+                              <option value={2}>사원 (Lv.2 - 쉬움)</option>
+                              <option value={3}>주임 (Lv.3 - 보통)</option>
+                              <option value={4}>대리 (Lv.4 - 조금 어려움)</option>
+                              <option value={5}>과장 (Lv.5 - 어려움)</option>
+                              <option value={6}>차장 (Lv.6 - 매우 어려움)</option>
+                              <option value={7}>부장 (Lv.7 - 명예의 전당 도전)</option>
                             </select>
                           </div>
                           
@@ -1766,53 +1685,62 @@ export default function App() {
                   </div>
 
                   <div className="p-8 md:p-12 flex flex-col md:flex-row gap-12">
-                    {/* My Board */}
+                    {/* My Board (or Spectated Board) */}
                     <div className="flex-1 space-y-4">
-                      <h3 className="text-[10px] font-bold text-[#999] uppercase tracking-wider">나의 감사 시트</h3>
+                      <h3 className="text-[10px] font-bold text-[#999] uppercase tracking-wider">
+                        {session.bingoGame?.boards?.[currentUser.uid] ? '나의 감사 시트' : `${session.players[session.bingoGame?.currentPlayerId || '']?.nickname || '플레이어'}의 시트 (관전)`}
+                      </h3>
                       <div className="relative shadow-xl rounded-lg overflow-hidden border border-[#d1d1d1]">
                         <div className="grid grid-cols-5 gap-1 bg-[#d1d1d1] p-1">
-                          {(Array.isArray(session.bingoGame?.boards?.[currentUser.uid]) ? session.bingoGame.boards[currentUser.uid] : Object.values(session.bingoGame?.boards?.[currentUser.uid] || {})).map((row: any, r: number) => (
-                            (Array.isArray(row) ? row : Object.values(row || {})).map((word: any, c: number) => {
-                              const isMarked = (session.bingoGame?.markedWords || []).includes(word);
-                              const isMyTurn = session.bingoGame?.currentPlayerId === currentUser.uid;
-                              return (
-                                <button
-                                  key={`${r}-${c}`}
-                                  disabled={!isMyTurn || isMarked}
-                                  onClick={() => sessionService.pickBingoWord(session.id, currentUser.uid, word, session)}
-                                  className={`aspect-square flex items-center justify-center text-[10px] p-1 transition-all break-all text-center leading-tight ${
-                                    isMarked 
-                                      ? 'bg-[#217346] text-white font-bold' 
-                                      : isMyTurn 
-                                        ? 'bg-white hover:bg-[#e8f0fe] cursor-pointer' 
-                                        : 'bg-white opacity-80'
-                                  }`}
-                                >
-                                  {word}
-                                </button>
-                              );
-                            })
-                          ))}
+                          {(() => {
+                            const targetId = session.bingoGame?.boards?.[currentUser.uid] ? currentUser.uid : session.bingoGame?.currentPlayerId;
+                            const board = session.bingoGame?.boards?.[targetId || ''];
+                            if (!board) return null;
+                            
+                            return (Array.isArray(board) ? board : Object.values(board)).map((row: any, r: number) => (
+                              (Array.isArray(row) ? row : Object.values(row || {})).map((word: any, c: number) => {
+                                const isMarked = (session.bingoGame?.markedWords || []).includes(word);
+                                const isMyTurn = session.bingoGame?.currentPlayerId === currentUser.uid;
+                                return (
+                                  <button
+                                    key={`${r}-${c}`}
+                                    disabled={!isMyTurn || isMarked || isSpectator}
+                                    onClick={() => sessionService.pickBingoWord(session.id, currentUser.uid, word, session)}
+                                    className={`aspect-square flex items-center justify-center text-[10px] p-1 transition-all break-all text-center leading-tight ${
+                                      isMarked 
+                                        ? 'bg-[#217346] text-white font-bold' 
+                                        : isMyTurn 
+                                          ? 'bg-white hover:bg-[#e8f0fe] cursor-pointer' 
+                                          : 'bg-white opacity-80'
+                                    }`}
+                                  >
+                                    {word}
+                                  </button>
+                                );
+                              })
+                            ));
+                          })()}
                         </div>
                         
                         {/* Strike-through lines overlay */}
                         <svg className="absolute inset-0 pointer-events-none w-full h-full z-20">
                           {(() => {
-                            const board = session.bingoGame?.boards[currentUser.uid];
+                            const targetId = session.bingoGame?.boards?.[currentUser.uid] ? currentUser.uid : session.bingoGame?.currentPlayerId;
+                            const board = session.bingoGame?.boards?.[targetId || ''];
                             const marked = session.bingoGame?.markedWords || [];
                             if (!board) return null;
                             const lines: React.ReactNode[] = [];
                             
                             // Rows
                             for (let r = 0; r < 5; r++) {
-                              if (board[r].every(w => marked.includes(w))) {
+                              if (board[r] && board[r].every((w: string) => marked.includes(w))) {
                                 lines.push(<line key={`r-${r}`} x1="5%" y1={`${r * 20 + 10}%`} x2="95%" y2={`${r * 20 + 10}%`} stroke="red" strokeWidth="2" strokeOpacity="0.6" />);
                               }
                             }
                             // Cols
                             for (let c = 0; c < 5; c++) {
                               let colMarked = true;
-                              for (let r = 0; r < 5; r++) if (!marked.includes(board[r][c])) colMarked = false;
+                              for (let r = 0; r < 5; r++) if (!board[r] || !marked.includes(board[r][c])) colMarked = false;
                               if (colMarked) {
                                 lines.push(<line key={`c-${c}`} x1={`${c * 20 + 10}%`} y1="5%" x2={`${c * 20 + 10}%`} y2="95%" stroke="red" strokeWidth="2" strokeOpacity="0.6" />);
                               }
@@ -1820,8 +1748,8 @@ export default function App() {
                             // Diagonals
                             let d1 = true, d2 = true;
                             for (let i = 0; i < 5; i++) {
-                              if (!marked.includes(board[i][i])) d1 = false;
-                              if (!marked.includes(board[i][4 - i])) d2 = false;
+                              if (!board[i] || !marked.includes(board[i][i])) d1 = false;
+                              if (!board[i] || !marked.includes(board[i][4 - i])) d2 = false;
                             }
                             if (d1) lines.push(<line key="d1" x1="5%" y1="5%" x2="95%" y2="95%" stroke="red" strokeWidth="2" strokeOpacity="0.6" />);
                             if (d2) lines.push(<line key="d2" x1="95%" y1="5%" x2="5%" y2="95%" stroke="red" strokeWidth="2" strokeOpacity="0.6" />);
@@ -1924,16 +1852,16 @@ export default function App() {
                         (Array.isArray(row) ? row : Object.values(row || {})).map((cell: any, c: number) => (
                           <button
                             key={`${r}-${c}`}
-                            onClick={() => sessionService.revealMinesweeperCell(session.id, r, c, session)}
+                            onClick={() => !isSpectator && sessionService.revealMinesweeperCell(session.id, r, c, session)}
                             onContextMenu={(e) => {
                               e.preventDefault();
-                              sessionService.flagMinesweeperCell(session.id, r, c, session);
+                              if (!isSpectator) sessionService.flagMinesweeperCell(session.id, r, c, session);
                             }}
                             className={`w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-xs font-bold transition-all ${
                               cell.isRevealed 
                                 ? 'bg-[#f1f1f1] text-[#333]' 
                                 : 'bg-[#e0e0e0] hover:bg-[#d5d5d5] shadow-[inset_2px_2px_0_rgba(255,255,255,0.5),inset_-2px_-2px_0_rgba(0,0,0,0.1)] active:shadow-none'
-                            } ${cell.isMine && cell.isRevealed ? 'bg-red-500 text-white' : ''}`}
+                            } ${cell.isMine && cell.isRevealed ? 'bg-red-500 text-white' : ''} ${isSpectator ? 'cursor-default' : ''}`}
                           >
                             {cell.isRevealed ? (
                               cell.isMine ? <Bomb size={14} /> : (cell.neighborMines > 0 ? cell.neighborMines : '')
@@ -2075,13 +2003,14 @@ export default function App() {
                           return (
                             <button 
                               key={`${r}-${c}`}
-                              onClick={() => !isInitial && setSelectedSudokuCell({r, c})}
+                              onClick={() => !isSpectator && !isInitial && setSelectedSudokuCell({r, c})}
                               className={`w-8 h-8 md:w-10 md:h-10 border border-[#ccc] flex items-center justify-center text-sm md:text-base font-bold transition-all
                                 ${r % 3 === 2 && r !== 8 ? 'border-b-2 border-b-[#333]' : ''}
                                 ${c % 3 === 2 && c !== 8 ? 'border-r-2 border-r-[#333]' : ''}
                                 ${isInitial ? 'bg-[#f8f9fa] text-[#333]' : 'bg-white text-[#217346]'}
                                 ${isWrong ? 'bg-red-100 text-red-600' : ''}
                                 ${isSelected ? 'ring-2 ring-inset ring-[#217346] bg-[#e8f0fe] z-10' : ''}
+                                ${isSpectator ? 'cursor-default' : ''}
                               `}
                             >
                               {val || ''}
@@ -2833,6 +2762,13 @@ export default function App() {
                             </div>
                           )}
                           
+                          {session.omokGame?.lastScore !== undefined && (
+                            <div className="bg-[#e8f0fe] border border-[#217346] p-4 rounded-lg inline-block">
+                              <div className="text-[10px] text-[#217346] font-bold uppercase mb-1">획득 점수</div>
+                              <div className="text-3xl font-black text-[#217346]">{session.omokGame.lastScore}점</div>
+                            </div>
+                          )}
+
                           <div className="flex justify-center gap-8 mt-6">
                             <div className={`text-center p-4 rounded border ${session.omokGame?.winner === session.omokGame?.blackPlayerId ? 'bg-black/5 border-black' : 'border-transparent'}`}>
                               <div className="w-12 h-12 mx-auto mb-2 shadow-lg flex items-center justify-center">
@@ -2859,7 +2795,7 @@ export default function App() {
                           <div className="w-full max-w-sm mx-auto mt-8">
                             <Leaderboard 
                               entries={globalLeaderboards?.OMOK_HOF || []} 
-                              title="오목" 
+                              title="오목 (최고난도)" 
                               sessionId="GLOBAL"
                               gameType="OMOK_HOF"
                             />
@@ -3302,7 +3238,7 @@ export default function App() {
         session={session} 
         currentUser={currentUser} 
         nickname={session.players[currentUser?.uid]?.nickname || nickname}
-        isSpectator={me && !me.isAlive && session.status !== SessionStatus.LOBBY && session.status !== SessionStatus.SUMMARY}
+        isSpectator={isSpectator}
       />
     </div>
   );
