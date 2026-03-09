@@ -131,17 +131,21 @@ export const sessionService = {
   },
 
   async startLiarGame(sessionId: string, players: Record<string, Player>, settings: any, currentTurnOrder?: string[]) {
-    const playerIds = Object.keys(players);
-    const liarIdx = Math.floor(Math.random() * playerIds.length);
-    const liarPlayerId = playerIds[liarIdx];
+    if (!db) return;
+    
+    const playerIds = Object.keys(players).filter(id => !players[id].isSpectator);
+    const shuffledOrder = [...playerIds].sort(() => Math.random() - 0.5);
+    
+    const liarIdx = Math.floor(Math.random() * shuffledOrder.length);
+    const liarPlayerId = shuffledOrder[liarIdx];
 
     let spyPlayerId: string | undefined;
-    if (settings.liarMode === LiarMode.SPY && playerIds.length >= 3) {
+    if (settings.liarMode === LiarMode.SPY && shuffledOrder.length >= 3) {
       let spyIdx;
       do {
-        spyIdx = Math.floor(Math.random() * playerIds.length);
+        spyIdx = Math.floor(Math.random() * shuffledOrder.length);
       } while (spyIdx === liarIdx);
-      spyPlayerId = playerIds[spyIdx];
+      spyPlayerId = shuffledOrder[spyIdx];
     }
 
     const category = settings.liarCategory === '랜덤' 
@@ -163,22 +167,7 @@ export const sessionService = {
     }
 
     // Determine Turn Order
-    let turnOrder: string[] = [];
-    if (currentTurnOrder) {
-      // Filter out players who are no longer in the session
-      const validOrderedIds = currentTurnOrder.filter(id => playerIds.includes(id));
-      
-      // Find players who are not in the turn order (newly joined)
-      const newPlayerIds = playerIds.filter(id => !validOrderedIds.includes(id));
-      
-      // Combine valid existing order with new players
-      turnOrder = [...validOrderedIds, ...newPlayerIds];
-    }
-
-    // If turnOrder is empty or invalid (shouldn't happen with logic above, but safety check), shuffle
-    if (turnOrder.length === 0) {
-      turnOrder = [...playerIds].sort(() => Math.random() - 0.5);
-    }
+    const turnOrder = [...shuffledOrder];
 
     const updates: any = {
       status: SessionStatus.REVEAL,
@@ -215,22 +204,7 @@ export const sessionService = {
     }
     
     // Determine Turn Order
-    let finalTurnOrder: string[] = [];
-    if (currentTurnOrder) {
-      // Filter out players who are no longer in the session
-      const validOrderedIds = currentTurnOrder.filter(id => playerIds.includes(id));
-      
-      // Find players who are not in the turn order (newly joined)
-      const newPlayerIds = playerIds.filter(id => !validOrderedIds.includes(id));
-      
-      // Combine valid existing order with new players
-      finalTurnOrder = [...validOrderedIds, ...newPlayerIds];
-    }
-
-    // If turnOrder is empty or invalid (shouldn't happen with logic above, but safety check), shuffle
-    if (finalTurnOrder.length === 0) {
-      finalTurnOrder = [...playerIds].sort(() => Math.random() - 0.5);
-    }
+    const finalTurnOrder = [...playerIds].sort(() => Math.random() - 0.5);
     
     // Assign Roles Randomly (independent of turn order)
     const roleAssignmentOrder = [...playerIds].sort(() => Math.random() - 0.5);
@@ -728,12 +702,14 @@ export const sessionService = {
   async startBingoGame(sessionId: string, players: Record<string, Player>, turnOrder: string[]) {
     if (!db) return;
     
-    // Ensure turnOrder is valid
-    const validTurnOrder = turnOrder && turnOrder.length > 0 ? turnOrder : Object.keys(players);
+    // Shuffle turnOrder for fairness
+    const playerIds = Object.keys(players).filter(id => !players[id].isSpectator);
+    const shuffledOrder = [...playerIds].sort(() => Math.random() - 0.5);
     
     const updates: any = {
       status: SessionStatus.PLAYING,
-      'bingoGame/currentPlayerId': validTurnOrder[0]
+      turnOrder: shuffledOrder,
+      'bingoGame/currentPlayerId': shuffledOrder[0]
     };
 
     await update(ref(db, `sessions/${sessionId}`), updates);
@@ -787,6 +763,9 @@ export const sessionService = {
   async startDrawGame(sessionId: string, players: Record<string, Player>, settings: any, turnOrder: string[]) {
     if (!db) return;
     
+    const playerIds = Object.keys(players).filter(id => !players[id].isSpectator);
+    const shuffledOrder = [...playerIds].sort(() => Math.random() - 0.5);
+    
     const category = settings.drawCategory || '랜덤';
     let words: string[] = [];
     if (category === '랜덤') {
@@ -797,7 +776,7 @@ export const sessionService = {
     const secretWord = words[Math.floor(Math.random() * words.length)];
 
     const drawGame: DrawGameState = {
-      presenterId: turnOrder[0],
+      presenterId: shuffledOrder[0],
       word: secretWord,
       category: category,
       canvasData: '',
@@ -808,13 +787,14 @@ export const sessionService = {
     };
 
     // Initialize scores
-    Object.keys(players).forEach(pid => {
+    shuffledOrder.forEach(pid => {
       drawGame.scores[pid] = 0;
     });
 
     const updates: any = {
       status: SessionStatus.PLAYING,
-      drawGame
+      drawGame,
+      turnOrder: shuffledOrder
     };
 
     await update(ref(db, `sessions/${sessionId}`), updates);
@@ -1037,20 +1017,15 @@ export const sessionService = {
       await this.updateStats(sessionId, playerId);
       
       // AI Match Leaderboard
-      if (game.isAIMatch && playerId !== 'AI_PLAYER') {
+      if (game.isAIMatch && playerId !== 'AI_PLAYER' && game.difficulty === 7) {
         const timeTaken = (Date.now() - (game.startTime || Date.now())) / 1000;
         const moveCount = (game.moveCount || 0) + 1;
         // Score calculation: Base 10000 - (time * 10) - (moves * 50)
         const score = Math.max(0, 10000 - Math.floor(timeTaken * 10) - (moveCount * 50));
         
-        // Record to general AI leaderboard
-        await this.recordLeaderboard(sessionId, 'OMOK_AI', playerId, player, score);
+        // Record to Hall of Fame
+        await this.recordLeaderboard(sessionId, 'OMOK_HOF', playerId, player, score, { timeTaken, moveCount });
         updates['omokGame/lastScore'] = score;
-        
-        // Record to Hall of Fame if difficulty is 7 (부장)
-        if (game.difficulty === 7) {
-          await this.recordLeaderboard(sessionId, 'OMOK_HOF', playerId, player, score, { timeTaken, moveCount });
-        }
       }
     }
     

@@ -52,7 +52,7 @@ const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], 
       <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Trophy size={14} className="text-yellow-500" />
-          <span className="text-[10px] font-bold text-[#666] uppercase tracking-wider">{title} 명예의 전당</span>
+          <span className="text-[10px] font-bold text-[#666] uppercase tracking-wider truncate">{title} 명예의 전당</span>
         </div>
         {sessionId && <span className="text-[8px] text-[#999] italic">Moderation Active</span>}
       </div>
@@ -804,7 +804,7 @@ export default function App() {
           <div className="bg-white p-1 rounded-sm">
             <Grid className="text-[#217346]" size={16} />
           </div>
-          <h1 className="text-sm font-bold tracking-tight truncate max-w-[200px] sm:max-w-none flex items-center gap-2">
+          <h1 className="text-sm font-bold tracking-tight truncate max-w-[150px] sm:max-w-none flex items-center gap-2">
             <span>
               {session.gameType === GameType.LIAR ? '오피스_라이어_시트.xlsx' : 
                session.gameType === GameType.MAFIA ? '오피스_마피아_시트.xlsx' : 
@@ -2757,7 +2757,7 @@ export default function App() {
                           {session.omokGame?.isDraw ? (
                             <div className="text-3xl font-black text-[#666]">무승부</div>
                           ) : (
-                            <div className="text-3xl font-black text-[#217346]">
+                            <div className="text-3xl font-black text-[#217346] truncate px-4">
                               {session.players[session.omokGame!.winner!].nickname} 승리!
                             </div>
                           )}
