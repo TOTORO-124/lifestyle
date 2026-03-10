@@ -1,9 +1,13 @@
 import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
-import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry } from '../types';
+import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState } from '../types';
 import { LIAR_TOPICS } from '../data/topics';
 import { DRAW_TOPICS } from '../data/drawTopics';
+import { OFFICE_LIFE_BOARD } from '../data/officeLifeBoard';
+import { CHANCE_CARDS } from '../data/chanceCards';
+import { OFFICE_ITEMS } from '../data/officeItems';
+import { OFFICE_RANKS, OFFICE_ROLES } from '../data/officeRanks';
 
 export const sessionService = {
   async authenticate() {
@@ -2040,4 +2044,394 @@ export const sessionService = {
 
     await update(ref(db, `sessions/${sessionId}`), { sudokuGame: game });
   },
+
+  // --- Office Life ---
+  async startOfficeLifeGame(sessionId: string, players: Record<string, Player>, turnOrder?: string[], mode: 'INDIVIDUAL' | 'TEAM' = 'INDIVIDUAL') {
+    if (!db) return;
+    
+    const order = turnOrder || Object.keys(players);
+    const playerStates: Record<string, any> = {};
+    
+    order.forEach(pid => {
+      playerStates[pid] = {
+        position: 0,
+        assets: 2000,
+        teamId: mode === 'TEAM' ? (players[pid].teamId || 'TEAM_A') : 'INDIVIDUAL',
+        items: [],
+        isJailed: false,
+        jailTurns: 0,
+        rank: OFFICE_RANKS[0].name,
+        rankIndex: 0
+      };
+    });
+
+    const officeLifeGame: OfficeLifeGameState = {
+      playerStates,
+      cells: {},
+      currentTurnIndex: 0,
+      turnOrder: order,
+      status: 'PLAYING',
+      waitingForAction: 'SELECT_ROLE'
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), {
+      status: SessionStatus.PLAYING,
+      officeLifeGame
+    });
+    await this.addLog(sessionId, "오피스 라이프: 승진 대작전 프로젝트가 시작되었습니다!", "success");
+  },
+
+  async rollOfficeLifeDice(sessionId: string, playerId: string, session: Session) {
+    if (!db || !session.officeLifeGame || session.officeLifeGame.status !== 'PLAYING') return;
+    const game = JSON.parse(JSON.stringify(session.officeLifeGame)) as OfficeLifeGameState;
+    const turnOrder = game.turnOrder || [];
+    const currentPlayerId = turnOrder[game.currentTurnIndex || 0];
+    
+    if (currentPlayerId !== playerId) return;
+    if (game.waitingForAction !== 'NONE' && game.waitingForAction !== undefined) return;
+    
+    const pState = game.playerStates?.[playerId];
+    if (!pState) return;
+
+    if (pState.isJailed) {
+      pState.jailTurns++;
+      if (pState.jailTurns >= 3) {
+        pState.isJailed = false;
+        pState.jailTurns = 0;
+        await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 경위서 작성을 마치고 복귀했습니다.`, 'info');
+      } else {
+        await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 경위서를 작성 중입니다. (${pState.jailTurns}/3)`, 'warning');
+        game.currentTurnIndex = (game.currentTurnIndex + 1) % (turnOrder.length || 1);
+        await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+        return;
+      }
+    }
+
+    const dice = Math.floor(Math.random() * 6) + 1;
+    game.lastDice = dice;
+    
+    const oldPos = pState.position || 0;
+    let newPos = (oldPos + dice) % 40;
+    
+    // Salary check (passed HR)
+    if (newPos < oldPos) {
+      const rank = OFFICE_RANKS[pState.rankIndex || 0] || OFFICE_RANKS[0];
+      let salary = rank.salary;
+      
+      // Planner skill: 20% bonus
+      if (pState.roleId === 'PLANNER') {
+        salary = Math.floor(salary * 1.2);
+      }
+      
+      pState.assets = (pState.assets || 0) + salary;
+      pState.passedHRThisTurn = true;
+      await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 인사팀을 통과하여 월급 ${salary}만원을 수령했습니다!`, 'success');
+    } else {
+      pState.passedHRThisTurn = false;
+    }
+    
+    pState.position = newPos;
+    const cell = OFFICE_LIFE_BOARD[newPos];
+    
+    await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 주사위 ${dice}을 굴려 '${cell.name}'에 도착했습니다.`, 'info');
+    
+    if (cell.type === 'TAX') {
+      const tax = Math.floor((pState.assets || 0) * 0.1);
+      pState.assets = (pState.assets || 0) - tax;
+      await this.addLog(sessionId, `세금으로 ${tax}만원이 공제되었습니다.`, 'warning');
+    } else if (cell.type === 'GO_TO_JAIL') {
+      pState.position = 10;
+      pState.isJailed = true;
+      pState.jailTurns = 0;
+      await this.addLog(sessionId, `감사팀으로 긴급 호출되었습니다!`, 'error');
+    } else if (cell.type === 'PROJECT') {
+      const cellData = (game.cells || {})[newPos];
+      if (cellData && cellData.ownerId && cellData.ownerId !== playerId) {
+        const ownerState = (game.playerStates || {})[cellData.ownerId];
+        
+        if (ownerState && (pState.teamId === 'INDIVIDUAL' || pState.teamId !== ownerState.teamId)) {
+          const baseRent = cell.rent?.[(cellData.level || 1) - 1] || 0;
+          const rankMultiplier = (OFFICE_RANKS[ownerState.rankIndex || 0] || OFFICE_RANKS[0]).tollMultiplier;
+          let finalRent = Math.floor(baseRent * rankMultiplier);
+          
+          // Developer skill: 10% discount for payer
+          if (pState.roleId === 'DEV') {
+            finalRent = Math.floor(finalRent * 0.9);
+          }
+          
+          // Designer skill: 10% extra for owner
+          if (ownerState.roleId === 'DESIGN') {
+            finalRent = Math.floor(finalRent * 1.1);
+          }
+ 
+          pState.assets = (pState.assets || 0) - finalRent;
+          ownerState.assets = (ownerState.assets || 0) + finalRent;
+          await this.addLog(sessionId, `${session.players?.[cellData.ownerId]?.nickname || '플레이어'}님에게 협업 비용 ${finalRent}만원을 지불했습니다.`, 'warning');
+        }
+      } else if (!cellData || cellData.level < 3) {
+        game.waitingForAction = 'BUY_PROJECT';
+      }
+    } else if (cell.type === 'CHANCE') {
+      game.waitingForAction = 'CHANCE_CARD';
+    } else if (cell.type === 'REST') {
+      game.waitingForAction = 'BUY_ITEM';
+    }
+
+    if (game.waitingForAction === 'NONE' || !game.waitingForAction) {
+      // No action needed
+    }
+    
+    await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+  },
+
+  async buyOfficeLifeProject(sessionId: string, playerId: string, session: Session) {
+    if (!db || !session.officeLifeGame) return;
+    const game = JSON.parse(JSON.stringify(session.officeLifeGame)) as OfficeLifeGameState;
+    const pState = game.playerStates?.[playerId];
+    if (!pState) return;
+    
+    const cellPos = pState.position || 0;
+    const cell = OFFICE_LIFE_BOARD[cellPos];
+    
+    if (cell.type !== 'PROJECT') return;
+    
+    const cellData = (game.cells || {})[cellPos] || { level: 0 };
+    if (cellData.ownerId && cellData.ownerId !== playerId) return;
+    
+    if (cellData.level >= 3) return;
+    
+    let cost = cell.price || 0;
+    // Sales skill: 10% discount
+    if (pState.roleId === 'SALES') {
+      cost = Math.floor(cost * 0.9);
+    }
+
+    if ((pState.assets || 0) < cost) {
+      await this.addLog(sessionId, `자산이 부족하여 프로젝트를 진행할 수 없습니다.`, 'warning');
+      return;
+    }
+    
+    pState.assets = (pState.assets || 0) - cost;
+    if (!game.cells) game.cells = {};
+    game.cells[cellPos] = {
+      ownerId: playerId,
+      level: (cellData.level || 0) + 1
+    };
+    
+    game.waitingForAction = 'NONE';
+    await this.addLog(sessionId, `'${cell.name}' 프로젝트를 ${game.cells[cellPos].level}단계로 승인했습니다.`, 'success');
+    
+    // Check if promotion test is needed after cell action
+    if (pState.passedHRThisTurn && (pState.rankIndex || 0) < OFFICE_RANKS.length - 1) {
+      game.waitingForAction = 'PROMOTION_TEST';
+      pState.passedHRThisTurn = false;
+    }
+
+    await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+  },
+
+  async drawOfficeLifeChanceCard(sessionId: string, playerId: string, session: Session) {
+    if (!db || !session.officeLifeGame) return;
+    const game = JSON.parse(JSON.stringify(session.officeLifeGame)) as OfficeLifeGameState;
+    const turnOrder = game.turnOrder || [];
+    const currentPlayerId = turnOrder[game.currentTurnIndex || 0];
+    if (currentPlayerId !== playerId || game.waitingForAction !== 'CHANCE_CARD') return;
+
+    const pState = game.playerStates?.[playerId];
+    if (!pState) return;
+
+    let card = CHANCE_CARDS[Math.floor(Math.random() * CHANCE_CARDS.length)];
+    
+    // HR Skill: Draw 2 cards and pick the best one
+    if (pState.roleId === 'HR') {
+      const card2 = CHANCE_CARDS[Math.floor(Math.random() * CHANCE_CARDS.length)];
+      const assets = pState.assets || 0;
+      const result1 = card.effect(assets) - assets;
+      const result2 = card2.effect(assets) - assets;
+      
+      if (result2 > result1) {
+        card = card2;
+      }
+      await this.addLog(sessionId, `[인사팀 스킬] 두 장의 카드 중 더 유리한 카드를 선택했습니다.`, 'success');
+    }
+
+    const oldAssets = pState.assets || 0;
+    pState.assets = card.effect(oldAssets);
+    const diff = pState.assets - oldAssets;
+
+    game.lastChanceCard = {
+      title: card.title,
+      message: card.message,
+      type: card.type
+    };
+    
+    game.waitingForAction = 'NONE';
+    
+    await this.addLog(sessionId, `[법인카드 찬스] ${card.title}: ${card.message} (${diff > 0 ? '+' : ''}${diff}만원)`, card.type === 'GOOD' ? 'success' : card.type === 'BAD' ? 'warning' : 'info');
+    
+    // Check if promotion test is needed after cell action
+    if (pState.passedHRThisTurn && (pState.rankIndex || 0) < OFFICE_RANKS.length - 1) {
+      game.waitingForAction = 'PROMOTION_TEST';
+      pState.passedHRThisTurn = false;
+    }
+
+    await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+  },
+
+  async buyOfficeLifeItem(sessionId: string, playerId: string, itemId: string, session: Session) {
+    if (!db || !session.officeLifeGame) return;
+    const game = JSON.parse(JSON.stringify(session.officeLifeGame)) as OfficeLifeGameState;
+    const pState = game.playerStates?.[playerId];
+    if (!pState) return;
+
+    const item = OFFICE_ITEMS.find(i => i.id === itemId);
+    
+    if (!item || (pState.assets || 0) < item.price) {
+      await this.addLog(sessionId, `자산이 부족하여 아이템을 구매할 수 없습니다.`, 'warning');
+      return;
+    }
+    
+    pState.assets = (pState.assets || 0) - item.price;
+    pState.items = [...(pState.items || []), item.id];
+    
+    await this.addLog(sessionId, `'${item.name}' 아이템을 구매했습니다.`, 'success');
+    await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+  },
+
+  async useOfficeLifeItem(sessionId: string, playerId: string, itemId: string, session: Session) {
+    if (!db || !session.officeLifeGame) return;
+    const game = JSON.parse(JSON.stringify(session.officeLifeGame)) as OfficeLifeGameState;
+    const pState = game.playerStates?.[playerId];
+    if (!pState) return;
+    
+    const items = pState.items || [];
+    const itemIdx = items.indexOf(itemId);
+    if (itemIdx === -1) return;
+    
+    // Remove item from inventory
+    items.splice(itemIdx, 1);
+    pState.items = items;
+    
+    const item = OFFICE_ITEMS.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Item Effects
+    if (itemId === 'COFFEE') {
+      if (pState.isJailed) {
+        pState.jailTurns = Math.min(3, pState.jailTurns + 2); // Speed up
+        if (pState.jailTurns >= 3) {
+          pState.isJailed = false;
+          pState.jailTurns = 0;
+        }
+        await this.addLog(sessionId, `아이스 아메리카노의 힘으로 경위서 작성이 빨라졌습니다!`, 'success');
+      } else {
+        await this.addLog(sessionId, `커피를 마셨지만 아무 일도 일어나지 않았습니다. (경위서 작성 중이 아님)`, 'info');
+      }
+    } else {
+      await this.addLog(sessionId, `'${item.name}' 아이템을 사용했습니다. (효과 적용 예정)`, 'info');
+    }
+    
+    await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+  },
+
+  async setPlayerTeam(sessionId: string, playerId: string, teamId: string) {
+    if (!db) return;
+    await update(ref(db, `sessions/${sessionId}/players/${playerId}`), { teamId });
+  },
+
+  async payOfficeLifeJailFine(sessionId: string, playerId: string, session: Session) {
+    if (!db || !session.officeLifeGame) return;
+    const game = JSON.parse(JSON.stringify(session.officeLifeGame)) as OfficeLifeGameState;
+    const pState = game.playerStates?.[playerId];
+    if (!pState || !pState.isJailed) return;
+
+    const fine = 500;
+    
+    if ((pState.assets || 0) >= fine) {
+      pState.assets = (pState.assets || 0) - fine;
+      pState.isJailed = false;
+      pState.jailTurns = 0;
+      await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 벌금 ${fine}만원을 지불하고 즉시 복귀했습니다.`, 'success');
+      await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+    } else {
+      await this.addLog(sessionId, `벌금을 지불할 자산이 부족합니다.`, 'warning');
+    }
+  },
+
+  async selectOfficeLifeRole(sessionId: string, playerId: string, roleId: string, session: Session) {
+    if (!db || !session.officeLifeGame) return;
+    
+    const role = OFFICE_ROLES.find(r => r.id === roleId);
+    await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 '${role?.name}' 직무를 선택했습니다.`, 'info');
+    
+    // Update only this player's role
+    await update(ref(db, `sessions/${sessionId}/officeLifeGame/playerStates/${playerId}`), { roleId });
+    
+    // Check if all players have selected roles to advance the game state
+    // We fetch the latest state to be sure
+    const snapshot = await get(ref(db, `sessions/${sessionId}/officeLifeGame`));
+    if (snapshot.exists()) {
+      const latestGame = snapshot.val() as OfficeLifeGameState;
+      const turnOrder = latestGame.turnOrder || [];
+      const allSelected = turnOrder.every(pid => latestGame.playerStates?.[pid]?.roleId);
+      if (allSelected) {
+        await update(ref(db, `sessions/${sessionId}/officeLifeGame`), { waitingForAction: 'NONE' });
+      }
+    }
+  },
+
+  async takeOfficeLifePromotionTest(sessionId: string, playerId: string, accept: boolean, session: Session) {
+    if (!db || !session.officeLifeGame) return;
+    const game = JSON.parse(JSON.stringify(session.officeLifeGame)) as OfficeLifeGameState;
+    const pState = game.playerStates?.[playerId];
+    if (!pState || game.waitingForAction !== 'PROMOTION_TEST') return;
+
+    if (accept) {
+      const nextRankIndex = (pState.rankIndex || 0) + 1;
+      const nextRank = OFFICE_RANKS[nextRankIndex];
+      
+      if (nextRank && (pState.assets || 0) >= nextRank.promotionCost) {
+        pState.assets = (pState.assets || 0) - nextRank.promotionCost;
+        pState.rankIndex = nextRankIndex;
+        pState.rank = nextRank.name;
+        await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 '${nextRank.name}'으로 승진했습니다! 축하합니다!`, 'success');
+      } else {
+        await this.addLog(sessionId, `자산이 부족하여 승진에 실패했습니다.`, 'warning');
+      }
+    } else {
+      await this.addLog(sessionId, `승진 기회를 다음으로 미뤘습니다.`, 'info');
+    }
+
+    game.waitingForAction = 'NONE';
+    await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+  },
+
+  async endOfficeLifeTurn(sessionId: string, playerId: string, session: Session) {
+    if (!db || !session.officeLifeGame) return;
+    const game = JSON.parse(JSON.stringify(session.officeLifeGame)) as OfficeLifeGameState;
+    const turnOrder = game.turnOrder || [];
+    const currentPlayerId = turnOrder[game.currentTurnIndex || 0];
+    if (currentPlayerId !== playerId) return;
+
+    // Victory Check
+    const pState = game.playerStates?.[playerId];
+    if (!pState) return;
+    
+    const targetAssets = 30000; // 3억
+    const maxRankIndex = OFFICE_RANKS.length - 1;
+
+    if ((pState.assets || 0) >= targetAssets || (pState.rankIndex || 0) === maxRankIndex) {
+      game.status = 'FINISHED';
+      game.winner = playerId;
+      if (pState.teamId !== 'INDIVIDUAL') {
+        game.winnerTeam = pState.teamId;
+      }
+      await this.addLog(sessionId, `축하합니다! ${session.players?.[playerId]?.nickname || '플레이어'}님이 최종 승리했습니다!`, 'success');
+    }
+
+    game.waitingForAction = 'NONE';
+    game.currentTurnIndex = ((game.currentTurnIndex || 0) + 1) % (turnOrder.length || 1);
+    
+    await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+  }
 };

@@ -7,6 +7,7 @@ export enum GameType {
   MINESWEEPER = 'MINESWEEPER',
   OFFICE_2048 = 'OFFICE_2048',
   SUDOKU = 'SUDOKU',
+  OFFICE_LIFE = 'OFFICE_LIFE',
 }
 
 export enum SessionStatus {
@@ -52,6 +53,7 @@ export interface Player {
   hasConfirmedRole?: boolean;
   lastActive?: number;
   score?: number;
+  teamId?: string;
 }
 
 export interface LiarGameState {
@@ -155,6 +157,39 @@ export interface SudokuGameState {
   mistakes: number;
 }
 
+export interface OfficeLifeGameState {
+  playerStates: Record<string, {
+    position: number;
+    assets: number;
+    teamId: string;
+    items: string[];
+    isJailed: boolean;
+    jailTurns: number;
+    rank: string;
+    rankIndex: number;
+    roleId?: string;
+    passedHRThisTurn?: boolean;
+  }>;
+  cells: Record<number, {
+    ownerId?: string;
+    level: number;
+    trapType?: string;
+    setterId?: string;
+  }>;
+  currentTurnIndex: number;
+  turnOrder: string[];
+  status: 'PLAYING' | 'FINISHED';
+  winner?: string;
+  winnerTeam?: string;
+  lastDice?: number;
+  lastChanceCard?: {
+    title: string;
+    message: string;
+    type: 'GOOD' | 'BAD' | 'NEUTRAL';
+  };
+  waitingForAction?: 'SELECT_ROLE' | 'BUY_PROJECT' | 'CHANCE_CARD' | 'BUY_ITEM' | 'PROMOTION_TEST' | 'NONE';
+}
+
 export interface LeaderboardEntry {
   playerId: string;
   nickname: string;
@@ -178,6 +213,7 @@ export interface Session {
   minesweeperGame?: MinesweeperGameState;
   office2048Game?: Office2048GameState;
   sudokuGame?: SudokuGameState;
+  officeLifeGame?: OfficeLifeGameState;
   leaderboards?: Record<string, LeaderboardEntry[]>;
   settings: {
     maxPlayers: number;
@@ -192,6 +228,7 @@ export interface Session {
     drawTime?: number;
     minesweeperDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
     sudokuDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+    officeLifeMode?: 'INDIVIDUAL' | 'TEAM';
   };
   turnOrder?: string[];
   messages?: Record<string, ChatMessage>;

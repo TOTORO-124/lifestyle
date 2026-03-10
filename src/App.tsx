@@ -7,7 +7,8 @@ import { LIAR_TOPICS } from './data/topics';
 import { BINGO_TOPICS } from './data/bingoTopics';
 import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid, Cpu } from 'lucide-react';
+import { OfficeLifeBoard } from './components/OfficeLifeBoard';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid, Cpu, Briefcase } from 'lucide-react';
 
 const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], title: string, sessionId?: string | null, gameType?: string }) => {
   const rankNames = ['사장', '부사장', '전무', '상무', '이사', '부장', '차장', '과장', '대리', '사원'];
@@ -487,6 +488,8 @@ export default function App() {
       await sessionService.startOffice2048Game(session.id);
     } else if (session.gameType === GameType.SUDOKU) {
       await sessionService.startSudokuGame(session.id, session.settings.sudokuDifficulty || 'EASY');
+    } else if (session.gameType === GameType.OFFICE_LIFE) {
+      await sessionService.startOfficeLifeGame(session.id, session.players, session.turnOrder, session.settings.officeLifeMode || 'INDIVIDUAL');
     }
   };
 
@@ -698,6 +701,14 @@ export default function App() {
                         >
                           <span className="font-bold">스도쿠</span>
                           <span className="text-[9px] font-normal opacity-80">데이터 무결성 검증</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.OFFICE_LIFE)} 
+                          className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">승진 대작전</span>
+                          <span className="text-[9px] font-normal opacity-80">오피스 라이프 보드</span>
                         </button>
                       </div>
                     </div>
@@ -1070,6 +1081,59 @@ export default function App() {
                               </span>
                             </div>
                           </div>
+                        </div>
+                      )}
+
+                      {session.gameType === GameType.OFFICE_LIFE && (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between p-3 bg-gray-50 rounded border border-[#d1d1d1]">
+                            <div className="flex items-center gap-2">
+                              <Users size={16} className="text-[#217346]" />
+                              <span className="text-xs font-bold">게임 모드</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => sessionService.updateSettings(session.id, { officeLifeMode: 'INDIVIDUAL' })}
+                                className={`px-3 py-1 rounded text-[10px] font-bold border ${session.settings.officeLifeMode !== 'TEAM' ? 'bg-[#217346] text-white border-[#217346]' : 'bg-white text-gray-600 border-gray-300'}`}
+                              >
+                                개인전
+                              </button>
+                              <button
+                                onClick={() => sessionService.updateSettings(session.id, { officeLifeMode: 'TEAM' })}
+                                className={`px-3 py-1 rounded text-[10px] font-bold border ${session.settings.officeLifeMode === 'TEAM' ? 'bg-[#217346] text-white border-[#217346]' : 'bg-white text-gray-600 border-gray-300'}`}
+                              >
+                                팀전
+                              </button>
+                            </div>
+                          </div>
+
+                          {session.settings.officeLifeMode === 'TEAM' && (
+                            <div className="p-3 bg-blue-50 rounded border border-blue-100">
+                              <p className="text-[10px] font-bold text-blue-800 mb-2">팀 배정 (클릭하여 변경)</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {Object.values(session.players).map(pObj => {
+                                  const p = pObj as Player;
+                                  return (
+                                    <div key={p.id} className="flex items-center justify-between p-2 bg-white rounded border border-blue-200">
+                                      <span className="text-[10px] font-medium truncate max-w-[60px]">{p.nickname}</span>
+                                      <button
+                                        onClick={() => {
+                                          if (p.id === currentUser.uid) {
+                                            const nextTeam = p.teamId === 'TEAM_B' ? 'TEAM_A' : 'TEAM_B';
+                                            sessionService.setPlayerTeam(session.id, p.id, nextTeam);
+                                          }
+                                        }}
+                                        disabled={p.id !== currentUser.uid}
+                                        className={`px-2 py-0.5 rounded text-[8px] font-bold ${p.teamId === 'TEAM_B' ? 'bg-orange-500 text-white' : 'bg-blue-500 text-white'}`}
+                                      >
+                                        {p.teamId === 'TEAM_B' ? 'B팀' : 'A팀'}
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1927,6 +1991,8 @@ export default function App() {
                   </div>
                 </div>
               </div>
+            ) : session.gameType === GameType.OFFICE_LIFE ? (
+              <OfficeLifeBoard session={session} currentUser={currentUser} />
             ) : session.gameType === GameType.OFFICE_2048 ? (
               <div className="max-w-md mx-auto space-y-6">
                 <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
