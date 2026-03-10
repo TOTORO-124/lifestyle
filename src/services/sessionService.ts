@@ -1713,8 +1713,97 @@ export const sessionService = {
   async flagMinesweeperCell(sessionId: string, r: number, c: number, session: Session) {
     if (!db || !session.minesweeperGame || session.minesweeperGame.status !== 'PLAYING') return;
     const game = JSON.parse(JSON.stringify(session.minesweeperGame));
+    
+    // Ensure board is 2D array
+    game.board = (Array.isArray(game.board) ? game.board : Object.values(game.board)).map((row: any) => 
+      Array.isArray(row) ? row : Object.values(row)
+    );
+    
     game.board[r][c].isFlagged = !game.board[r][c].isFlagged;
+    
+    // Update mineCount display
+    let flags = 0;
+    game.board.forEach((row: any) => row.forEach((cell: any) => { if (cell.isFlagged) flags++; }));
+    const totalMines = { 'EASY': 10, 'MEDIUM': 40, 'HARD': 99 }[game.difficulty as 'EASY' | 'MEDIUM' | 'HARD'] || 10;
+    game.mineCount = totalMines - flags;
+
     await update(ref(db, `sessions/${sessionId}`), { minesweeperGame: game });
+  },
+
+  async chordMinesweeperCell(sessionId: string, r: number, c: number, session: Session) {
+    if (!db || !session.minesweeperGame || session.minesweeperGame.status !== 'PLAYING') return;
+    
+    const game = JSON.parse(JSON.stringify(session.minesweeperGame));
+    game.board = (Array.isArray(game.board) ? game.board : Object.values(game.board)).map((row: any) => 
+      Array.isArray(row) ? row : Object.values(row)
+    );
+    const board = game.board;
+    const rows = board.length;
+    const cols = board[0].length;
+    
+    if (!board[r][c].isRevealed || board[r][c].neighborMines === 0) return;
+
+    // Count flags around the cell
+    let flagCount = 0;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && board[nr][nc].isFlagged) {
+          flagCount++;
+        }
+      }
+    }
+
+    // If flag count matches neighbor mines, reveal all non-flagged neighbors
+    if (flagCount === board[r][c].neighborMines) {
+      let hitMine = false;
+      const reveal = (row: number, col: number) => {
+        if (row < 0 || row >= rows || col < 0 || col >= cols || board[row][col].isRevealed || board[row][col].isFlagged) return;
+        
+        if (board[row][col].isMine) {
+          hitMine = true;
+          return;
+        }
+
+        board[row][col].isRevealed = true;
+        game.revealedCount++;
+        if (board[row][col].neighborMines === 0) {
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              reveal(row + dr, col + dc);
+            }
+          }
+        }
+      };
+
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          reveal(r + dr, c + dc);
+        }
+      }
+
+      if (hitMine) {
+        game.status = 'LOST';
+        board.forEach((row: any) => row.forEach((cell: any) => { if (cell.isMine) cell.isRevealed = true; }));
+        await this.addLog(sessionId, `잘못된 검수로 지뢰(데이터 오류)가 폭발했습니다!`, 'warning');
+      } else {
+        const totalCells = rows * cols;
+        if (game.revealedCount === totalCells - game.mineCount) {
+          game.status = 'WON';
+          await this.addLog(sessionId, `모든 지뢰를 성공적으로 찾아냈습니다!`, 'success');
+          
+          const timeTaken = Date.now() - (game.startTime || Date.now());
+          const difficultyBonus = { 'EASY': 1000, 'MEDIUM': 5000, 'HARD': 15000 }[game.difficulty as 'EASY' | 'MEDIUM' | 'HARD'];
+          const score = Math.max(0, difficultyBonus + 100000 - Math.floor(timeTaken / 10));
+          const user = auth?.currentUser;
+          if (user && session.players[user.uid]) {
+            await this.recordLeaderboard(sessionId, 'MINESWEEPER', user.uid, session.players[user.uid].nickname, score);
+          }
+        }
+      }
+      await update(ref(db, `sessions/${sessionId}`), { minesweeperGame: game });
+    }
   },
 
   // --- Office 2048 ---

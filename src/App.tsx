@@ -217,22 +217,32 @@ export default function App() {
   const [showLiarKeyword, setShowLiarKeyword] = useState(false);
   const [selectedSudokuCell, setSelectedSudokuCell] = useState<{r: number, c: number} | null>(null);
   const [globalLeaderboards, setGlobalLeaderboards] = useState<Record<string, any[]>>({});
+  const [bingoLinesInput, setBingoLinesInput] = useState<string>('3');
 
   const isHost = session?.hostId === currentUser?.uid;
   const me = session?.players?.[currentUser?.uid];
   const isSpectator = !me || me.isSpectator || (!me.isAlive && session.status !== SessionStatus.LOBBY && session.status !== SessionStatus.SUMMARY);
 
   useEffect(() => {
+    if (session?.settings?.bingoLines) {
+      setBingoLinesInput(String(session.settings.bingoLines));
+    }
+  }, [session?.settings?.bingoLines]);
+
+  useEffect(() => {
     if (session?.gameType === GameType.BINGO) {
       if (session.bingoGame?.boards?.[currentUser?.uid]) {
         setBingoBoard(session.bingoGame.boards[currentUser.uid]);
         setBingoSubmitted(true);
-      } else if (session.status === SessionStatus.PREPARING || session.status === SessionStatus.LOBBY) {
+      } else if (session.status === SessionStatus.LOBBY) {
         setBingoSubmitted(false);
         setBingoBoard(Array(5).fill(null).map(() => Array(5).fill('')));
+      } else if (session.status === SessionStatus.PREPARING) {
+        setBingoSubmitted(false);
+        // Don't reset board here if it's already being filled
       }
     }
-  }, [session?.gameType, session?.bingoGame?.boards, currentUser?.uid, session?.status]);
+  }, [session?.gameType, session?.bingoGame?.boards?.[currentUser?.uid], currentUser?.uid, session?.status]);
 
   useEffect(() => {
     setSelectedVoteTarget(null);
@@ -1146,8 +1156,20 @@ export default function App() {
                               min="1" 
                               max="12"
                               className="office-input text-xs text-center"
-                              value={session.settings.bingoLines || 3}
-                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, bingoLines: parseInt(e.target.value) || 3 })}
+                              value={bingoLinesInput}
+                              onChange={(e) => {
+                                setBingoLinesInput(e.target.value);
+                                const val = parseInt(e.target.value);
+                                if (!isNaN(val) && val > 0) {
+                                  sessionService.updateSettings(session.id, { ...session.settings, bingoLines: val });
+                                }
+                              }}
+                              onBlur={() => {
+                                if (bingoLinesInput === '' || isNaN(parseInt(bingoLinesInput))) {
+                                  setBingoLinesInput('3');
+                                  sessionService.updateSettings(session.id, { ...session.settings, bingoLines: 3 });
+                                }
+                              }}
                             />
                           </div>
                           <div className="space-y-1">
@@ -1852,10 +1874,18 @@ export default function App() {
                         (Array.isArray(row) ? row : Object.values(row || {})).map((cell: any, c: number) => (
                           <button
                             key={`${r}-${c}`}
-                            onClick={() => !isSpectator && sessionService.revealMinesweeperCell(session.id, r, c, session)}
+                            onClick={() => {
+                              if (!isSpectator) {
+                                if (cell.isRevealed) {
+                                  sessionService.chordMinesweeperCell(session.id, r, c, session);
+                                } else {
+                                  sessionService.revealMinesweeperCell(session.id, r, c, session);
+                                }
+                              }
+                            }}
                             onContextMenu={(e) => {
                               e.preventDefault();
-                              if (!isSpectator) sessionService.flagMinesweeperCell(session.id, r, c, session);
+                              if (!isSpectator && !cell.isRevealed) sessionService.flagMinesweeperCell(session.id, r, c, session);
                             }}
                             className={`w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-xs font-bold transition-all ${
                               cell.isRevealed 
