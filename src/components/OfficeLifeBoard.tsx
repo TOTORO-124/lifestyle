@@ -41,10 +41,16 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
     return { r: 0, c: 0 };
   };
 
+  const getTeamColor = (teamId?: string) => {
+    if (teamId === 'TEAM_A') return '#3b82f6'; // blue-500
+    if (teamId === 'TEAM_B') return '#ef4444'; // red-500
+    return '#217346'; // default green
+  };
+
   const chartData = Object.entries(game.playerStates || {}).map(([id, state]) => ({
     name: session.players?.[id]?.nickname || 'Unknown',
     assets: (state as any).assets,
-    color: id === currentUser.uid ? '#217346' : '#666'
+    color: (state as any).teamId !== 'INDIVIDUAL' ? getTeamColor((state as any).teamId) : (id === currentUser.uid ? '#217346' : '#666')
   }));
 
   const handleRollDice = () => {
@@ -122,24 +128,24 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
       {/* Role Selection Overlay */}
       {game.waitingForAction === 'SELECT_ROLE' && !myState?.roleId && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-4 md:p-8 animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full p-4 md:p-8 animate-in zoom-in duration-300 flex flex-col max-h-[90vh]">
             <div className="text-center mb-4 md:mb-8 flex-shrink-0">
               <h2 className="text-2xl md:text-3xl font-black text-[#217346] italic mb-1 md:mb-2">CHOOSE YOUR ROLE</h2>
               <p className="text-gray-500 font-bold uppercase text-[10px] md:text-xs tracking-widest">직무를 선택하여 고유 스킬을 획득하세요</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 overflow-y-auto pr-2 custom-scrollbar">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 overflow-y-auto pr-2 custom-scrollbar">
               {OFFICE_ROLES.map(role => (
                 <button
                   key={role.id}
                   onClick={() => handleSelectRole(role.id)}
-                  className="flex flex-col items-center p-4 md:p-6 border-2 border-gray-100 rounded-xl hover:border-[#217346] hover:bg-green-50 transition-all group text-center"
+                  className="flex flex-col items-center p-3 md:p-4 border-2 border-gray-100 rounded-xl hover:border-[#217346] hover:bg-green-50 transition-all group text-center"
                 >
                   <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-100 rounded-full flex items-center justify-center mb-2 md:mb-4 group-hover:bg-[#217346] group-hover:text-white transition-colors">
                     {getRoleIcon(role.id)}
                   </div>
                   <h3 className="font-black text-sm md:text-base text-gray-800 mb-1">{role.name}</h3>
-                  <p className="text-[9px] md:text-[10px] text-gray-400 mb-2 md:mb-3">{role.description}</p>
-                  <div className="bg-white border border-gray-200 rounded-lg p-2 w-full">
+                  <p className="text-[9px] md:text-[10px] text-gray-400 mb-2 md:mb-3 leading-tight">{role.description}</p>
+                  <div className="bg-white border border-gray-200 rounded-lg p-2 w-full mt-auto">
                     <p className="text-[8px] md:text-[9px] font-bold text-[#217346] leading-tight">{role.skill}</p>
                   </div>
                 </button>
@@ -149,85 +155,98 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
         </div>
       )}
       {/* Main Board Area */}
-      <div className="flex-1 p-2 md:p-4 overflow-auto flex items-center justify-center relative min-h-0">
-        <div className="grid grid-cols-11 grid-rows-11 gap-px bg-[#d1d1d1] border-2 border-[#217346] shadow-2xl flex-shrink-0" style={{ width: 'min(85vh, 95vw)', height: 'min(85vh, 95vw)' }}>
+      <div className="flex-1 p-2 md:p-8 overflow-auto flex items-center justify-center relative min-h-0 bg-[#f3f2f1]">
+        <div className="grid grid-cols-11 grid-rows-11 gap-0.5 md:gap-1 bg-[#d1d1d1] border-2 md:border-4 border-[#217346] shadow-2xl flex-shrink-0 rounded-lg md:rounded-xl p-0.5 md:p-1" style={{ width: 'min(95vw, 80vh)', height: 'min(95vw, 80vh)', minWidth: '350px', minHeight: '350px' }}>
           {/* Render Cells */}
           {OFFICE_LIFE_BOARD.map((cell, idx) => {
             const coords = getCellCoords(idx);
             const playersInCell = Object.entries(game.playerStates || {}).filter(([_, s]) => (s as any).position === idx);
             const cellData = game.cells?.[idx];
             const owner = cellData?.ownerId ? session.players?.[cellData.ownerId] : null;
+            const ownerState = cellData?.ownerId ? game.playerStates?.[cellData.ownerId] : null;
+            const ownerColor = ownerState?.teamId !== 'INDIVIDUAL' ? getTeamColor(ownerState?.teamId) : (cellData?.ownerId === currentUser.uid ? '#217346' : '#666');
 
             return (
               <div
                 key={idx}
-                className={`relative bg-white flex flex-col items-center justify-center p-1 border border-transparent transition-all
-                  ${myState?.position === idx ? 'ring-2 ring-inset ring-[#217346] bg-green-50' : ''}
-                  ${cell.type === 'START' ? 'bg-blue-50' : ''}
-                  ${cell.type === 'JAIL' ? 'bg-red-50' : ''}
-                  ${cell.type === 'REST' ? 'bg-yellow-50' : ''}
+                className={`relative bg-white flex flex-col items-center justify-center p-1 md:p-2 border border-gray-200 transition-all rounded-sm shadow-sm overflow-hidden
+                  ${myState?.position === idx ? 'ring-4 ring-inset ring-yellow-400 z-10' : ''}
+                  ${cell.type === 'START' ? 'bg-blue-100' : ''}
+                  ${cell.type === 'JAIL' ? 'bg-red-100' : ''}
+                  ${cell.type === 'REST' ? 'bg-yellow-100' : ''}
+                  ${cell.type === 'TAX' ? 'bg-orange-50' : ''}
+                  ${cell.type === 'CHANCE' ? 'bg-purple-50' : ''}
                 `}
                 style={{ gridRow: coords.r + 1, gridColumn: coords.c + 1 }}
               >
-                <span className="absolute top-0.5 left-0.5 text-[8px] text-gray-400">{idx}</span>
+                <span className="absolute top-0.5 left-1 text-[8px] md:text-[10px] text-gray-400 font-mono">{idx}</span>
                 
                 {owner && (
-                  <div className="absolute top-0 right-0 w-full h-1" style={{ backgroundColor: cellData.ownerId === currentUser.uid ? '#217346' : '#666' }} />
+                  <div className="absolute top-0 right-0 w-full h-1.5 opacity-80" style={{ backgroundColor: ownerColor }} />
                 )}
 
-                <div className="text-[8px] md:text-[10px] font-bold text-center leading-tight mb-1">
+                <div className="text-[7px] md:text-[12px] font-bold text-center leading-tight mb-0.5 md:mb-1 mt-1 md:mt-2 px-0.5 md:px-1 break-keep">
                   {cell.name}
                 </div>
 
                 {cell.type === 'PROJECT' && cellData && (
-                  <div className="flex gap-0.5 mb-1">
+                  <div className="flex gap-0.5 mb-0.5 md:mb-1 flex-wrap justify-center">
                     {[...Array(cellData.level)].map((_, i) => (
-                      <div key={i} className="w-1.5 h-1.5 bg-yellow-400 rounded-full border border-yellow-600" />
+                      <div key={i} className="w-1 h-1 md:w-2 md:h-2 bg-yellow-400 rounded-sm border border-yellow-600 shadow-sm" />
                     ))}
                   </div>
                 )}
 
                 {/* Players */}
-                <div className="flex flex-wrap justify-center gap-0.5">
-                  {playersInCell.map(([pid, _]) => (
-                    <div
-                      key={pid}
-                      className={`w-3 h-3 md:w-4 md:h-4 rounded-full border border-white shadow-sm flex items-center justify-center
-                        ${pid === currentUser.uid ? 'bg-[#217346] z-10 scale-110' : 'bg-gray-500'}
-                      `}
-                      title={session.players?.[pid]?.nickname}
-                    >
-                      {pid === currentUser.uid && <User size={10} className="text-white" />}
-                    </div>
-                  ))}
+                <div className="flex flex-wrap justify-center gap-0.5 md:gap-1 mt-auto pb-0.5 md:pb-1">
+                  {playersInCell.map(([pid, pState]) => {
+                    const isTeam = pState.teamId !== 'INDIVIDUAL';
+                    const playerColor = isTeam ? getTeamColor(pState.teamId) : (pid === currentUser.uid ? '#217346' : '#666');
+                    const nickname = session.players?.[pid]?.nickname || '';
+                    const initial = nickname.charAt(0).toUpperCase();
+                    
+                    return (
+                      <div
+                        key={pid}
+                        className={`w-3.5 h-3.5 md:w-6 md:h-6 rounded-full border-2 border-white shadow-md flex items-center justify-center font-black text-[8px] md:text-xs text-white
+                          ${pid === currentUser.uid ? 'z-20 scale-125 ring-2 ring-yellow-400 animate-pulse' : 'z-10'}
+                          ${isTeam ? 'shadow-lg' : ''}
+                        `}
+                        style={{ backgroundColor: playerColor }}
+                        title={nickname}
+                      >
+                        {initial}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
 
           {/* Center Area */}
-          <div className="col-start-2 col-end-11 row-start-2 row-end-11 bg-white/50 flex flex-col items-center justify-center p-2 md:p-8 text-center">
-            <div className="mb-2 md:mb-4 opacity-10">
-              <TrendingUp size={60} className="text-[#217346] md:w-[120px] md:h-[120px]" />
+          <div className="col-start-2 col-end-11 row-start-2 row-end-11 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-2 md:p-8 text-center rounded-lg m-0.5 md:m-1 shadow-inner border border-gray-200">
+            <div className="mb-1 md:mb-4 opacity-10">
+              <TrendingUp size={40} className="text-[#217346] md:w-[120px] md:h-[120px]" />
             </div>
-            <h1 className="text-xl md:text-4xl font-black text-[#217346] italic tracking-tighter mb-1 md:mb-2">OFFICE LIFE</h1>
-            <p className="text-[8px] md:text-sm font-bold text-gray-500 uppercase tracking-widest mb-4 md:mb-8">Promotion Battle v1.0</p>
+            <h1 className="text-xl md:text-5xl font-black text-[#217346] italic tracking-tighter mb-0.5 md:mb-2">OFFICE LIFE</h1>
+            <p className="text-[8px] md:text-sm font-bold text-gray-500 uppercase tracking-widest mb-2 md:mb-8">Promotion Battle v1.0</p>
             
-            <div className="flex gap-2 md:gap-4 items-center scale-75 md:scale-100">
+            <div className="flex gap-1 md:gap-4 items-center scale-75 md:scale-100">
               {game.lastDice && (
-                <div className="bg-white border-2 border-[#217346] rounded-lg p-4 shadow-xl animate-bounce">
-                  <div className="text-[10px] font-bold text-[#999] uppercase mb-1">Dice Result</div>
-                  <div className="text-5xl font-black text-[#217346]">{game.lastDice}</div>
+                <div className="bg-white border md:border-2 border-[#217346] rounded-lg p-2 md:p-4 shadow-xl animate-bounce min-w-[50px] md:min-w-[80px]">
+                  <div className="text-[7px] md:text-[10px] font-bold text-[#999] uppercase mb-0.5 md:mb-1">Dice Result</div>
+                  <div className="text-2xl md:text-6xl font-black text-[#217346]">{game.lastDice}</div>
                 </div>
               )}
 
               {game.lastChanceCard && (
-                <div className={`bg-white border-2 rounded-lg p-4 shadow-xl max-w-xs text-left animate-in fade-in zoom-in duration-300
+                <div className={`bg-white border md:border-2 rounded-lg p-2 md:p-4 shadow-xl max-w-[120px] md:max-w-xs text-left animate-in fade-in zoom-in duration-300
                   ${game.lastChanceCard.type === 'GOOD' ? 'border-green-500' : game.lastChanceCard.type === 'BAD' ? 'border-red-500' : 'border-blue-500'}
                 `}>
-                  <div className="text-[8px] font-bold text-[#999] uppercase mb-1">법인카드 찬스</div>
-                  <div className="text-lg font-black text-gray-800 mb-1">{game.lastChanceCard.title}</div>
-                  <div className="text-xs text-gray-600 leading-tight">{game.lastChanceCard.message}</div>
+                  <div className="text-[7px] md:text-[10px] font-bold text-[#999] uppercase mb-0.5 md:mb-1">법인카드 찬스</div>
+                  <div className="text-[10px] md:text-lg font-black text-gray-800 mb-0.5 md:mb-1 truncate">{game.lastChanceCard.title}</div>
+                  <div className="text-[8px] md:text-xs text-gray-600 leading-tight line-clamp-2 md:line-clamp-none">{game.lastChanceCard.message}</div>
                 </div>
               )}
             </div>
@@ -359,21 +378,36 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
               <span className="text-[10px] font-bold uppercase">진행 순서</span>
             </div>
             <div className="space-y-2">
-              {game.turnOrder?.map((pid, idx) => (
-                <div key={pid} className={`flex items-center justify-between p-2 rounded text-[10px] ${idx === game.currentTurnIndex ? 'bg-[#217346] text-white font-bold' : 'bg-white text-gray-600'}`}>
-                  <div className="flex items-center gap-2">
-                    <span className="opacity-50">{idx + 1}.</span>
-                    <span>{session.players?.[pid]?.nickname}</span>
+              {game.turnOrder?.map((pid, idx) => {
+                const pState = game.playerStates?.[pid];
+                const playerColor = pState?.teamId !== 'INDIVIDUAL' ? getTeamColor(pState?.teamId) : (idx === game.currentTurnIndex ? '#217346' : '#666');
+                const isCurrent = idx === game.currentTurnIndex;
+                
+                return (
+                  <div 
+                    key={pid} 
+                    className={`flex items-center justify-between p-2 rounded text-[10px] transition-all`}
+                    style={{ 
+                      backgroundColor: isCurrent ? playerColor : 'white',
+                      color: isCurrent ? 'white' : '#666',
+                      borderLeft: !isCurrent ? `3px solid ${playerColor}` : 'none',
+                      fontWeight: isCurrent ? 'bold' : 'normal'
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="opacity-50">{idx + 1}.</span>
+                      <span>{session.players?.[pid]?.nickname}</span>
+                    </div>
+                    {isCurrent && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
                   </div>
-                  {idx === game.currentTurnIndex && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
 
         {/* Controls */}
-        <div className="p-4 bg-[#f8f9fa] border-t border-[#d1d1d1] space-y-3">
+        <div className="p-4 bg-[#f8f9fa] border-t border-[#d1d1d1] space-y-3 flex-shrink-0">
           {isMyTurn ? (
             <>
               {(!game.waitingForAction || game.waitingForAction === 'NONE') ? (
@@ -385,7 +419,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
                   <span className="text-sm font-black">주사위 굴리기</span>
                 </button>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-[30vh] overflow-y-auto custom-scrollbar pr-1">
                   {game.waitingForAction === 'BUY_PROJECT' && (
                     <button
                       onClick={handleBuyProject}
@@ -426,14 +460,14 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
                         <Award className="mx-auto text-yellow-600 mb-1" size={20} />
                         <h4 className="text-xs md:text-sm font-black text-yellow-800">승진 기회 포착!</h4>
                         <p className="text-[9px] md:text-[10px] text-yellow-700">
-                          {OFFICE_RANKS[myState.rankIndex + 1]?.name}으로 승진하시겠습니까?<br/>
-                          (비용: {OFFICE_RANKS[myState.rankIndex + 1]?.promotionCost}만원)
+                          {OFFICE_RANKS[(myState.rankIndex || 0) + 1]?.name}으로 승진하시겠습니까?<br/>
+                          (비용: {OFFICE_RANKS[(myState.rankIndex || 0) + 1]?.promotionCost}만원)
                         </p>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           onClick={() => handlePromotionTest(true)}
-                          disabled={myState.assets < (OFFICE_RANKS[myState.rankIndex + 1]?.promotionCost || 0)}
+                          disabled={(myState.assets || 0) < (OFFICE_RANKS[(myState.rankIndex || 0) + 1]?.promotionCost || 0)}
                           className="bg-yellow-500 hover:bg-yellow-600 text-white py-1.5 md:py-2 rounded font-bold text-[9px] md:text-[10px] shadow-sm disabled:opacity-50"
                         >
                           승진 도전
