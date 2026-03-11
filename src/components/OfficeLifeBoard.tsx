@@ -334,8 +334,8 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
         </div>
       )}
       {/* Main Board Area */}
-      <div className="flex-1 p-2 md:p-8 overflow-auto flex items-center justify-center relative min-h-0 bg-[#f3f2f1]">
-        <div className="grid grid-cols-11 grid-rows-11 gap-0.5 md:gap-1 bg-[#d1d1d1] border-2 md:border-4 border-[#217346] shadow-2xl flex-shrink-0 rounded-lg md:rounded-xl p-0.5 md:p-1" style={{ width: 'min(95vw, 80vh)', height: 'min(95vw, 80vh)', minWidth: '350px', minHeight: '350px' }}>
+      <div className="flex-1 p-2 md:p-8 overflow-auto flex relative min-h-0 bg-[#f3f2f1]" style={{ containerType: 'size', justifyContent: 'safe center', alignItems: 'safe center' }}>
+        <div className="grid gap-0.5 md:gap-1 bg-[#d1d1d1] border-2 md:border-4 border-[#217346] shadow-2xl flex-shrink-0 rounded-lg md:rounded-xl p-0.5 md:p-1" style={{ width: 'min(100cqw, 100cqh, 80vh)', height: 'min(100cqw, 100cqh, 80vh)', minWidth: '350px', minHeight: '350px', gridTemplateColumns: 'repeat(11, minmax(0, 1fr))', gridTemplateRows: 'repeat(11, minmax(0, 1fr))' }}>
           {/* Render Cells */}
           {OFFICE_LIFE_BOARD.map((cell, idx) => {
             const coords = getCellCoords(idx);
