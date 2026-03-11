@@ -4,7 +4,7 @@ import { OFFICE_LIFE_BOARD, BoardCell } from '../data/officeLifeBoard';
 import { OFFICE_ITEMS } from '../data/officeItems';
 import { OFFICE_RANKS, OFFICE_ROLES } from '../data/officeRanks';
 import { sessionService } from '../services/sessionService';
-import { User, CreditCard, BarChart3, Play, CheckCircle2, AlertCircle, Users, Briefcase, TrendingUp, Coffee, RotateCcw, Search, ShieldCheck, ShoppingBag, Code, Handshake, Palette, LineChart, Award, ScrollText, X } from 'lucide-react';
+import { User, CreditCard, BarChart3, Play, CheckCircle2, AlertCircle, Users, Briefcase, TrendingUp, Coffee, RotateCcw, Search, ShieldCheck, ShoppingBag, Code, Handshake, Palette, LineChart, Award, ScrollText, X, Cpu } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -58,6 +58,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
   const myRole = OFFICE_ROLES.find(r => r.id === myState?.roleId);
   const myRank = OFFICE_RANKS[myState?.rankIndex || 0] || OFFICE_RANKS[0];
   const isMyTurn = game.turnOrder?.[game.currentTurnIndex] === currentUser.uid;
+  const isHost = session.hostId === currentUser?.uid;
 
   const getRoleIcon = (roleId?: string) => {
     switch (roleId) {
@@ -138,6 +139,79 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
   const handleEndTurn = () => {
     sessionService.endOfficeLifeTurn(session.id, currentUser.uid, session);
   };
+
+  // AI Logic
+  useEffect(() => {
+    if (!isHost || game.status !== 'PLAYING') return;
+
+    const currentPlayerId = game.turnOrder?.[game.currentTurnIndex];
+    if (!currentPlayerId) return;
+
+    const currentPlayer = session.players?.[currentPlayerId];
+    if (!currentPlayer?.isAI) return;
+
+    const aiState = game.playerStates?.[currentPlayerId];
+    if (!aiState) return;
+
+    const aiMove = async () => {
+      // Small delay for natural feel
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      if (game.waitingForAction === 'SELECT_ROLE') {
+        const randomRole = OFFICE_ROLES[Math.floor(Math.random() * OFFICE_ROLES.length)];
+        await sessionService.selectOfficeLifeRole(session.id, currentPlayerId, randomRole.id, session);
+      } else if (!game.waitingForAction || game.waitingForAction === 'NONE') {
+        // Jail handling
+        if (aiState.jailTurns > 0) {
+          if (aiState.assets >= 500) { // Jail fine is 500
+            await sessionService.payOfficeLifeJailFine(session.id, currentPlayerId, session);
+          } else {
+            await sessionService.rollOfficeLifeDice(session.id, currentPlayerId, session);
+          }
+        } else {
+          await sessionService.rollOfficeLifeDice(session.id, currentPlayerId, session);
+        }
+      } else if (game.waitingForAction === 'BUY_PROJECT') {
+        const cell = OFFICE_LIFE_BOARD[aiState.position];
+        if (cell.type === 'PROJECT') {
+          const cellData = game.cells?.[aiState.position];
+          const isUnowned = !cellData?.ownerId;
+          const isMine = cellData?.ownerId === currentPlayerId;
+          
+          if (isUnowned) {
+            if (aiState.assets >= (cell.price || 0)) {
+              await sessionService.buyOfficeLifeProject(session.id, currentPlayerId, session);
+            } else {
+              await sessionService.endOfficeLifeTurn(session.id, currentPlayerId, session);
+            }
+          } else if (isMine) {
+            if (cellData.level < 3 && aiState.assets >= (cell.price || 0)) {
+              await sessionService.buyOfficeLifeProject(session.id, currentPlayerId, session);
+            } else {
+              await sessionService.endOfficeLifeTurn(session.id, currentPlayerId, session);
+            }
+          } else {
+            await sessionService.endOfficeLifeTurn(session.id, currentPlayerId, session);
+          }
+        } else {
+          await sessionService.endOfficeLifeTurn(session.id, currentPlayerId, session);
+        }
+      } else if (game.waitingForAction === 'CHANCE_CARD') {
+        await sessionService.drawOfficeLifeChanceCard(session.id, currentPlayerId, session);
+      } else if (game.waitingForAction === 'PROMOTION_TEST') {
+        const nextRank = OFFICE_RANKS[(aiState.rankIndex || 0) + 1];
+        const cost = nextRank?.promotionCost || 0;
+        await sessionService.takeOfficeLifePromotionTest(session.id, currentPlayerId, aiState.assets >= cost, session);
+      } else if (game.waitingForAction === 'BUY_ITEM' || game.waitingForAction === 'END_TURN') {
+        await sessionService.endOfficeLifeTurn(session.id, currentPlayerId, session);
+      } else {
+        // Fallback
+        await sessionService.endOfficeLifeTurn(session.id, currentPlayerId, session);
+      }
+    };
+
+    aiMove();
+  }, [game.currentTurnIndex, game.waitingForAction, isHost, session.id, game.status]);
 
   return (
     <div className="flex flex-col lg:flex-row h-full bg-[#f3f2f1] font-sans text-[#323130] overflow-hidden relative">
@@ -621,7 +695,10 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
                   >
                     <div className="flex items-center gap-2">
                       <span className="opacity-50">{idx + 1}.</span>
-                      <span>{session.players?.[pid]?.nickname}</span>
+                      <div className="flex items-center gap-1">
+                        {session.players?.[pid]?.isAI && <Cpu size={10} className={isCurrent ? 'text-white' : 'text-[#217346]'} />}
+                        <span>{session.players?.[pid]?.nickname}</span>
+                      </div>
                     </div>
                     {isCurrent && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
                   </div>

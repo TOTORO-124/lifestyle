@@ -4,19 +4,25 @@ import { MysteryReportGameState } from "../types";
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 export const mysteryService = {
-  async generateMystery(): Promise<{ mystery: string; solution: string }> {
+  async generateMystery(): Promise<{ mystery: string; solution: string; difficulty: 'EASY' | 'MEDIUM' | 'HARD' }> {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: "바다거북 스프(수평적 사고 추리 게임) 문제를 하나 내줘. 오피스/직장 생활과 관련된 미스테리한 상황이면 좋겠어. '상황(문제)'과 '해답(전말)'을 각각 한국어로 작성해줘.",
+      contents: `
+        바다거북 스프(수평적 사고 추리 게임) 문제를 하나 내줘. 
+        주제는 일상, 공포, 판타지, SF, 범죄 등 아주 다양하게 선택해줘. (꼭 회사 관련일 필요 없음)
+        난이도는 'EASY'(상황이 단순함), 'MEDIUM'(적절한 추리가 필요함), 'HARD'(매우 기발한 발상이 필요함) 중 하나로 랜덤하게 정해줘.
+        '상황(mystery)', '해답(solution)', '난이도(difficulty)'를 각각 한국어로 작성해줘.
+      `,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             mystery: { type: Type.STRING, description: "기이하고 미스테리한 상황 설명" },
-            solution: { type: Type.STRING, description: "사건의 실제 전말과 해답" }
+            solution: { type: Type.STRING, description: "사건의 실제 전말과 해답" },
+            difficulty: { type: Type.STRING, enum: ["EASY", "MEDIUM", "HARD"], description: "난이도" }
           },
-          required: ["mystery", "solution"]
+          required: ["mystery", "solution", "difficulty"]
         }
       }
     });
@@ -27,7 +33,8 @@ export const mysteryService = {
       console.error("Failed to parse mystery response", e);
       return {
         mystery: "어느 날 아침, 김 대리는 자신의 책상 위에 놓인 차가운 커피를 보고 비명을 질렀습니다. 하지만 그 커피는 독이 든 것도 아니었고, 김 대리가 주문한 것도 아니었습니다. 왜 그랬을까요?",
-        solution: "김 대리는 전날 밤 늦게까지 야근을 하다가 책상에서 잠이 들었습니다. 아침에 눈을 떴을 때 놓여있던 차가운 커피는 그가 어젯밤 마시려다 잠들어서 식어버린 자신의 커피였습니다. 그는 자신이 회사에서 밤을 지새웠다는 사실에 절망하여 비명을 지른 것입니다."
+        solution: "김 대리는 전날 밤 늦게까지 야근을 하다가 책상에서 잠이 들었습니다. 아침에 눈을 떴을 때 놓여있던 차가운 커피는 그가 어젯밤 마시려다 잠들어서 식어버린 자신의 커피였습니다. 그는 자신이 회사에서 밤을 지새웠다는 사실에 절망하여 비명을 지른 것입니다.",
+        difficulty: 'EASY'
       };
     }
   },

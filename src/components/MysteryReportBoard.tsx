@@ -14,9 +14,11 @@ import {
   MessageSquare,
   Trophy,
   AlertCircle,
-  Loader2
+  Loader2,
+  Timer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import confetti from 'canvas-confetti';
 
 interface MysteryReportBoardProps {
   session: Session;
@@ -31,11 +33,29 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
   const game = session.mysteryReportGame as MysteryReportGameState;
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const turnOrder = game.turnOrder || [];
+  const currentTurnIndex = game.currentTurnIndex || 0;
+  const currentTurnPlayerId = turnOrder[currentTurnIndex];
+  const isMyTurn = currentTurnPlayerId === currentUser.uid;
+  const currentTurnPlayer = session.players[currentTurnPlayerId];
+  const isMultiplayer = turnOrder.length > 1;
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [game?.questions]);
+
+  useEffect(() => {
+    if (game?.status === 'SOLVED') {
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#217346', '#ffffff', '#fbbf24']
+      });
+    }
+  }, [game?.status]);
 
   // Handle AI response for new questions
   useEffect(() => {
@@ -55,14 +75,16 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
 
   const handleSubmitQuestion = async (customText?: string) => {
     const textToSubmit = typeof customText === 'string' ? customText : question;
-    if (!textToSubmit.trim() || isSubmitting) return;
+    if (!textToSubmit.trim() || isSubmitting || (isMultiplayer && !isMyTurn)) return;
     setIsSubmitting(true);
     try {
       await sessionService.submitMysteryQuestion(
         session.id, 
         currentUser.uid, 
         session.players[currentUser.uid]?.nickname || '익명', 
-        textToSubmit.trim()
+        textToSubmit.trim(),
+        currentTurnIndex,
+        turnOrder
       );
       if (typeof customText !== 'string') setQuestion('');
     } finally {
@@ -79,14 +101,16 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
   ];
 
   const handleRequestHint = async () => {
-    if (isSubmitting) return;
+    if (isSubmitting || (isMultiplayer && !isMyTurn)) return;
     setIsSubmitting(true);
     try {
       await sessionService.submitMysteryQuestion(
         session.id, 
         currentUser.uid, 
         session.players[currentUser.uid]?.nickname || '익명', 
-        "힌트를 주세요!"
+        "힌트를 주세요!",
+        currentTurnIndex,
+        turnOrder
       );
     } finally {
       setIsSubmitting(false);
@@ -141,6 +165,14 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
             <Search size={14} className="text-blue-600" />
             <span className="text-[10px] font-bold text-blue-700">분석 진행 중</span>
           </div>
+          {isMultiplayer && (
+            <div className={`px-3 py-1 rounded-full flex items-center gap-2 border ${isMyTurn ? 'bg-green-50 border-green-200 animate-pulse' : 'bg-gray-50 border-gray-200'}`}>
+              <Timer size={14} className={isMyTurn ? 'text-green-600' : 'text-gray-400'} />
+              <span className={`text-[10px] font-bold ${isMyTurn ? 'text-green-700' : 'text-gray-500'}`}>
+                {isMyTurn ? '내 차례입니다!' : `${currentTurnPlayer?.nickname || '대기 중'}의 차례`}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -157,10 +189,23 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
               <AlertCircle size={16} className="text-white" />
               <span className="text-[10px] font-black text-white uppercase">기이한_상황_보고</span>
             </div>
-            <div className="p-6">
+            <div className="p-6 flex flex-col items-center gap-4">
               <p className="text-lg md:text-xl font-bold text-gray-800 leading-relaxed text-center italic">
                 "{game.mystery}"
               </p>
+              
+              {game.difficulty && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase">난이도:</span>
+                  <div className={`px-3 py-0.5 rounded-full text-[10px] font-black uppercase shadow-sm ${
+                    game.difficulty === 'EASY' ? 'bg-green-100 text-green-700 border border-green-200' :
+                    game.difficulty === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                    'bg-red-100 text-red-700 border border-red-200'
+                  }`}>
+                    {game.difficulty === 'EASY' ? '하' : game.difficulty === 'MEDIUM' ? '중' : '상'}
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
 
@@ -250,7 +295,14 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
 
             {/* Input Area */}
             {game.status === 'PLAYING' && (
-              <div className="p-4 bg-[#f8f9fa] border-t border-[#d1d1d1] space-y-3">
+              <div className={`p-4 border-t border-[#d1d1d1] space-y-3 ${isMultiplayer && !isMyTurn ? 'bg-gray-100 opacity-70' : 'bg-[#f8f9fa]'}`}>
+                {isMultiplayer && !isMyTurn && (
+                  <div className="flex items-center justify-center gap-2 py-1 bg-gray-200 rounded-md mb-2">
+                    <Timer size={12} className="text-gray-500" />
+                    <span className="text-[10px] font-bold text-gray-600">{currentTurnPlayer?.nickname}님이 질문 중입니다...</span>
+                  </div>
+                )}
+                
                 {/* Quick Questions */}
                 <div className="flex flex-wrap gap-2 items-center">
                   <span className="text-[9px] font-black text-gray-400 uppercase mr-1">빠른_질문:</span>
@@ -258,7 +310,7 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
                     <button
                       key={idx}
                       onClick={() => handleSubmitQuestion(q)}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || (isMultiplayer && !isMyTurn)}
                       className="text-[9px] font-bold bg-white border border-gray-200 px-2 py-1 rounded-full hover:border-[#217346] hover:text-[#217346] transition-colors disabled:opacity-50"
                     >
                       {q}
@@ -266,7 +318,7 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
                   ))}
                   <button
                     onClick={handleRequestHint}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || (isMultiplayer && !isMyTurn)}
                     className="text-[9px] font-bold bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded-full hover:bg-yellow-100 transition-colors disabled:opacity-50 flex items-center gap-1"
                   >
                     <Lightbulb size={10} />
@@ -277,15 +329,16 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
                 <div className="flex gap-2">
                   <input 
                     type="text"
-                    placeholder="예/아니오로 대답할 수 있는 질문을 입력하세요..."
-                    className="flex-1 bg-white border border-[#d1d1d1] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#217346] shadow-inner"
+                    placeholder={isMultiplayer && !isMyTurn ? "다른 플레이어의 차례를 기다려주세요..." : "예/아니오로 대답할 수 있는 질문을 입력하세요..."}
+                    className="flex-1 bg-white border border-[#d1d1d1] rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#217346] shadow-inner disabled:bg-gray-50"
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSubmitQuestion()}
+                    disabled={isMultiplayer && !isMyTurn}
                   />
                   <button 
                     onClick={() => handleSubmitQuestion()}
-                    disabled={!question.trim() || isSubmitting}
+                    disabled={!question.trim() || isSubmitting || (isMultiplayer && !isMyTurn)}
                     className="bg-[#217346] text-white p-2 rounded-lg hover:bg-[#1a5a36] transition-colors disabled:opacity-50 shadow-md"
                   >
                     {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
@@ -349,6 +402,7 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
                   <div className="text-center">
                     <p className="text-[10px] font-bold text-green-600 uppercase mb-1">최초_해결자</p>
                     <p className="text-lg font-black text-gray-800">{session.players[game.winnerId!]?.nickname}</p>
+                    <p className="text-[9px] text-gray-400 mt-1">총 {Object.keys(game.questions || {}).length}번의 질의 끝에 해결!</p>
                   </div>
                   <div className="h-px bg-green-200" />
                   <div>
@@ -357,6 +411,37 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
                       {game.solution}
                     </p>
                   </div>
+
+                  {/* Host Actions */}
+                  {currentUser.uid === session.hostId && (
+                    <div className="flex flex-col gap-2 pt-4">
+                      <button
+                        onClick={async () => {
+                          if (isSubmitting) return;
+                          setIsSubmitting(true);
+                          try {
+                            const res = await mysteryService.generateMystery();
+                            await sessionService.startMysteryReport(session.id, res.mystery, res.solution, res.difficulty, session.players, session.turnOrder);
+                          } catch (err) {
+                            console.error(err);
+                          } finally {
+                            setIsSubmitting(false);
+                          }
+                        }}
+                        disabled={isSubmitting}
+                        className="w-full bg-green-600 text-white py-3 rounded-lg font-black text-sm hover:bg-green-700 transition-all shadow-md flex items-center justify-center gap-2"
+                      >
+                        {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                        다음_사건_조사하기
+                      </button>
+                      <button
+                        onClick={() => sessionService.resetSession(session.id, session.players)}
+                        className="w-full bg-white border border-gray-300 text-gray-600 py-2 rounded-lg font-bold text-xs hover:bg-gray-50 transition-all"
+                      >
+                        대기실로 돌아가기
+                      </button>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}

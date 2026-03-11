@@ -442,6 +442,8 @@ export const sessionService = {
       minesweeperGame: null,
       office2048Game: null,
       sudokuGame: null,
+      officeLifeGame: null,
+      mysteryReportGame: null,
     };
     
     Object.keys(players).forEach(pid => {
@@ -2435,14 +2437,43 @@ export const sessionService = {
     await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
   },
 
-  async startMysteryReport(sessionId: string, mystery: string, solution: string) {
+  async addAIPlayer(sessionId: string) {
     if (!db) return;
+    const aiId = `AI_${Math.random().toString(36).substr(2, 9)}`;
+    const aiNames = ['김대리(AI)', '이과장(AI)', '박부장(AI)', '최사원(AI)', '정주임(AI)', '강이사(AI)', '조상무(AI)'];
+    const nickname = aiNames[Math.floor(Math.random() * aiNames.length)];
+    
+    const aiPlayer: Player = {
+      id: aiId,
+      nickname,
+      isHost: false,
+      isAlive: true,
+      isReady: true,
+      isConnected: true,
+      lastActive: Date.now(),
+      isAI: true,
+    };
+    
+    await set(ref(db, `sessions/${sessionId}/players/${aiId}`), aiPlayer);
+  },
+
+  async startMysteryReport(sessionId: string, mystery: string, solution: string, difficulty: 'EASY' | 'MEDIUM' | 'HARD', players: Record<string, Player>, turnOrder?: string[]) {
+    if (!db) return;
+    
+    const activePlayers = Object.values(players).filter(p => !p.isSpectator);
+    const order = turnOrder && turnOrder.length > 0 
+      ? turnOrder 
+      : activePlayers.map(p => p.id).sort(() => Math.random() - 0.5);
+
     const mysteryReportGame: MysteryReportGameState = {
       mystery,
       solution,
+      difficulty,
       status: 'PLAYING',
       questions: [],
-      hints: []
+      hints: [],
+      turnOrder: order,
+      currentTurnIndex: 0
     };
     await update(ref(db, `sessions/${sessionId}`), {
       status: SessionStatus.PLAYING,
@@ -2451,7 +2482,7 @@ export const sessionService = {
     await this.addLog(sessionId, `미스테리 보고서 분석이 시작되었습니다. 상황을 파악하고 질문을 던지세요!`, 'success');
   },
 
-  async submitMysteryQuestion(sessionId: string, playerId: string, nickname: string, text: string) {
+  async submitMysteryQuestion(sessionId: string, playerId: string, nickname: string, text: string, currentTurnIndex: number, turnOrder: string[]) {
     if (!db) return;
     const questionRef = push(ref(db, `sessions/${sessionId}/mysteryReportGame/questions`));
     await set(questionRef, {
@@ -2460,6 +2491,12 @@ export const sessionService = {
       nickname,
       text,
       timestamp: Date.now()
+    });
+
+    // Advance turn
+    const nextTurnIndex = (currentTurnIndex + 1) % turnOrder.length;
+    await update(ref(db, `sessions/${sessionId}/mysteryReportGame`), {
+      currentTurnIndex: nextTurnIndex
     });
   },
 

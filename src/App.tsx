@@ -497,7 +497,7 @@ export default function App() {
       setLoading(true);
       try {
         const res = await mysteryService.generateMystery();
-        await sessionService.startMysteryReport(session.id, res.mystery, res.solution);
+        await sessionService.startMysteryReport(session.id, res.mystery, res.solution, res.difficulty, session.players, session.turnOrder);
       } catch (err) {
         console.error(err);
       } finally {
@@ -939,6 +939,7 @@ export default function App() {
                           <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
                           <td className={`excel-cell ${player.id === currentUser?.uid ? 'bg-[#e8f0fe] font-bold' : ''}`}>
                             <div className="flex items-center gap-2">
+                              {player.isAI && <Cpu size={10} className="text-[#217346]" />}
                               {player.nickname}
                               {player.isHost && <Shield size={10} className="text-[#217346]" />}
                             </div>
@@ -1128,6 +1129,14 @@ export default function App() {
                               </button>
                             </div>
                           </div>
+
+                          <button
+                            onClick={() => sessionService.addAIPlayer(session.id)}
+                            className="w-full office-btn py-2 flex items-center justify-center gap-2 text-xs font-bold"
+                          >
+                            <Cpu size={14} />
+                            <span>AI 동료 추가</span>
+                          </button>
 
                           {session.settings.officeLifeMode === 'TEAM' && (
                             <div className="p-3 bg-blue-50 rounded border border-blue-100">

@@ -206,6 +206,9 @@ export interface MysteryReportGameState {
   }[];
   hints: string[];
   winnerId?: string;
+  turnOrder?: string[];
+  currentTurnIndex?: number;
+  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
 }
 
 export interface LeaderboardEntry {
