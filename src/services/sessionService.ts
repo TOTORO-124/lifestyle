@@ -1,7 +1,7 @@
 import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
-import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState } from '../types';
+import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, MysteryReportGameState } from '../types';
 import { LIAR_TOPICS } from '../data/topics';
 import { DRAW_TOPICS } from '../data/drawTopics';
 import { OFFICE_LIFE_BOARD } from '../data/officeLifeBoard';
@@ -2433,5 +2433,50 @@ export const sessionService = {
     game.currentTurnIndex = ((game.currentTurnIndex || 0) + 1) % (turnOrder.length || 1);
     
     await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+  },
+
+  async startMysteryReport(sessionId: string, mystery: string, solution: string) {
+    if (!db) return;
+    const mysteryReportGame: MysteryReportGameState = {
+      mystery,
+      solution,
+      status: 'PLAYING',
+      questions: [],
+      hints: []
+    };
+    await update(ref(db, `sessions/${sessionId}`), {
+      status: SessionStatus.PLAYING,
+      mysteryReportGame
+    });
+    await this.addLog(sessionId, `미스테리 보고서 분석이 시작되었습니다. 상황을 파악하고 질문을 던지세요!`, 'success');
+  },
+
+  async submitMysteryQuestion(sessionId: string, playerId: string, nickname: string, text: string) {
+    if (!db) return;
+    const questionRef = push(ref(db, `sessions/${sessionId}/mysteryReportGame/questions`));
+    await set(questionRef, {
+      id: questionRef.key,
+      playerId,
+      nickname,
+      text,
+      timestamp: Date.now()
+    });
+  },
+
+  async answerMysteryQuestion(sessionId: string, questionId: string, answer: 'YES' | 'NO' | 'IRRELEVANT' | 'HINT', text: string) {
+    if (!db) return;
+    await update(ref(db, `sessions/${sessionId}/mysteryReportGame/questions/${questionId}`), {
+      answer,
+      hintText: answer === 'HINT' ? (text || '') : ''
+    });
+  },
+
+  async solveMystery(sessionId: string, winnerId: string) {
+    if (!db) return;
+    await update(ref(db, `sessions/${sessionId}/mysteryReportGame`), {
+      status: 'SOLVED',
+      winnerId
+    });
+    await this.addLog(sessionId, `사건의 전말이 밝혀졌습니다!`, 'success');
   }
 };

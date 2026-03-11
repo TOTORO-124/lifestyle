@@ -8,7 +8,9 @@ import { BINGO_TOPICS } from './data/bingoTopics';
 import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
 import { OfficeLifeBoard } from './components/OfficeLifeBoard';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid, Cpu, Briefcase } from 'lucide-react';
+import { MysteryReportBoard } from './components/MysteryReportBoard';
+import { mysteryService } from './services/mysteryService';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid, Cpu, Briefcase, Loader2 } from 'lucide-react';
 
 const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], title: string, sessionId?: string | null, gameType?: string }) => {
   const rankNames = ['사장', '부사장', '전무', '상무', '이사', '부장', '차장', '과장', '대리', '사원'];
@@ -467,7 +469,7 @@ export default function App() {
   };
 
   const handleStartGame = async () => {
-    if (!session) return;
+    if (!session || session.status !== SessionStatus.LOBBY) return;
     if (session.gameType === GameType.LIAR) {
       await sessionService.startLiarGame(session.id, session.players, session.settings, session.turnOrder);
     } else if (session.gameType === GameType.MAFIA) {
@@ -490,6 +492,17 @@ export default function App() {
       await sessionService.startSudokuGame(session.id, session.settings.sudokuDifficulty || 'EASY');
     } else if (session.gameType === GameType.OFFICE_LIFE) {
       await sessionService.startOfficeLifeGame(session.id, session.players, session.turnOrder, session.settings.officeLifeMode || 'INDIVIDUAL');
+    } else if (session.gameType === GameType.MYSTERY_REPORT) {
+      if (loading) return;
+      setLoading(true);
+      try {
+        const res = await mysteryService.generateMystery();
+        await sessionService.startMysteryReport(session.id, res.mystery, res.solution);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -573,7 +586,7 @@ export default function App() {
             <div className="bg-white p-1 rounded-sm">
               <Grid className="text-[#217346]" size={16} />
             </div>
-            <h1 className="text-sm font-bold tracking-tight">전사_명예의_전당_통합_보고서.xlsx</h1>
+            <h1 className="text-sm font-bold tracking-tight">프로젝트_시트.xlsx</h1>
           </div>
           <div className="flex items-center gap-4 text-[10px] opacity-90">
             <span className="hidden sm:inline">자동 저장: 켬</span>
@@ -704,11 +717,19 @@ export default function App() {
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.OFFICE_LIFE)} 
-                          className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          className="office-btn py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
                           disabled={loading}
                         >
                           <span className="font-bold">승진 대작전</span>
                           <span className="text-[9px] font-normal opacity-80">오피스 라이프 보드</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.MYSTERY_REPORT)} 
+                          className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">미스테리 보고서</span>
+                          <span className="text-[9px] font-normal opacity-80">AI 추리 게임</span>
                         </button>
                       </div>
                     </div>
@@ -741,7 +762,7 @@ export default function App() {
           ) : activeSheet === 'LEADERBOARD' ? (
             <div className="max-w-4xl w-full bg-white border border-[#d1d1d1] shadow-md rounded overflow-hidden">
               <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
-                전사_명예의_전당_통합_보고서 (글로벌)
+                프로젝트_시트 (글로벌)
               </div>
               <div className="p-6">
                 <p className="text-xs text-gray-500 mb-6 italic">* 전사 시트에서 기록된 실시간 순위입니다. (글로벌 통합)</p>
@@ -833,7 +854,8 @@ export default function App() {
                session.gameType === GameType.BINGO ? '오피스_빙고_매칭.xlsx' : 
                session.gameType === GameType.DRAW ? '오피스_캐치마인드.xlsx' :
                session.gameType === GameType.MINESWEEPER ? '데이터_오류_검수.xlsx' :
-               session.gameType === GameType.OFFICE_2048 ? '직급_승진_프로세스.xlsx' : '데이터_무결성_검증.xlsx'}
+               session.gameType === GameType.OFFICE_2048 ? '직급_승진_프로세스.xlsx' : 
+               session.gameType === GameType.MYSTERY_REPORT ? '미스테리_보고서_분석.xlsx' : '데이터_무결성_검증.xlsx'}
             </span>
             {isSpectator && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-normal">(관전 모드)</span>}
           </h1>
@@ -1331,8 +1353,19 @@ export default function App() {
                         <RefreshCw size={14} />
                         <span>참가자 순서 섞기</span>
                       </button>
-                      <button onClick={handleStartGame} className="office-btn-primary w-full py-2">
-                        세션_실행
+                      <button 
+                        onClick={handleStartGame} 
+                        disabled={loading}
+                        className="office-btn-primary w-full py-2 flex items-center justify-center gap-2"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="animate-spin" size={14} />
+                            <span>보고서 생성 중...</span>
+                          </>
+                        ) : (
+                          <span>세션_실행</span>
+                        )}
                       </button>
                     </div>
                   ) : (
@@ -1434,7 +1467,7 @@ export default function App() {
                         if (category === '랜덤') {
                           words = Array.from(new Set(BINGO_TOPICS.flatMap(t => t.words)));
                         } else {
-                          words = BINGO_TOPICS.find(t => t.category === category)?.words || [];
+                          words = Array.from(new Set(BINGO_TOPICS.find(t => t.category === category)?.words || []));
                         }
                         const shuffled = [...words].sort(() => 0.5 - Math.random());
                         const newBoard = Array(5).fill(null).map((_, r) => 
@@ -1484,7 +1517,7 @@ export default function App() {
                       <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-2 max-h-[300px] content-start pr-1">
                         {(session.bingoGame?.category === '랜덤' 
                           ? Array.from(new Set(BINGO_TOPICS.flatMap(t => t.words)))
-                          : BINGO_TOPICS.find(t => t.category === session.bingoGame?.category)?.words || []
+                          : Array.from(new Set(BINGO_TOPICS.find(t => t.category === session.bingoGame?.category)?.words || []))
                         ).map(word => (
                           <button
                             key={word}
@@ -1538,6 +1571,14 @@ export default function App() {
                     ) : (
                       <button 
                         onClick={() => {
+                          const flatBoard = bingoBoard.flat().filter(cell => cell.trim() !== '');
+                          const uniqueWords = new Set(flatBoard);
+                          
+                          if (flatBoard.length !== uniqueWords.size) {
+                            alert('중복된 단어가 있습니다. 모든 칸을 서로 다른 단어로 채워주세요.');
+                            return;
+                          }
+
                           const isComplete = bingoBoard.every(row => row.every(cell => cell.trim() !== ''));
                           if (!isComplete && !confirm('빈 칸이 있습니다. 그대로 제출하시겠습니까?')) return;
                           sessionService.submitBingoBoard(session.id, currentUser.uid, bingoBoard, Object.keys(session.players).length);
@@ -1776,6 +1817,36 @@ export default function App() {
                       <h3 className="text-[10px] font-bold text-[#999] uppercase tracking-wider">
                         {session.bingoGame?.boards?.[currentUser.uid] ? '나의 감사 시트' : `${session.players[session.bingoGame?.currentPlayerId || '']?.nickname || '플레이어'}의 시트 (관전)`}
                       </h3>
+
+                      {/* Current Turn Indicator */}
+                      <div className={`p-3 rounded-lg border flex items-center justify-between shadow-sm transition-all ${
+                        session.bingoGame?.currentPlayerId === currentUser.uid 
+                          ? 'bg-[#e8f0fe] border-[#217346] text-[#217346] ring-2 ring-[#217346]/20' 
+                          : 'bg-gray-50 border-gray-200 text-gray-600'
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <User size={16} className={session.bingoGame?.currentPlayerId === currentUser.uid ? 'text-[#217346]' : 'text-gray-400'} />
+                            {session.bingoGame?.currentPlayerId === currentUser.uid && (
+                              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                            )}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold opacity-70 uppercase leading-none mb-1">현재_결재권자</span>
+                            <span className="text-xs font-bold leading-none">
+                              {session.bingoGame?.currentPlayerId === currentUser.uid 
+                                ? '당신의 차례입니다! 단어를 선택하세요.' 
+                                : `${session.players[session.bingoGame?.currentPlayerId || '']?.nickname || '플레이어'}님의 차례입니다.`}
+                            </span>
+                          </div>
+                        </div>
+                        {session.bingoGame?.currentPlayerId === currentUser.uid && (
+                          <div className="text-[9px] font-black bg-[#217346] text-white px-2 py-1 rounded shadow-sm animate-bounce">
+                            결재 대기 중
+                          </div>
+                        )}
+                      </div>
+
                       <div className="relative shadow-xl rounded-lg overflow-hidden border border-[#d1d1d1]">
                         <div className="grid grid-cols-5 gap-1 bg-[#d1d1d1] p-1">
                           {(() => {
@@ -1993,6 +2064,8 @@ export default function App() {
               </div>
             ) : session.gameType === GameType.OFFICE_LIFE ? (
               <OfficeLifeBoard session={session} currentUser={currentUser} />
+            ) : session.gameType === GameType.MYSTERY_REPORT ? (
+              <MysteryReportBoard session={session} currentUser={currentUser} />
             ) : session.gameType === GameType.OFFICE_2048 ? (
               <div className="max-w-md mx-auto space-y-6">
                 <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
@@ -3164,7 +3237,7 @@ export default function App() {
           ) : activeSheet === 'LEADERBOARD' ? (
             <div className="bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden">
               <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
-                전사_명예의_전당_통합_보고서
+                프로젝트_시트
               </div>
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
