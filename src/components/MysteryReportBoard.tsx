@@ -53,17 +53,41 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
     }
   }, [game?.questions, currentUser.uid, session.id]);
 
-  const handleSubmitQuestion = async () => {
-    if (!question.trim() || isSubmitting) return;
+  const handleSubmitQuestion = async (customText?: string) => {
+    const textToSubmit = typeof customText === 'string' ? customText : question;
+    if (!textToSubmit.trim() || isSubmitting) return;
     setIsSubmitting(true);
     try {
       await sessionService.submitMysteryQuestion(
         session.id, 
         currentUser.uid, 
         session.players[currentUser.uid]?.nickname || '익명', 
-        question.trim()
+        textToSubmit.trim()
       );
-      setQuestion('');
+      if (typeof customText !== 'string') setQuestion('');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const quickQuestions = [
+    "사람이 죽었나요?",
+    "직장 상사와 관련 있나요?",
+    "돈과 관련 있나요?",
+    "초자연적인 현상인가요?",
+    "거짓말이 포함되어 있나요?"
+  ];
+
+  const handleRequestHint = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await sessionService.submitMysteryQuestion(
+        session.id, 
+        currentUser.uid, 
+        session.players[currentUser.uid]?.nickname || '익명', 
+        "힌트를 주세요!"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -101,6 +125,18 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
           </div>
         </div>
         <div className="flex items-center gap-4">
+          <div className="flex flex-col items-end">
+            <span className="text-[9px] font-black text-gray-400 uppercase">분석_진척도</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-700">{Object.keys(game.questions || {}).length} / 20</span>
+              <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+                <div 
+                  className="h-full bg-[#217346] transition-all duration-500" 
+                  style={{ width: `${Math.min((Object.keys(game.questions || {}).length / 20) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
           <div className="bg-blue-50 border border-blue-200 px-3 py-1 rounded-full flex items-center gap-2">
             <Search size={14} className="text-blue-600" />
             <span className="text-[10px] font-bold text-blue-700">분석 진행 중</span>
@@ -214,7 +250,30 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
 
             {/* Input Area */}
             {game.status === 'PLAYING' && (
-              <div className="p-4 bg-[#f8f9fa] border-t border-[#d1d1d1]">
+              <div className="p-4 bg-[#f8f9fa] border-t border-[#d1d1d1] space-y-3">
+                {/* Quick Questions */}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span className="text-[9px] font-black text-gray-400 uppercase mr-1">빠른_질문:</span>
+                  {quickQuestions.map((q, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSubmitQuestion(q)}
+                      disabled={isSubmitting}
+                      className="text-[9px] font-bold bg-white border border-gray-200 px-2 py-1 rounded-full hover:border-[#217346] hover:text-[#217346] transition-colors disabled:opacity-50"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                  <button
+                    onClick={handleRequestHint}
+                    disabled={isSubmitting}
+                    className="text-[9px] font-bold bg-yellow-50 border border-yellow-200 text-yellow-700 px-2 py-1 rounded-full hover:bg-yellow-100 transition-colors disabled:opacity-50 flex items-center gap-1"
+                  >
+                    <Lightbulb size={10} />
+                    힌트_요청
+                  </button>
+                </div>
+
                 <div className="flex gap-2">
                   <input 
                     type="text"
@@ -225,7 +284,7 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
                     onKeyDown={(e) => e.key === 'Enter' && handleSubmitQuestion()}
                   />
                   <button 
-                    onClick={handleSubmitQuestion}
+                    onClick={() => handleSubmitQuestion()}
                     disabled={!question.trim() || isSubmitting}
                     className="bg-[#217346] text-white p-2 rounded-lg hover:bg-[#1a5a36] transition-colors disabled:opacity-50 shadow-md"
                   >

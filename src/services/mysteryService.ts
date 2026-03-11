@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { MysteryReportGameState } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
@@ -33,31 +33,35 @@ export const mysteryService = {
   },
 
   async answerQuestion(mystery: string, solution: string, question: string, history: any[]): Promise<{ answer: 'YES' | 'NO' | 'IRRELEVANT' | 'HINT'; text: string }> {
-    const historyText = history.map(h => `질문: ${h.text} -> 답변: ${h.answer}`).join('\n');
+    const historyText = history.map(h => `Q: ${h.text} -> A: ${h.answer}`).join('\n');
     
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `
-        당신은 '바다거북 스프' 게임의 출제자입니다. 
+        당신은 '바다거북 스프' 추리 게임의 출제자입니다. 
         상황: ${mystery}
         해답: ${solution}
         
-        이전 질문 기록:
+        이전 기록:
         ${historyText}
         
-        새로운 질문: ${question}
+        질문: ${question}
         
-        이 질문에 대해 '예', '아니오', '관련 없음' 중 하나로 대답하세요. 
-        만약 질문이 정답에 매우 가깝거나 플레이어가 너무 헤매고 있다면 '힌트'를 줄 수도 있습니다.
-        답변은 반드시 지정된 형식(JSON)으로 하세요.
+        'YES', 'NO', 'IRRELEVANT', 'HINT' 중 하나로 답하세요. 
+        - 정답에 가까우면 'YES'
+        - 틀리면 'NO'
+        - 상관없으면 'IRRELEVANT'
+        - 플레이어가 너무 헤매거나 핵심에 근접하면 'HINT'와 함께 짧은 단서를 주세요.
+        답변은 JSON 형식으로 하세요.
       `,
       config: {
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             answer: { type: Type.STRING, enum: ["YES", "NO", "IRRELEVANT", "HINT"] },
-            text: { type: Type.STRING, description: "답변에 대한 짧은 부연 설명 (힌트일 경우 힌트 내용)" }
+            text: { type: Type.STRING, description: "답변 부연 설명 (힌트일 경우 내용)" }
           },
           required: ["answer", "text"]
         }
