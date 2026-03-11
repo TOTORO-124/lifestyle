@@ -187,8 +187,7 @@ export interface OfficeLifeGameState {
     message: string;
     type: 'GOOD' | 'BAD' | 'NEUTRAL';
   };
-  waitingForAction?: 'SELECT_ROLE' | 'BUY_PROJECT' | 'CHANCE_CARD' | 'BUY_ITEM' | 'PROMOTION_TEST' | 'NONE';
-  logs?: { message: string; timestamp: number }[];
+  waitingForAction?: 'SELECT_ROLE' | 'BUY_PROJECT' | 'CHANCE_CARD' | 'BUY_ITEM' | 'PROMOTION_TEST' | 'END_TURN' | 'NONE';
 }
 
 export interface LeaderboardEntry {

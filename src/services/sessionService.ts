@@ -2046,12 +2046,6 @@ export const sessionService = {
   },
 
   // --- Office Life ---
-  addOfficeLifeLog(game: OfficeLifeGameState, message: string) {
-    if (!game.logs) game.logs = [];
-    game.logs.unshift({ message, timestamp: Date.now() });
-    if (game.logs.length > 50) game.logs.pop(); // Keep last 50 logs
-  },
-
   async startOfficeLifeGame(sessionId: string, players: Record<string, Player>, turnOrder?: string[], mode: 'INDIVIDUAL' | 'TEAM' = 'INDIVIDUAL') {
     if (!db) return;
     
@@ -2184,7 +2178,7 @@ export const sessionService = {
     }
 
     if (game.waitingForAction === 'NONE' || !game.waitingForAction) {
-      // No action needed
+      game.waitingForAction = 'END_TURN';
     }
     
     await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
@@ -2224,7 +2218,7 @@ export const sessionService = {
       level: (cellData.level || 0) + 1
     };
     
-    game.waitingForAction = 'NONE';
+    game.waitingForAction = 'END_TURN';
     await this.addLog(sessionId, `'${cell.name}' 프로젝트를 ${game.cells[cellPos].level}단계로 승인했습니다.`, 'success');
     
     // Check if promotion test is needed after cell action
@@ -2271,7 +2265,7 @@ export const sessionService = {
       type: card.type
     };
     
-    game.waitingForAction = 'NONE';
+    game.waitingForAction = 'END_TURN';
     
     await this.addLog(sessionId, `[법인카드 찬스] ${card.title}: ${card.message} (${diff > 0 ? '+' : ''}${diff}만원)`, card.type === 'GOOD' ? 'success' : card.type === 'BAD' ? 'warning' : 'info');
     
@@ -2408,7 +2402,7 @@ export const sessionService = {
       await this.addLog(sessionId, `승진 기회를 다음으로 미뤘습니다.`, 'info');
     }
 
-    game.waitingForAction = 'NONE';
+    game.waitingForAction = 'END_TURN';
     await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
   },
 

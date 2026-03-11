@@ -18,28 +18,37 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
   const [rollingDiceNum, setRollingDiceNum] = useState(1);
   const [selectedCellIdx, setSelectedCellIdx] = useState<number | null>(null);
   const [toast, setToast] = useState<{ message: string, type: string } | null>(null);
+  const [lastToastTime, setLastToastTime] = useState<number>(0);
 
   const game = session.officeLifeGame;
   
   // Toast effect based on logs
   useEffect(() => {
-    if (game?.logs && game.logs.length > 0) {
-      const latestLog = game.logs[0];
-      // Only show toast for important events (success, warning, error)
-      // We don't have log type in the type definition, but we can guess from keywords
-      const isImportant = latestLog.message.includes('승진') || 
-                          latestLog.message.includes('감사팀') || 
-                          latestLog.message.includes('파산') || 
-                          latestLog.message.includes('찬스') ||
-                          latestLog.message.includes('승인');
-      
-      if (isImportant) {
-        setToast({ message: latestLog.message, type: latestLog.message.includes('감사팀') || latestLog.message.includes('파산') ? 'error' : 'success' });
-        const timer = setTimeout(() => setToast(null), 3000);
-        return () => clearTimeout(timer);
+    if (session.logs) {
+      const logsArray = Object.values(session.logs).sort((a, b) => b.timestamp - a.timestamp);
+      if (logsArray.length > 0) {
+        const latestLog = logsArray[0];
+        
+        // Prevent duplicate toasts for the same log
+        if (latestLog.timestamp > lastToastTime) {
+          setLastToastTime(latestLog.timestamp);
+          
+          // Only show toast for important events (success, warning, error)
+          const isImportant = latestLog.content.includes('승진') || 
+                              latestLog.content.includes('감사팀') || 
+                              latestLog.content.includes('파산') || 
+                              latestLog.content.includes('찬스') ||
+                              latestLog.content.includes('승인');
+          
+          if (isImportant) {
+            setToast({ message: latestLog.content, type: latestLog.content.includes('감사팀') || latestLog.content.includes('파산') ? 'error' : 'success' });
+            const timer = setTimeout(() => setToast(null), 3000);
+            return () => clearTimeout(timer);
+          }
+        }
       }
     }
-  }, [game?.logs]);
+  }, [session.logs, lastToastTime]);
 
   if (!game) return null;
 
@@ -587,13 +596,18 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
               <span className="text-[10px] font-bold uppercase">게임 기록</span>
             </div>
             <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar pr-2">
-              {game.logs && game.logs.length > 0 ? (
-                game.logs.map((log, idx) => (
+              {session.logs && Object.keys(session.logs).length > 0 ? (
+                Object.values(session.logs)
+                  .sort((a, b) => b.timestamp - a.timestamp)
+                  .slice(0, 50)
+                  .map((log, idx) => (
                   <div key={idx} className="text-[10px] leading-tight border-b border-gray-50 pb-1 last:border-0 animate-in fade-in slide-in-from-top-1">
                     <span className="text-gray-400 text-[8px] mr-1">
                       {new Date(log.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
-                    <span className="text-gray-700">{log.message}</span>
+                    <span className={`text-gray-700 ${log.type === 'success' ? 'text-green-600 font-bold' : log.type === 'warning' ? 'text-orange-600 font-bold' : log.type === 'error' ? 'text-red-600 font-bold' : ''}`}>
+                      {log.content}
+                    </span>
                   </div>
                 ))
               ) : (
@@ -682,7 +696,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
                   )}
                   <button
                     onClick={handleEndTurn}
-                    className="w-full office-btn py-3 text-xs font-bold shadow-sm animate-pulse ring-2 ring-blue-400"
+                    className={`w-full office-btn py-3 text-xs font-bold shadow-sm ${game.waitingForAction === 'END_TURN' || game.waitingForAction === 'BUY_ITEM' ? 'animate-pulse ring-2 ring-blue-400' : ''}`}
                   >
                     업무 종료 (턴 넘기기)
                   </button>
