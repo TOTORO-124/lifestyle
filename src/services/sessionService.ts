@@ -2046,6 +2046,12 @@ export const sessionService = {
   },
 
   // --- Office Life ---
+  addOfficeLifeLog(game: OfficeLifeGameState, message: string) {
+    if (!game.logs) game.logs = [];
+    game.logs.unshift({ message, timestamp: Date.now() });
+    if (game.logs.length > 50) game.logs.pop(); // Keep last 50 logs
+  },
+
   async startOfficeLifeGame(sessionId: string, players: Record<string, Player>, turnOrder?: string[], mode: 'INDIVIDUAL' | 'TEAM' = 'INDIVIDUAL') {
     if (!db) return;
     

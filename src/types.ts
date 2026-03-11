@@ -188,6 +188,7 @@ export interface OfficeLifeGameState {
     type: 'GOOD' | 'BAD' | 'NEUTRAL';
   };
   waitingForAction?: 'SELECT_ROLE' | 'BUY_PROJECT' | 'CHANCE_CARD' | 'BUY_ITEM' | 'PROMOTION_TEST' | 'NONE';
+  logs?: { message: string; timestamp: number }[];
 }
 
 export interface LeaderboardEntry {

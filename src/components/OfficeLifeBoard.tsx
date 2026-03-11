@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Session, Player, OfficeLifeGameState } from '../types';
 import { OFFICE_LIFE_BOARD, BoardCell } from '../data/officeLifeBoard';
 import { OFFICE_ITEMS } from '../data/officeItems';
 import { OFFICE_RANKS, OFFICE_ROLES } from '../data/officeRanks';
 import { sessionService } from '../services/sessionService';
-import { User, CreditCard, BarChart3, Play, CheckCircle2, AlertCircle, Users, Briefcase, TrendingUp, Coffee, RotateCcw, Search, ShieldCheck, ShoppingBag, Code, Handshake, Palette, LineChart, Award } from 'lucide-react';
+import { User, CreditCard, BarChart3, Play, CheckCircle2, AlertCircle, Users, Briefcase, TrendingUp, Coffee, RotateCcw, Search, ShieldCheck, ShoppingBag, Code, Handshake, Palette, LineChart, Award, ScrollText, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface Props {
   session: Session;
@@ -13,7 +14,33 @@ interface Props {
 }
 
 export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
+  const [isRolling, setIsRolling] = useState(false);
+  const [rollingDiceNum, setRollingDiceNum] = useState(1);
+  const [selectedCellIdx, setSelectedCellIdx] = useState<number | null>(null);
+  const [toast, setToast] = useState<{ message: string, type: string } | null>(null);
+
   const game = session.officeLifeGame;
+  
+  // Toast effect based on logs
+  useEffect(() => {
+    if (game?.logs && game.logs.length > 0) {
+      const latestLog = game.logs[0];
+      // Only show toast for important events (success, warning, error)
+      // We don't have log type in the type definition, but we can guess from keywords
+      const isImportant = latestLog.message.includes('승진') || 
+                          latestLog.message.includes('감사팀') || 
+                          latestLog.message.includes('파산') || 
+                          latestLog.message.includes('찬스') ||
+                          latestLog.message.includes('승인');
+      
+      if (isImportant) {
+        setToast({ message: latestLog.message, type: latestLog.message.includes('감사팀') || latestLog.message.includes('파산') ? 'error' : 'success' });
+        const timer = setTimeout(() => setToast(null), 3000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [game?.logs]);
+
   if (!game) return null;
 
   const me = session.players?.[currentUser.uid];
@@ -54,8 +81,19 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
   }));
 
   const handleRollDice = () => {
-    if (isMyTurn) {
-      sessionService.rollOfficeLifeDice(session.id, currentUser.uid, session);
+    if (isMyTurn && !isRolling) {
+      setIsRolling(true);
+      // Fake rolling animation
+      let rollCount = 0;
+      const rollInterval = setInterval(() => {
+        setRollingDiceNum(Math.floor(Math.random() * 6) + 1);
+        rollCount++;
+        if (rollCount > 10) {
+          clearInterval(rollInterval);
+          setIsRolling(false);
+          sessionService.rollOfficeLifeDice(session.id, currentUser.uid, session);
+        }
+      }, 100);
     }
   };
 
@@ -93,6 +131,138 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
 
   return (
     <div className="flex flex-col lg:flex-row h-full bg-[#f3f2f1] font-sans text-[#323130] overflow-hidden relative">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className={`fixed top-10 left-1/2 -translate-x-1/2 z-[300] px-6 py-3 rounded-full shadow-2xl font-bold text-sm md:text-base flex items-center gap-2 border-2
+              ${toast.type === 'error' ? 'bg-red-100 text-red-800 border-red-500' : 'bg-green-100 text-green-800 border-green-500'}
+            `}
+          >
+            {toast.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
+            {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Cell Detail Popup */}
+      <AnimatePresence>
+        {selectedCellIdx !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-[250] flex items-center justify-center p-4"
+            onClick={() => setSelectedCellIdx(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <button 
+                onClick={() => setSelectedCellIdx(null)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+              
+              {(() => {
+                const cell = OFFICE_LIFE_BOARD[selectedCellIdx];
+                const cellData = game.cells?.[selectedCellIdx];
+                const owner = cellData?.ownerId ? session.players?.[cellData.ownerId] : null;
+                const ownerState = cellData?.ownerId ? game.playerStates?.[cellData.ownerId] : null;
+                const ownerColor = ownerState?.teamId !== 'INDIVIDUAL' ? getTeamColor(ownerState?.teamId) : '#217346';
+                
+                return (
+                  <>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl
+                        ${cell.type === 'START' ? 'bg-blue-100' : ''}
+                        ${cell.type === 'JAIL' ? 'bg-red-100' : ''}
+                        ${cell.type === 'REST' ? 'bg-yellow-100' : ''}
+                        ${cell.type === 'TAX' ? 'bg-orange-100' : ''}
+                        ${cell.type === 'CHANCE' ? 'bg-purple-100' : ''}
+                        ${cell.type === 'PROJECT' ? 'bg-gray-100' : ''}
+                      `}>
+                        {cell.type === 'START' && '🏢'}
+                        {cell.type === 'JAIL' && '🚨'}
+                        {cell.type === 'REST' && '☕'}
+                        {cell.type === 'TAX' && '💸'}
+                        {cell.type === 'CHANCE' && '💳'}
+                        {cell.type === 'PROJECT' && '📁'}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black text-gray-800">{cell.name}</h3>
+                        <p className="text-xs text-gray-500 font-bold">{cell.type} 칸</p>
+                      </div>
+                    </div>
+
+                    {cell.type === 'PROJECT' && (
+                      <div className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-bold text-gray-600">소유자</span>
+                          {owner ? (
+                            <span className="text-sm font-black px-2 py-1 rounded text-white" style={{ backgroundColor: ownerColor }}>
+                              {owner.nickname}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400 italic">없음</span>
+                          )}
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-bold text-gray-600">프로젝트 레벨</span>
+                          <div className="flex gap-1">
+                            {[1, 2, 3].map(level => (
+                              <div key={level} className={`w-4 h-4 rounded-sm border ${
+                                (cellData?.level || 0) >= level 
+                                  ? 'bg-yellow-400 border-yellow-600' 
+                                  : 'bg-gray-200 border-gray-300'
+                              }`} />
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-gray-200">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs text-gray-500">기본 협업 비용 (통행료)</span>
+                            <span className="text-sm font-bold text-gray-800">{cell.rent?.[(cellData?.level || 1) - 1] || 0}만원</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-500">다음 레벨 승인 비용</span>
+                            <span className="text-sm font-bold text-blue-600">
+                              {cellData?.level === 3 ? '최대 레벨' : `${cell.cost?.[cellData?.level || 0] || 0}만원`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {cell.type === 'TAX' && (
+                      <p className="text-sm text-gray-600 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        도착 시 보유 자산의 10%를 세금으로 납부합니다.
+                      </p>
+                    )}
+                    
+                    {cell.type === 'JAIL' && (
+                      <p className="text-sm text-gray-600 p-3 bg-red-50 rounded-lg border border-red-200">
+                        도착 시 3턴 동안 경위서를 작성해야 합니다. (벌금 50만원으로 즉시 탈출 가능)
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Winner Overlay */}
       {game.status === 'FINISHED' && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
@@ -169,7 +339,8 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
             return (
               <div
                 key={idx}
-                className={`relative bg-white flex flex-col items-center justify-center p-1 md:p-2 border border-gray-200 transition-all rounded-sm shadow-sm overflow-hidden
+                onClick={() => setSelectedCellIdx(idx)}
+                className={`relative bg-white flex flex-col items-center justify-center p-1 md:p-2 border border-gray-200 transition-all rounded-sm shadow-sm overflow-hidden cursor-pointer hover:bg-gray-50
                   ${myState?.position === idx ? 'ring-4 ring-inset ring-yellow-400 z-10' : ''}
                   ${cell.type === 'START' ? 'bg-blue-100' : ''}
                   ${cell.type === 'JAIL' ? 'bg-red-100' : ''}
@@ -206,7 +377,9 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
                     const initial = nickname.charAt(0).toUpperCase();
                     
                     return (
-                      <div
+                      <motion.div
+                        layoutId={`player-${pid}`}
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
                         key={pid}
                         className={`w-3.5 h-3.5 md:w-6 md:h-6 rounded-full border-2 border-white shadow-md flex items-center justify-center font-black text-[8px] md:text-xs text-white
                           ${pid === currentUser.uid ? 'z-20 scale-125 ring-2 ring-yellow-400 animate-pulse' : 'z-10'}
@@ -216,7 +389,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
                         title={nickname}
                       >
                         {initial}
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
@@ -233,10 +406,12 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
             <p className="text-[8px] md:text-sm font-bold text-gray-500 uppercase tracking-widest mb-2 md:mb-8">Promotion Battle v1.0</p>
             
             <div className="flex gap-1 md:gap-4 items-center scale-75 md:scale-100">
-              {game.lastDice && (
-                <div className="bg-white border md:border-2 border-[#217346] rounded-lg p-2 md:p-4 shadow-xl animate-bounce min-w-[50px] md:min-w-[80px]">
+              {(game.lastDice || isRolling) && (
+                <div className="bg-white border md:border-2 border-[#217346] rounded-lg p-2 md:p-4 shadow-xl min-w-[50px] md:min-w-[80px]">
                   <div className="text-[7px] md:text-[10px] font-bold text-[#999] uppercase mb-0.5 md:mb-1">Dice Result</div>
-                  <div className="text-2xl md:text-6xl font-black text-[#217346]">{game.lastDice}</div>
+                  <div className={`text-2xl md:text-6xl font-black text-[#217346] ${isRolling ? 'animate-bounce' : ''}`}>
+                    {isRolling ? rollingDiceNum : game.lastDice}
+                  </div>
                 </div>
               )}
 
@@ -404,6 +579,30 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
               })}
             </div>
           </div>
+
+          {/* Game Logs */}
+          <div className="bg-white border border-[#d1d1d1] rounded p-4 shadow-sm flex flex-col h-48">
+            <div className="flex items-center gap-2 mb-3 text-[#217346]">
+              <ScrollText size={14} />
+              <span className="text-[10px] font-bold uppercase">게임 기록</span>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar pr-2">
+              {game.logs && game.logs.length > 0 ? (
+                game.logs.map((log, idx) => (
+                  <div key={idx} className="text-[10px] leading-tight border-b border-gray-50 pb-1 last:border-0 animate-in fade-in slide-in-from-top-1">
+                    <span className="text-gray-400 text-[8px] mr-1">
+                      {new Date(log.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                    <span className="text-gray-700">{log.message}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-[10px] text-gray-400 italic text-center py-4">
+                  아직 기록이 없습니다.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Controls */}
@@ -483,7 +682,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
                   )}
                   <button
                     onClick={handleEndTurn}
-                    className="w-full office-btn py-3 text-xs font-bold shadow-sm"
+                    className="w-full office-btn py-3 text-xs font-bold shadow-sm animate-pulse ring-2 ring-blue-400"
                   >
                     업무 종료 (턴 넘기기)
                   </button>
