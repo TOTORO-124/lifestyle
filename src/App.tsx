@@ -889,8 +889,8 @@ export default function App() {
         </div>
       )}
 
-      <main className="flex-1 overflow-auto p-4 sm:p-6">
-        <div className="max-w-5xl mx-auto space-y-6">
+      <main className={`flex-1 min-h-0 relative ${session.gameType === GameType.OFFICE_LIFE && session.status !== SessionStatus.LOBBY ? 'p-0 overflow-hidden' : 'p-4 sm:p-6 overflow-auto'}`}>
+        <div className={`${session.gameType === GameType.OFFICE_LIFE && session.status !== SessionStatus.LOBBY ? 'absolute inset-0 flex flex-col' : 'max-w-5xl mx-auto space-y-6'}`}>
           {activeSheet === 'GAME' ? (
             <>
               {session.status === SessionStatus.LOBBY && (

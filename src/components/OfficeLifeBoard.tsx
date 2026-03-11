@@ -19,15 +19,16 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
   const [selectedCellIdx, setSelectedCellIdx] = useState<number | null>(null);
   const [toast, setToast] = useState<{ message: string, type: string } | null>(null);
   const [lastToastTime, setLastToastTime] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<'board' | 'dashboard'>('board');
 
   const game = session.officeLifeGame;
   
   // Toast effect based on logs
   useEffect(() => {
     if (session.logs) {
-      const logsArray = Object.values(session.logs).sort((a, b) => b.timestamp - a.timestamp);
+      const logsArray = Object.values(session.logs).sort((a: any, b: any) => b.timestamp - a.timestamp);
       if (logsArray.length > 0) {
-        const latestLog = logsArray[0];
+        const latestLog = logsArray[0] as any;
         
         // Prevent duplicate toasts for the same log
         if (latestLog.timestamp > lastToastTime) {
@@ -140,6 +141,22 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
 
   return (
     <div className="flex flex-col lg:flex-row h-full bg-[#f3f2f1] font-sans text-[#323130] overflow-hidden relative">
+      {/* Mobile Tab Switcher */}
+      <div className="lg:hidden flex border-b border-[#d1d1d1] bg-white z-[60] flex-shrink-0">
+        <button 
+          onClick={() => setActiveTab('board')}
+          className={`flex-1 py-2 text-xs font-bold transition-colors ${activeTab === 'board' ? 'bg-[#217346] text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+        >
+          게임판 보기
+        </button>
+        <button 
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex-1 py-2 text-xs font-bold transition-colors ${activeTab === 'dashboard' ? 'bg-[#217346] text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+        >
+          대시보드 & 현황
+        </button>
+      </div>
+
       {/* Toast Notification */}
       <AnimatePresence>
         {toast && (
@@ -246,7 +263,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
                           <div className="flex justify-between items-center">
                             <span className="text-xs text-gray-500">다음 레벨 승인 비용</span>
                             <span className="text-sm font-bold text-blue-600">
-                              {cellData?.level === 3 ? '최대 레벨' : `${cell.cost?.[cellData?.level || 0] || 0}만원`}
+                              {cellData?.level === 3 ? '최대 레벨' : `${cell.price || 0}만원`}
                             </span>
                           </div>
                         </div>
@@ -333,9 +350,18 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
           </div>
         </div>
       )}
+
       {/* Main Board Area */}
-      <div className="flex-1 p-2 md:p-8 overflow-auto flex relative min-h-0 bg-[#f3f2f1]" style={{ containerType: 'size', justifyContent: 'safe center', alignItems: 'safe center' }}>
-        <div className="grid gap-0.5 md:gap-1 bg-[#d1d1d1] border-2 md:border-4 border-[#217346] shadow-2xl flex-shrink-0 rounded-lg md:rounded-xl p-0.5 md:p-1" style={{ width: 'min(100cqw, 100cqh, 80vh)', height: 'min(100cqw, 100cqh, 80vh)', minWidth: '350px', minHeight: '350px', gridTemplateColumns: 'repeat(11, minmax(0, 1fr))', gridTemplateRows: 'repeat(11, minmax(0, 1fr))' }}>
+      <div className={`flex-1 p-1 md:p-8 overflow-auto flex relative min-h-0 bg-[#f3f2f1] ${activeTab !== 'board' ? 'hidden lg:flex' : 'flex'}`} style={{ justifyContent: 'safe center', alignItems: 'safe center' }}>
+        <div className="grid gap-0.5 md:gap-1 bg-[#d1d1d1] border-2 md:border-4 border-[#217346] shadow-2xl flex-shrink-0 rounded-lg md:rounded-xl p-0.5 md:p-1" 
+          style={{ 
+            width: 'min(95vw, 75vh)', 
+            height: 'min(95vw, 75vh)', 
+            minWidth: '280px', 
+            minHeight: '280px', 
+            gridTemplateColumns: 'repeat(11, minmax(0, 1fr))', 
+            gridTemplateRows: 'repeat(11, minmax(0, 1fr))' 
+          }}>
           {/* Render Cells */}
           {OFFICE_LIFE_BOARD.map((cell, idx) => {
             const coords = getCellCoords(idx);
@@ -379,7 +405,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
 
                 {/* Players */}
                 <div className="flex flex-wrap justify-center gap-0.5 md:gap-1 mt-auto pb-0.5 md:pb-1">
-                  {playersInCell.map(([pid, pState]) => {
+                  {playersInCell.map(([pid, pState]: [string, any]) => {
                     const isTeam = pState.teamId !== 'INDIVIDUAL';
                     const playerColor = isTeam ? getTeamColor(pState.teamId) : (pid === currentUser.uid ? '#217346' : '#666');
                     const nickname = session.players?.[pid]?.nickname || '';
@@ -436,10 +462,25 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
             </div>
           </div>
         </div>
+
+        {/* Mobile FAB for Rolling Dice */}
+        <AnimatePresence>
+          {isMyTurn && activeTab === 'board' && (!game.waitingForAction || game.waitingForAction === 'NONE') && (
+            <motion.button
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              onClick={handleRollDice}
+              className="lg:hidden fixed bottom-20 right-6 w-16 h-16 bg-[#217346] text-white rounded-full shadow-2xl flex items-center justify-center z-[70] border-4 border-white"
+            >
+              <Play size={24} fill="white" />
+            </motion.button>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Right Sidebar: Dashboard */}
-      <div className="w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l border-[#d1d1d1] flex flex-col shadow-2xl z-20 h-[40vh] lg:h-full flex-shrink-0 lg:flex-shrink">
+      <div className={`w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l border-[#d1d1d1] flex flex-col shadow-2xl z-20 h-full lg:h-full flex-shrink-0 lg:flex-shrink ${activeTab !== 'dashboard' ? 'hidden lg:flex' : 'flex'}`}>
         <div className="bg-[#217346] text-white px-4 py-2 lg:py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <BarChart3 size={18} />
@@ -598,9 +639,9 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
             <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar pr-2">
               {session.logs && Object.keys(session.logs).length > 0 ? (
                 Object.values(session.logs)
-                  .sort((a, b) => b.timestamp - a.timestamp)
+                  .sort((a: any, b: any) => b.timestamp - a.timestamp)
                   .slice(0, 50)
-                  .map((log, idx) => (
+                  .map((log: any, idx) => (
                   <div key={idx} className="text-[10px] leading-tight border-b border-gray-50 pb-1 last:border-0 animate-in fade-in slide-in-from-top-1">
                     <span className="text-gray-400 text-[8px] mr-1">
                       {new Date(log.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
