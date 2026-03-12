@@ -478,7 +478,7 @@ export default function App() {
         await sessionService.startMafiaGame(session.id, session.players, session.settings, session.turnOrder);
       } else if (session.gameType === GameType.OMOK) {
         if (!omokBlackId || !omokWhiteId) {
-          alert('두 명의 플레이어를 선택해주세요.');
+          setError('두 명의 플레이어를 선택해주세요.');
           return;
         }
         await sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId);
@@ -507,7 +507,7 @@ export default function App() {
         }
       }
     } catch (e: any) {
-      alert(e.message || '게임을 시작하는 중 오류가 발생했습니다.');
+      setError(e.message || '게임을 시작하는 중 오류가 발생했습니다.');
     }
   };
 
@@ -1238,7 +1238,7 @@ export default function App() {
                             <button 
                               onClick={() => {
                                 if (!omokBlackId || !omokWhiteId) {
-                                  alert('플레이어를 선택해주세요.');
+                                  setError('플레이어를 선택해주세요.');
                                   return;
                                 }
                                 const isAIMatch = omokBlackId === 'AI_PLAYER' || omokWhiteId === 'AI_PLAYER';
@@ -1599,12 +1599,12 @@ export default function App() {
                           const uniqueWords = new Set(flatBoard);
                           
                           if (flatBoard.length !== uniqueWords.size) {
-                            alert('중복된 단어가 있습니다. 모든 칸을 서로 다른 단어로 채워주세요.');
+                            setError('중복된 단어가 있습니다. 모든 칸을 서로 다른 단어로 채워주세요.');
                             return;
                           }
 
                           const isComplete = bingoBoard.every(row => row.every(cell => cell.trim() !== ''));
-                          if (!isComplete && !confirm('빈 칸이 있습니다. 그대로 제출하시겠습니까?')) return;
+                          if (!isComplete && !window.confirm('빈 칸이 있습니다. 그대로 제출하시겠습니까?')) return;
                           sessionService.submitBingoBoard(session.id, currentUser.uid, bingoBoard, Object.keys(session.players).length);
                           setBingoSubmitted(true);
                         }}
