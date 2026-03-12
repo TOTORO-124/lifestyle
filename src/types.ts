@@ -170,6 +170,8 @@ export interface OfficeLifeGameState {
     rankIndex: number;
     roleId?: string;
     passedHRThisTurn?: boolean;
+    doubleCount?: number;
+    hasDouble?: boolean;
   }>;
   cells: Record<number, {
     ownerId?: string;

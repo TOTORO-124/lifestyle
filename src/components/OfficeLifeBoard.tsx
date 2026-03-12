@@ -97,7 +97,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
       // Fake rolling animation
       let rollCount = 0;
       const rollInterval = setInterval(() => {
-        setRollingDiceNum(Math.floor(Math.random() * 6) + 1);
+        setRollingDiceNum(Math.floor(Math.random() * 11) + 2); // 2~12
         rollCount++;
         if (rollCount > 10) {
           clearInterval(rollInterval);

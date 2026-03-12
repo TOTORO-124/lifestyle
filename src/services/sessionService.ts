@@ -2057,13 +2057,15 @@ export const sessionService = {
     order.forEach(pid => {
       playerStates[pid] = {
         position: 0,
-        assets: 2000,
+        assets: 5000,
         teamId: mode === 'TEAM' ? (players[pid].teamId || 'TEAM_A') : 'INDIVIDUAL',
         items: [],
         isJailed: false,
         jailTurns: 0,
         rank: OFFICE_RANKS[0].name,
-        rankIndex: 0
+        rankIndex: 0,
+        doubleCount: 0,
+        hasDouble: false
       };
     });
 
@@ -2109,8 +2111,32 @@ export const sessionService = {
       }
     }
 
-    const dice = Math.floor(Math.random() * 6) + 1;
+    const dice1 = Math.floor(Math.random() * 6) + 1;
+    const dice2 = Math.floor(Math.random() * 6) + 1;
+    const dice = dice1 + dice2;
+    const isDouble = dice1 === dice2;
     game.lastDice = dice;
+    
+    if (isDouble) {
+      pState.doubleCount = (pState.doubleCount || 0) + 1;
+      if (pState.doubleCount >= 3) {
+        pState.position = 10;
+        pState.isJailed = true;
+        pState.jailTurns = 0;
+        pState.doubleCount = 0;
+        pState.hasDouble = false;
+        await this.addLog(sessionId, `🚨 3연속 더블! 과도한 업무(주사위 조작 의심)로 인해 감사팀으로 긴급 호출되었습니다!`, 'error');
+        game.waitingForAction = 'END_TURN';
+        await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+        return;
+      } else {
+        pState.hasDouble = true;
+        await this.addLog(sessionId, `🎲 더블! (${dice1}, ${dice2}) 보너스 턴을 획득했습니다!`, 'success');
+      }
+    } else {
+      pState.doubleCount = 0;
+      pState.hasDouble = false;
+    }
     
     const oldPos = pState.position || 0;
     let newPos = (oldPos + dice) % 40;
@@ -2118,7 +2144,7 @@ export const sessionService = {
     // Salary check (passed HR)
     if (newPos < oldPos) {
       const rank = OFFICE_RANKS[pState.rankIndex || 0] || OFFICE_RANKS[0];
-      let salary = rank.salary;
+      let salary = rank.salary * 2; // Double salary for faster gameplay
       
       // Planner skill: 20% bonus
       if (pState.roleId === 'PLANNER') {
@@ -2127,7 +2153,7 @@ export const sessionService = {
       
       pState.assets = (pState.assets || 0) + salary;
       pState.passedHRThisTurn = true;
-      await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 인사팀을 통과하여 월급 ${salary}만원을 수령했습니다!`, 'success');
+      await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 인사팀을 통과하여 월급 ${salary}만원을 수령했습니다! (기본급 2배 인상)`, 'success');
     } else {
       pState.passedHRThisTurn = false;
     }
@@ -2145,6 +2171,8 @@ export const sessionService = {
       pState.position = 10;
       pState.isJailed = true;
       pState.jailTurns = 0;
+      pState.hasDouble = false;
+      pState.doubleCount = 0;
       await this.addLog(sessionId, `감사팀으로 긴급 호출되었습니다!`, 'error');
     } else if (cell.type === 'PROJECT') {
       const cellData = (game.cells || {})[newPos];
@@ -2431,8 +2459,14 @@ export const sessionService = {
       await this.addLog(sessionId, `축하합니다! ${session.players?.[playerId]?.nickname || '플레이어'}님이 최종 승리했습니다!`, 'success');
     }
 
-    game.waitingForAction = 'NONE';
-    game.currentTurnIndex = ((game.currentTurnIndex || 0) + 1) % (turnOrder.length || 1);
+    if (pState.hasDouble) {
+      pState.hasDouble = false;
+      game.waitingForAction = 'NONE';
+      await this.addLog(sessionId, `🎲 더블 찬스! ${session.players?.[playerId]?.nickname || '플레이어'}님이 한 번 더 주사위를 굴립니다!`, 'success');
+    } else {
+      game.waitingForAction = 'NONE';
+      game.currentTurnIndex = ((game.currentTurnIndex || 0) + 1) % (turnOrder.length || 1);
+    }
     
     await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
   },
