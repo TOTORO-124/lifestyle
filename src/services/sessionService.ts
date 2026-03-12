@@ -116,6 +116,33 @@ export const sessionService = {
     }
   },
 
+  async addAIPlayer(sessionId: string) {
+    if (!db) return;
+    const aiId = `AI_${Math.random().toString(36).substr(2, 9)}`;
+    const aiNames = ["알파고", "자비스", "시리", "빅스비", "코타나", "아만다", "로봇", "인공지능", "제미나이", "챗봇"];
+    const nickname = aiNames[Math.floor(Math.random() * aiNames.length)] + `_${Math.floor(Math.random() * 100)}`;
+    
+    const player: Player = {
+      id: aiId,
+      nickname,
+      isHost: false,
+      isAlive: true,
+      isReady: true,
+      isConnected: true,
+      isAI: true,
+    };
+
+    await set(ref(db, `sessions/${sessionId}/players/${aiId}`), player);
+    
+    const logRef = push(ref(db, `sessions/${sessionId}/logs`));
+    await set(logRef, {
+      id: logRef.key,
+      type: 'info',
+      content: `${nickname} (AI)가 참가했습니다.`,
+      timestamp: Date.now()
+    });
+  },
+
   async kickPlayer(sessionId: string, playerId: string) {
     if (!db) return;
     await remove(ref(db, `sessions/${sessionId}/players/${playerId}`));
@@ -199,9 +226,9 @@ export const sessionService = {
     const playerIds = Object.keys(players);
     const count = playerIds.length;
     
-    const mafiaCount = settings.mafiaCount || 1;
-    const doctorCount = settings.doctorCount || 1;
-    const policeCount = settings.policeCount || 1;
+    const mafiaCount = settings.mafiaCount ?? 1;
+    const doctorCount = settings.doctorCount ?? 1;
+    const policeCount = settings.policeCount ?? 1;
 
     if (mafiaCount + doctorCount + policeCount > count) {
       throw new Error('설정된 역할 수가 전체 플레이어 수보다 많습니다.');
@@ -2469,26 +2496,6 @@ export const sessionService = {
     }
     
     await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
-  },
-
-  async addAIPlayer(sessionId: string) {
-    if (!db) return;
-    const aiId = `AI_${Math.random().toString(36).substr(2, 9)}`;
-    const aiNames = ['김대리(AI)', '이과장(AI)', '박부장(AI)', '최사원(AI)', '정주임(AI)', '강이사(AI)', '조상무(AI)'];
-    const nickname = aiNames[Math.floor(Math.random() * aiNames.length)];
-    
-    const aiPlayer: Player = {
-      id: aiId,
-      nickname,
-      isHost: false,
-      isAlive: true,
-      isReady: true,
-      isConnected: true,
-      lastActive: Date.now(),
-      isAI: true,
-    };
-    
-    await set(ref(db, `sessions/${sessionId}/players/${aiId}`), aiPlayer);
   },
 
   async startMysteryReport(sessionId: string, mystery: string, solution: string, difficulty: 'EASY' | 'MEDIUM' | 'HARD', players: Record<string, Player>, turnOrder?: string[]) {

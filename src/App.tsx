@@ -9,6 +9,7 @@ import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
 import { OfficeLifeBoard } from './components/OfficeLifeBoard';
 import { MysteryReportBoard } from './components/MysteryReportBoard';
+import { MafiaAIEngine } from './components/MafiaAIEngine';
 import { mysteryService } from './services/mysteryService';
 import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid, Cpu, Briefcase, Loader2 } from 'lucide-react';
 
@@ -470,39 +471,43 @@ export default function App() {
 
   const handleStartGame = async () => {
     if (!session || session.status !== SessionStatus.LOBBY) return;
-    if (session.gameType === GameType.LIAR) {
-      await sessionService.startLiarGame(session.id, session.players, session.settings, session.turnOrder);
-    } else if (session.gameType === GameType.MAFIA) {
-      await sessionService.startMafiaGame(session.id, session.players, session.settings, session.turnOrder);
-    } else if (session.gameType === GameType.OMOK) {
-      if (!omokBlackId || !omokWhiteId) {
-        alert('두 명의 플레이어를 선택해주세요.');
-        return;
+    try {
+      if (session.gameType === GameType.LIAR) {
+        await sessionService.startLiarGame(session.id, session.players, session.settings, session.turnOrder);
+      } else if (session.gameType === GameType.MAFIA) {
+        await sessionService.startMafiaGame(session.id, session.players, session.settings, session.turnOrder);
+      } else if (session.gameType === GameType.OMOK) {
+        if (!omokBlackId || !omokWhiteId) {
+          alert('두 명의 플레이어를 선택해주세요.');
+          return;
+        }
+        await sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId);
+      } else if (session.gameType === GameType.BINGO) {
+        await sessionService.startBingoSetup(session.id, session.settings);
+      } else if (session.gameType === GameType.DRAW) {
+        await sessionService.startDrawGame(session.id, session.players, session.settings, session.turnOrder || Object.keys(session.players));
+      } else if (session.gameType === GameType.MINESWEEPER) {
+        await sessionService.startMinesweeperGame(session.id, session.settings.minesweeperDifficulty || 'EASY');
+      } else if (session.gameType === GameType.OFFICE_2048) {
+        await sessionService.startOffice2048Game(session.id);
+      } else if (session.gameType === GameType.SUDOKU) {
+        await sessionService.startSudokuGame(session.id, session.settings.sudokuDifficulty || 'EASY');
+      } else if (session.gameType === GameType.OFFICE_LIFE) {
+        await sessionService.startOfficeLifeGame(session.id, session.players, session.turnOrder, session.settings.officeLifeMode || 'INDIVIDUAL');
+      } else if (session.gameType === GameType.MYSTERY_REPORT) {
+        if (loading) return;
+        setLoading(true);
+        try {
+          const res = await mysteryService.generateMystery();
+          await sessionService.startMysteryReport(session.id, res.mystery, res.solution, res.difficulty, session.players, session.turnOrder);
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setLoading(false);
+        }
       }
-      await sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId);
-    } else if (session.gameType === GameType.BINGO) {
-      await sessionService.startBingoSetup(session.id, session.settings);
-    } else if (session.gameType === GameType.DRAW) {
-      await sessionService.startDrawGame(session.id, session.players, session.settings, session.turnOrder || Object.keys(session.players));
-    } else if (session.gameType === GameType.MINESWEEPER) {
-      await sessionService.startMinesweeperGame(session.id, session.settings.minesweeperDifficulty || 'EASY');
-    } else if (session.gameType === GameType.OFFICE_2048) {
-      await sessionService.startOffice2048Game(session.id);
-    } else if (session.gameType === GameType.SUDOKU) {
-      await sessionService.startSudokuGame(session.id, session.settings.sudokuDifficulty || 'EASY');
-    } else if (session.gameType === GameType.OFFICE_LIFE) {
-      await sessionService.startOfficeLifeGame(session.id, session.players, session.turnOrder, session.settings.officeLifeMode || 'INDIVIDUAL');
-    } else if (session.gameType === GameType.MYSTERY_REPORT) {
-      if (loading) return;
-      setLoading(true);
-      try {
-        const res = await mysteryService.generateMystery();
-        await sessionService.startMysteryReport(session.id, res.mystery, res.solution, res.difficulty, session.players, session.turnOrder);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+    } catch (e: any) {
+      alert(e.message || '게임을 시작하는 중 오류가 발생했습니다.');
     }
   };
 
@@ -912,14 +917,24 @@ export default function App() {
       )}
 
       <main className={`flex-1 min-h-0 relative ${session.gameType === GameType.OFFICE_LIFE && session.status !== SessionStatus.LOBBY ? 'p-0 overflow-hidden' : 'p-4 sm:p-6 overflow-auto'}`}>
+        {session.gameType === GameType.MAFIA && <MafiaAIEngine session={session} currentUser={currentUser} />}
         <div className={`${session.gameType === GameType.OFFICE_LIFE && session.status !== SessionStatus.LOBBY ? 'absolute inset-0 flex flex-col' : 'max-w-5xl mx-auto space-y-6'}`}>
           {activeSheet === 'GAME' ? (
             <>
               {session.status === SessionStatus.LOBBY && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 excel-grid rounded overflow-hidden shadow-sm">
-                <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
-                  참가자_데이터_그리드
+                <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-[#666]">참가자_데이터_그리드</span>
+                  {isHost && session.gameType === GameType.MAFIA && (
+                    <button
+                      onClick={() => sessionService.addAIPlayer(session.id)}
+                      className="flex items-center gap-1 px-2 py-1 bg-[#e8f0fe] text-[#1a73e8] hover:bg-[#d2e3fc] rounded text-[10px] font-bold transition-colors"
+                    >
+                      <Cpu size={12} />
+                      AI 봇 추가
+                    </button>
+                  )}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="excel-grid">
@@ -1061,7 +1076,7 @@ export default function App() {
                                 min="1" 
                                 max="5"
                                 className="office-input text-xs text-center"
-                                value={session.settings.mafiaCount || 1}
+                                value={session.settings.mafiaCount ?? 1}
                                 onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, mafiaCount: parseInt(e.target.value) || 1 })}
                               />
                             </div>
@@ -1072,7 +1087,7 @@ export default function App() {
                                 min="0" 
                                 max="2"
                                 className="office-input text-xs text-center"
-                                value={session.settings.doctorCount || 1}
+                                value={session.settings.doctorCount ?? 1}
                                 onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, doctorCount: parseInt(e.target.value) || 0 })}
                               />
                             </div>
@@ -1083,7 +1098,7 @@ export default function App() {
                                 min="0" 
                                 max="2"
                                 className="office-input text-xs text-center"
-                                value={session.settings.policeCount || 1}
+                                value={session.settings.policeCount ?? 1}
                                 onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, policeCount: parseInt(e.target.value) || 0 })}
                               />
                             </div>
@@ -1095,12 +1110,12 @@ export default function App() {
                             </div>
                             <div className="flex justify-between">
                               <span>특수직:</span>
-                              <span className="font-bold">{(session.settings.mafiaCount || 1) + (session.settings.doctorCount || 1) + (session.settings.policeCount || 1)}명</span>
+                              <span className="font-bold">{(session.settings.mafiaCount ?? 1) + (session.settings.doctorCount ?? 1) + (session.settings.policeCount ?? 1)}명</span>
                             </div>
                             <div className="flex justify-between border-t border-[#d1d1d1] mt-1 pt-1">
                               <span>시민:</span>
                               <span className="font-bold text-[#217346]">
-                                {Math.max(0, (Object.values(session.players) as Player[]).length - ((session.settings.mafiaCount || 1) + (session.settings.doctorCount || 1) + (session.settings.policeCount || 1)))}명
+                                {Math.max(0, (Object.values(session.players) as Player[]).length - ((session.settings.mafiaCount ?? 1) + (session.settings.doctorCount ?? 1) + (session.settings.policeCount ?? 1)))}명
                               </span>
                             </div>
                           </div>
