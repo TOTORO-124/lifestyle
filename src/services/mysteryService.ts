@@ -1,10 +1,32 @@
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { MysteryReportGameState } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+let aiInstance: GoogleGenAI | null = null;
+
+async function getAI(): Promise<GoogleGenAI> {
+  if (aiInstance) return aiInstance;
+  
+  // Try to use the build-time injected key first
+  let apiKey = process.env.GEMINI_API_KEY || '';
+  
+  // If not available (e.g., deployed without build-time key), fetch from server
+  if (!apiKey) {
+    try {
+      const res = await fetch('/api/config');
+      const data = await res.json();
+      apiKey = data.geminiApiKey || '';
+    } catch (e) {
+      console.error("Failed to fetch API key from server", e);
+    }
+  }
+  
+  aiInstance = new GoogleGenAI({ apiKey });
+  return aiInstance;
+}
 
 export const mysteryService = {
   async generateMystery(): Promise<{ mystery: string; solution: string; difficulty: 'EASY' | 'MEDIUM' | 'HARD' }> {
+    const ai = await getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `
@@ -42,6 +64,7 @@ export const mysteryService = {
   async answerQuestion(mystery: string, solution: string, question: string, history: any[]): Promise<{ answer: 'YES' | 'NO' | 'IRRELEVANT' | 'HINT'; text: string }> {
     const historyText = history.map(h => `Q: ${h.text} -> A: ${h.answer}`).join('\n');
     
+    const ai = await getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `
@@ -83,6 +106,7 @@ export const mysteryService = {
   },
 
   async checkSolution(mystery: string, solution: string, guess: string): Promise<{ isCorrect: boolean; feedback: string }> {
+    const ai = await getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `
