@@ -206,6 +206,13 @@ export interface MysteryReportGameState {
     hintText?: string;
     timestamp: number;
   }[];
+  guesses?: Record<string, {
+    id: string;
+    playerId: string;
+    nickname: string;
+    text: string;
+    timestamp: number;
+  }>;
   hints: string[];
   winnerId?: string;
   turnOrder?: string[];

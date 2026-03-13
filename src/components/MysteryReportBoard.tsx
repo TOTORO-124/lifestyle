@@ -57,21 +57,11 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
     }
   }, [game?.status]);
 
-  // Handle AI response for new questions
-  useEffect(() => {
-    if (!game || game.status !== 'PLAYING') return;
-
-    const unanswered = Object.values(game.questions || {}).find(q => !q.answer);
-    if (unanswered && unanswered.playerId === currentUser.uid) {
-      // The person who asked the question triggers the AI response
-      const processAI = async () => {
-        const history = Object.values(game.questions || {}).filter(q => q.answer);
-        const result = await mysteryService.answerQuestion(game.mystery, game.solution, unanswered.text, history);
-        await sessionService.answerMysteryQuestion(session.id, unanswered.id, result.answer, result.text);
-      };
-      processAI();
-    }
-  }, [game?.questions, currentUser.uid, session.id]);
+  // Handle manual response for new questions (Host only)
+  const handleAnswer = async (questionId: string, answer: 'YES' | 'NO' | 'IRRELEVANT' | 'HINT', text: string = '') => {
+    if (currentUser.uid !== session.hostId) return;
+    await sessionService.answerMysteryQuestion(session.id, questionId, answer, text);
+  };
 
   const handleSubmitQuestion = async (customText?: string) => {
     const textToSubmit = typeof customText === 'string' ? customText : question;
@@ -121,13 +111,14 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
     if (!guess.trim() || isCheckingGuess) return;
     setIsCheckingGuess(true);
     try {
-      const result = await mysteryService.checkSolution(game.mystery, game.solution, guess.trim());
-      if (result.isCorrect) {
-        await sessionService.solveMystery(session.id, currentUser.uid);
-      } else {
-        alert(result.feedback);
-      }
+      await sessionService.submitMysteryGuess(
+        session.id,
+        currentUser.uid,
+        session.players[currentUser.uid]?.nickname || '익명',
+        guess.trim()
+      );
       setGuess('');
+      alert('추론이 출제자(방장)에게 전달되었습니다. 방장의 확인을 기다려주세요!');
     } finally {
       setIsCheckingGuess(false);
     }
@@ -243,7 +234,7 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
                       </div>
                     </div>
 
-                    {/* AI Answer */}
+                    {/* Answer Section */}
                     <div className="flex justify-end pr-4">
                       <div className="flex items-start gap-3 flex-row-reverse max-w-[80%]">
                         <div className="w-8 h-8 bg-[#217346] rounded-full flex items-center justify-center text-white shrink-0 shadow-md">
@@ -251,20 +242,55 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
                         </div>
                         <div className="text-right">
                           <div className="flex items-center justify-end gap-2 mb-1">
-                            <span className="text-[10px] font-black text-[#217346]">AI_작성자</span>
+                            <span className="text-[10px] font-black text-[#217346]">출제자(방장)</span>
                           </div>
-                          <div className={`p-3 rounded-lg rounded-tr-none inline-block border shadow-sm ${
-                            q.answer === 'YES' ? 'bg-green-50 border-green-200 text-green-700' :
-                            q.answer === 'NO' ? 'bg-red-50 border-red-200 text-red-700' :
-                            q.answer === 'HINT' ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
-                            'bg-gray-50 border-gray-200 text-gray-500 italic'
-                          }`}>
-                            {!q.answer ? (
-                              <div className="flex items-center gap-2">
-                                <Loader2 size={12} className="animate-spin" />
-                                <span className="text-xs">분석 중...</span>
+                          
+                          {!q.answer ? (
+                            currentUser.uid === session.hostId ? (
+                              <div className="flex flex-wrap gap-2 justify-end">
+                                <button 
+                                  onClick={() => handleAnswer(q.id, 'YES')}
+                                  className="bg-green-100 text-green-700 border border-green-200 px-3 py-1 rounded-lg text-xs font-bold hover:bg-green-200 transition-colors"
+                                >
+                                  예
+                                </button>
+                                <button 
+                                  onClick={() => handleAnswer(q.id, 'NO')}
+                                  className="bg-red-100 text-red-700 border border-red-200 px-3 py-1 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors"
+                                >
+                                  아니오
+                                </button>
+                                <button 
+                                  onClick={() => handleAnswer(q.id, 'IRRELEVANT')}
+                                  className="bg-gray-100 text-gray-700 border border-gray-200 px-3 py-1 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors"
+                                >
+                                  관련 없음
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    const hint = prompt('힌트 내용을 입력하세요:');
+                                    if (hint) handleAnswer(q.id, 'HINT', hint);
+                                  }}
+                                  className="bg-yellow-100 text-yellow-700 border border-yellow-200 px-3 py-1 rounded-lg text-xs font-bold hover:bg-yellow-200 transition-colors"
+                                >
+                                  힌트 주기
+                                </button>
                               </div>
                             ) : (
+                              <div className="p-3 rounded-lg rounded-tr-none inline-block border shadow-sm bg-gray-50 border-gray-200 text-gray-500 italic">
+                                <div className="flex items-center gap-2">
+                                  <Loader2 size={12} className="animate-spin" />
+                                  <span className="text-xs">방장의 답변 대기 중...</span>
+                                </div>
+                              </div>
+                            )
+                          ) : (
+                            <div className={`p-3 rounded-lg rounded-tr-none inline-block border shadow-sm ${
+                              q.answer === 'YES' ? 'bg-green-50 border-green-200 text-green-700' :
+                              q.answer === 'NO' ? 'bg-red-50 border-red-200 text-red-700' :
+                              q.answer === 'HINT' ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
+                              'bg-gray-50 border-gray-200 text-gray-500 italic'
+                            }`}>
                               <div className="flex items-center gap-2">
                                 {q.answer === 'YES' && <CheckCircle2 size={14} />}
                                 {q.answer === 'NO' && <XCircle size={14} />}
@@ -277,8 +303,8 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
                                 </span>
                                 {q.hintText && <span className="text-xs font-normal ml-1 border-l border-current pl-2">{q.hintText}</span>}
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -345,7 +371,7 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
                   </button>
                 </div>
                 <p className="text-[9px] text-gray-400 mt-2 text-center font-bold">
-                  * AI 작성자는 "예", "아니오", "관련 없음"으로만 대답합니다.
+                  * 방장이 정답을 확인하고 "예", "아니오", "관련 없음"으로 대답합니다.
                 </p>
               </div>
             )}
@@ -354,33 +380,74 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
 
         {/* Right Side: Guess & Solution */}
         <div className="w-full lg:w-80 flex flex-col gap-6 shrink-0">
-          {/* Guess Card */}
+          {/* Guess Card / Solution for Host */}
           <div className="bg-white border border-[#d1d1d1] rounded-xl shadow-lg overflow-hidden flex flex-col">
             <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-3">
               <div className="flex items-center gap-2">
                 <Lightbulb size={16} className="text-yellow-500" />
-                <span className="text-[10px] font-black text-gray-600 uppercase">최종_사건_추론</span>
+                <span className="text-[10px] font-black text-gray-600 uppercase">
+                  {currentUser.uid === session.hostId ? '사건_정답_확인' : '최종_사건_추론'}
+                </span>
               </div>
             </div>
             <div className="p-4 space-y-4">
-              <p className="text-[11px] text-gray-500 leading-tight">
-                사건의 전말을 파악하셨나요? 핵심적인 이유를 포함하여 추론을 제출하십시오.
-              </p>
-              <textarea 
-                className="w-full h-32 bg-gray-50 border border-[#d1d1d1] rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#217346] resize-none shadow-inner"
-                placeholder="여기에 추론 내용을 작성하세요..."
-                value={guess}
-                onChange={(e) => setGuess(e.target.value)}
-                disabled={game.status !== 'PLAYING'}
-              />
-              <button 
-                onClick={handleSubmitGuess}
-                disabled={!guess.trim() || isCheckingGuess || game.status !== 'PLAYING'}
-                className="w-full bg-[#217346] text-white py-3 rounded-lg font-black text-sm hover:bg-[#1a5a36] transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {isCheckingGuess ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                추론_제출_및_검증
-              </button>
+              {currentUser.uid === session.hostId ? (
+                <>
+                  <p className="text-[11px] text-gray-500 leading-tight">
+                    방장은 정답을 미리 알고 있습니다. 플레이어들의 질문에 정확하게 답변해주세요.
+                  </p>
+                  <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
+                    <p className="text-xs text-gray-700 leading-relaxed font-medium">
+                      {game.solution}
+                    </p>
+                  </div>
+
+                  {/* Guesses List for Host */}
+                  <div className="mt-4 space-y-3">
+                    <span className="text-[10px] font-black text-gray-400 uppercase">플레이어_추론_목록</span>
+                    {Object.values(game.guesses || {}).length === 0 ? (
+                      <p className="text-[10px] text-gray-400 italic">아직 제출된 추론이 없습니다.</p>
+                    ) : (
+                      Object.values(game.guesses || {}).sort((a, b) => b.timestamp - a.timestamp).map((g) => (
+                        <div key={g.id} className="bg-gray-50 border border-gray-200 p-3 rounded-lg space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-bold text-gray-700">{g.nickname}</span>
+                            <span className="text-[8px] text-gray-400">{new Date(g.timestamp).toLocaleTimeString()}</span>
+                          </div>
+                          <p className="text-xs text-gray-600">{g.text}</p>
+                          <button
+                            onClick={() => sessionService.solveMystery(session.id, g.playerId)}
+                            className="w-full bg-green-100 text-green-700 border border-green-200 py-1 rounded text-[10px] font-bold hover:bg-green-200 transition-colors"
+                          >
+                            정답 처리
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] text-gray-500 leading-tight">
+                    사건의 전말을 파악하셨나요? 핵심적인 이유를 포함하여 추론을 제출하십시오.
+                  </p>
+                  <textarea 
+                    className="w-full h-32 bg-gray-50 border border-[#d1d1d1] rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#217346] resize-none shadow-inner"
+                    placeholder="여기에 추론 내용을 작성하세요..."
+                    value={guess}
+                    onChange={(e) => setGuess(e.target.value)}
+                    disabled={game.status !== 'PLAYING'}
+                  />
+                  <button 
+                    onClick={handleSubmitGuess}
+                    disabled={!guess.trim() || isCheckingGuess || game.status !== 'PLAYING'}
+                    className="w-full bg-[#217346] text-white py-3 rounded-lg font-black text-sm hover:bg-[#1a5a36] transition-all shadow-md active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isCheckingGuess ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                    추론_제출_및_검증
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -455,7 +522,7 @@ export const MysteryReportBoard: React.FC<MysteryReportBoardProps> = ({ session,
             <ul className="text-[10px] text-blue-600 space-y-1 font-medium">
               <li>• "예/아니오"로 대답 가능한 질문을 하세요.</li>
               <li>• 상황의 모순점을 찾아 집중 공략하세요.</li>
-              <li>• AI가 주는 힌트를 놓치지 마세요.</li>
+              <li>• 방장이 주는 힌트를 놓치지 마세요.</li>
               <li>• 동료 조사관들의 질문을 참고하세요.</li>
             </ul>
           </div>

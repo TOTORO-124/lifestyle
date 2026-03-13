@@ -1,29 +1,3 @@
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
-import { MysteryReportGameState } from "../types";
-
-let aiInstance: GoogleGenAI | null = null;
-
-async function getAI(): Promise<GoogleGenAI> {
-  if (aiInstance) return aiInstance;
-  
-  // Try to use the build-time injected key first
-  let apiKey = process.env.GEMINI_API_KEY || '';
-  
-  // If not available (e.g., deployed without build-time key), fetch from server
-  if (!apiKey) {
-    try {
-      const res = await fetch('/api/config');
-      const data = await res.json();
-      apiKey = data.geminiApiKey || '';
-    } catch (e) {
-      console.error("Failed to fetch API key from server", e);
-    }
-  }
-  
-  aiInstance = new GoogleGenAI({ apiKey });
-  return aiInstance;
-}
-
 const FALLBACK_MYSTERIES = [
   {
     mystery: "어느 날 아침, 김 대리는 자신의 책상 위에 놓인 차가운 커피를 보고 비명을 질렀습니다. 하지만 그 커피는 독이 든 것도 아니었고, 김 대리가 주문한 것도 아니었습니다. 왜 그랬을까요?",
@@ -49,121 +23,36 @@ const FALLBACK_MYSTERIES = [
     mystery: "남자는 라디오를 듣고 권총으로 자살했다. 왜 그랬을까?",
     solution: "남자는 등대지기였다. 라디오 뉴스에서 등대 불이 꺼져 여객선이 암초에 부딪혀 침몰했다는 소식을 듣고 죄책감에 자살한 것이다.",
     difficulty: 'HARD' as const
+  },
+  {
+    mystery: "한 남자가 식당에서 '바다거북 스프'를 주문해 한 입 먹고는 집으로 돌아가 자살했습니다. 왜 그랬을까요?",
+    solution: "남자는 과거에 배가 난파되어 아내와 함께 무인도에 표류했습니다. 먹을 것이 없어 굶어 죽기 직전, 동료가 '바다거북 스프'라며 고기 국을 주어 먹고 살아남았습니다. 하지만 나중에 식당에서 진짜 바다거북 스프를 먹어보니 그때 먹었던 맛과 전혀 달랐고, 그제야 자신이 그때 먹은 것이 아내의 살이었다는 것을 깨닫고 죄책감에 자살한 것입니다.",
+    difficulty: 'HARD' as const
   }
 ];
 
 export const mysteryService = {
   async generateMystery(): Promise<{ mystery: string; solution: string; difficulty: 'EASY' | 'MEDIUM' | 'HARD' }> {
-    try {
-      const ai = await getAI();
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `
-          바다거북 스프(수평적 사고 추리 게임) 문제를 하나 내줘. 
-          주제는 일상, 공포, 판타지, SF, 범죄 등 아주 다양하게 선택해줘. (꼭 회사 관련일 필요 없음)
-          난이도는 'EASY'(상황이 단순함), 'MEDIUM'(적절한 추리가 필요함), 'HARD'(매우 기발한 발상이 필요함) 중 하나로 랜덤하게 정해줘.
-          '상황(mystery)', '해답(solution)', '난이도(difficulty)'를 각각 한국어로 작성해줘.
-        `,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              mystery: { type: Type.STRING, description: "기이하고 미스테리한 상황 설명" },
-              solution: { type: Type.STRING, description: "사건의 실제 전말과 해답" },
-              difficulty: { type: Type.STRING, enum: ["EASY", "MEDIUM", "HARD"], description: "난이도" }
-            },
-            required: ["mystery", "solution", "difficulty"]
-          }
-        }
-      });
-
-      return JSON.parse(response.text);
-    } catch (e) {
-      console.error("Failed to generate mystery (API Error or Parse Error):", e);
-      // Return a random fallback mystery
-      const randomIndex = Math.floor(Math.random() * FALLBACK_MYSTERIES.length);
-      return FALLBACK_MYSTERIES[randomIndex];
-    }
+    // Return a random fallback mystery instead of using AI
+    const randomIndex = Math.floor(Math.random() * FALLBACK_MYSTERIES.length);
+    return FALLBACK_MYSTERIES[randomIndex];
   },
 
   async answerQuestion(mystery: string, solution: string, question: string, history: any[]): Promise<{ answer: 'YES' | 'NO' | 'IRRELEVANT' | 'HINT'; text: string }> {
-    try {
-      const historyText = history.map(h => `Q: ${h.text} -> A: ${h.answer}`).join('\n');
-      
-      const ai = await getAI();
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `
-          당신은 '바다거북 스프' 추리 게임의 출제자입니다. 
-          상황: ${mystery}
-          해답: ${solution}
-          
-          이전 기록:
-          ${historyText}
-          
-          질문: ${question}
-          
-          'YES', 'NO', 'IRRELEVANT', 'HINT' 중 하나로 답하세요. 
-          - 정답에 가까우면 'YES'
-          - 틀리면 'NO'
-          - 상관없으면 'IRRELEVANT'
-          - 플레이어가 너무 헤매거나 핵심에 근접하면 'HINT'와 함께 짧은 단서를 주세요.
-          답변은 JSON 형식으로 하세요.
-        `,
-        config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              answer: { type: Type.STRING, enum: ["YES", "NO", "IRRELEVANT", "HINT"] },
-              text: { type: Type.STRING, description: "답변 부연 설명 (힌트일 경우 내용)" }
-            },
-            required: ["answer", "text"]
-          }
-        }
-      });
-
-      return JSON.parse(response.text);
-    } catch (e) {
-      console.error("Failed to answer question (API Error or Parse Error):", e);
-      return { answer: 'HINT', text: "⏳ API 무료 사용량(분당 20회)을 초과했습니다. 약 1분 정도 기다렸다가 다시 질문해 주세요!" };
-    }
+    // AI is disabled, so we return a placeholder. 
+    // In the UI, we should probably allow the host to answer manually.
+    return { 
+      answer: 'HINT', 
+      text: "AI 기능이 비활성화되었습니다. 방장(호스트)이 정답을 확인하고 답변을 입력해주세요." 
+    };
   },
 
   async checkSolution(mystery: string, solution: string, guess: string): Promise<{ isCorrect: boolean; feedback: string }> {
-    try {
-      const ai = await getAI();
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `
-          당신은 '바다거북 스프' 게임의 출제자입니다.
-          상황: ${mystery}
-          해답: ${solution}
-          
-          플레이어의 추측: ${guess}
-          
-          플레이어가 사건의 핵심 전말을 충분히 맞혔는지 판단하세요. 
-          완벽하게 똑같을 필요는 없지만, 핵심적인 이유(왜 그런 일이 일어났는지)가 포함되어야 합니다.
-        `,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              isCorrect: { type: Type.BOOLEAN },
-              feedback: { type: Type.STRING, description: "정답일 경우 축하 메시지, 아닐 경우 격려 메시지" }
-            },
-            required: ["isCorrect", "feedback"]
-          }
-        }
-      });
-
-      return JSON.parse(response.text);
-    } catch (e) {
-      console.error("Failed to check solution (API Error or Parse Error):", e);
-      return { isCorrect: false, feedback: "⏳ API 무료 사용량(분당 20회)을 초과했습니다. 약 1분 정도 기다렸다가 다시 정답을 제출해 주세요!" };
-    }
+    // AI is disabled. We can't automatically check the solution accurately.
+    // We'll return a message asking the host to judge or just show the solution.
+    return { 
+      isCorrect: false, 
+      feedback: "AI 자동 검증 기능이 비활성화되었습니다. 방장에게 정답 여부를 확인받거나 직접 정답을 확인하세요." 
+    };
   }
 };

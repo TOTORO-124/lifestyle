@@ -9,9 +9,8 @@ import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
 import { OfficeLifeBoard } from './components/OfficeLifeBoard';
 import { MysteryReportBoard } from './components/MysteryReportBoard';
-import { MafiaAIEngine } from './components/MafiaAIEngine';
 import { mysteryService } from './services/mysteryService';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid, Cpu, Briefcase, Loader2 } from 'lucide-react';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2 } from 'lucide-react';
 
 const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], title: string, sessionId?: string | null, gameType?: string }) => {
   const rankNames = ['사장', '부사장', '전무', '상무', '이사', '부장', '차장', '과장', '대리', '사원'];
@@ -734,7 +733,7 @@ export default function App() {
                           disabled={loading}
                         >
                           <span className="font-bold">미스테리 보고서</span>
-                          <span className="text-[9px] font-normal opacity-80">AI 추리 게임</span>
+                          <span className="text-[9px] font-normal opacity-80">추리 게임</span>
                         </button>
                       </div>
                     </div>
@@ -771,11 +770,10 @@ export default function App() {
               </div>
               <div className="p-6">
                 <p className="text-xs text-gray-500 mb-6 italic">* 전사 시트에서 기록된 실시간 순위입니다. (글로벌 통합)</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
-                  <Leaderboard entries={globalLeaderboards?.OMOK_HOF || []} title="오목 (최고난도)" sessionId="GLOBAL" gameType="OMOK_HOF" />
                 </div>
               </div>
             </div>
@@ -917,7 +915,6 @@ export default function App() {
       )}
 
       <main className={`flex-1 min-h-0 relative ${session.gameType === GameType.OFFICE_LIFE && session.status !== SessionStatus.LOBBY ? 'p-0 overflow-hidden' : 'p-4 sm:p-6 overflow-auto'}`}>
-        {session.gameType === GameType.MAFIA && <MafiaAIEngine session={session} currentUser={currentUser} />}
         <div className={`${session.gameType === GameType.OFFICE_LIFE && session.status !== SessionStatus.LOBBY ? 'absolute inset-0 flex flex-col' : 'max-w-5xl mx-auto space-y-6'}`}>
           {activeSheet === 'GAME' ? (
             <>
@@ -926,15 +923,6 @@ export default function App() {
               <div className="lg:col-span-2 excel-grid rounded overflow-hidden shadow-sm">
                 <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
                   <span className="text-[10px] font-bold text-[#666]">참가자_데이터_그리드</span>
-                  {isHost && session.gameType === GameType.MAFIA && (
-                    <button
-                      onClick={() => sessionService.addAIPlayer(session.id)}
-                      className="flex items-center gap-1 px-2 py-1 bg-[#e8f0fe] text-[#1a73e8] hover:bg-[#d2e3fc] rounded text-[10px] font-bold transition-colors"
-                    >
-                      <Cpu size={12} />
-                      AI 봇 추가
-                    </button>
-                  )}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="excel-grid">
@@ -954,7 +942,6 @@ export default function App() {
                           <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
                           <td className={`excel-cell ${player.id === currentUser?.uid ? 'bg-[#e8f0fe] font-bold' : ''}`}>
                             <div className="flex items-center gap-2">
-                              {player.isAI && <Cpu size={10} className="text-[#217346]" />}
                               {player.nickname}
                               {player.isHost && <Shield size={10} className="text-[#217346]" />}
                             </div>
@@ -1145,13 +1132,7 @@ export default function App() {
                             </div>
                           </div>
 
-                          <button
-                            onClick={() => sessionService.addAIPlayer(session.id)}
-                            className="w-full office-btn py-2 flex items-center justify-center gap-2 text-xs font-bold"
-                          >
-                            <Cpu size={14} />
-                            <span>AI 동료 추가</span>
-                          </button>
+
 
                           {session.settings.officeLifeMode === 'TEAM' && (
                             <div className="p-3 bg-blue-50 rounded border border-blue-100">
@@ -1197,7 +1178,6 @@ export default function App() {
                                 {getSortedPlayers().map(p => (
                                   <option key={p.id} value={p.id} disabled={p.id === omokWhiteId}>{p.nickname}</option>
                                 ))}
-                                <option value="AI_PLAYER" disabled={"AI_PLAYER" === omokWhiteId}>알파고 (AI)</option>
                               </select>
                             </div>
                             <div className="flex-1 space-y-1">
@@ -1211,27 +1191,8 @@ export default function App() {
                                 {getSortedPlayers().map(p => (
                                   <option key={p.id} value={p.id} disabled={p.id === omokBlackId}>{p.nickname}</option>
                                 ))}
-                                <option value="AI_PLAYER" disabled={"AI_PLAYER" === omokBlackId}>알파고 (AI)</option>
                               </select>
                             </div>
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-[#999]">AI 난이도 (AI 대전 시)</label>
-                            <select 
-                              className="office-input text-xs"
-                              value={omokDifficulty}
-                              onChange={(e) => setOmokDifficulty(parseInt(e.target.value))}
-                              disabled={omokBlackId !== 'AI_PLAYER' && omokWhiteId !== 'AI_PLAYER'}
-                            >
-                              <option value={1}>인턴 (Lv.1 - 매우 쉬움)</option>
-                              <option value={2}>사원 (Lv.2 - 쉬움)</option>
-                              <option value={3}>주임 (Lv.3 - 보통)</option>
-                              <option value={4}>대리 (Lv.4 - 조금 어려움)</option>
-                              <option value={5}>과장 (Lv.5 - 어려움)</option>
-                              <option value={6}>차장 (Lv.6 - 매우 어려움)</option>
-                              <option value={7}>부장 (Lv.7 - 명예의 전당 도전)</option>
-                            </select>
                           </div>
                           
                           <div className="pt-2 border-t border-[#d1d1d1] mt-2">
@@ -1241,8 +1202,7 @@ export default function App() {
                                   setError('플레이어를 선택해주세요.');
                                   return;
                                 }
-                                const isAIMatch = omokBlackId === 'AI_PLAYER' || omokWhiteId === 'AI_PLAYER';
-                                sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId, isAIMatch, omokDifficulty);
+                                sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId);
                               }}
                               className="w-full office-btn-primary py-2 text-[10px] font-bold flex items-center justify-center gap-2"
                             >
@@ -1252,7 +1212,7 @@ export default function App() {
                           </div>
 
                           <p className="text-[10px] text-[#999]">
-                            * 오목은 두 명의 플레이어가 진행하거나, AI와 대결할 수 있습니다.
+                            * 오목은 두 명의 플레이어가 진행합니다.
                           </p>
                         </div>
                       )}
@@ -2472,10 +2432,7 @@ export default function App() {
                           <div className="text-center py-2">
                             {session.liarGame?.liarPlayerId === currentUser.uid ? (
                               session.liarGame?.mode === LiarMode.FOOL ? (
-                                <div className="flex flex-col items-center">
-                                  <span className="text-red-600 font-black text-lg">{session.liarGame?.liarWord}</span>
-                                  <span className="text-[9px] text-red-400 font-bold">(바보 라이어 단어)</span>
-                                </div>
+                                <span className="text-[#217346] font-black text-lg">{session.liarGame?.liarWord}</span>
                               ) : (
                                 <span className="text-red-600 font-black text-lg">당신은 라이어입니다</span>
                               )
@@ -2985,14 +2942,7 @@ export default function App() {
                             </div>
                           </div>
                           
-                          <div className="w-full max-w-sm mx-auto mt-8">
-                            <Leaderboard 
-                              entries={globalLeaderboards?.OMOK_HOF || []} 
-                              title="오목 (최고난도)" 
-                              sessionId="GLOBAL"
-                              gameType="OMOK_HOF"
-                            />
-                          </div>
+
                         </div>
                       ) : session.gameType === GameType.LIAR ? (
                         <div className="space-y-4">
@@ -3264,11 +3214,10 @@ export default function App() {
                 프로젝트_시트
               </div>
               <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
-                  <Leaderboard entries={globalLeaderboards?.OMOK_HOF || []} title="오목 (최고난도)" sessionId="GLOBAL" gameType="OMOK_HOF" />
                 </div>
               </div>
             </div>

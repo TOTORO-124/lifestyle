@@ -116,33 +116,6 @@ export const sessionService = {
     }
   },
 
-  async addAIPlayer(sessionId: string) {
-    if (!db) return;
-    const aiId = `AI_${Math.random().toString(36).substr(2, 9)}`;
-    const aiNames = ["알파고", "자비스", "시리", "빅스비", "코타나", "아만다", "로봇", "인공지능", "제미나이", "챗봇"];
-    const nickname = aiNames[Math.floor(Math.random() * aiNames.length)] + `_${Math.floor(Math.random() * 100)}`;
-    
-    const player: Player = {
-      id: aiId,
-      nickname,
-      isHost: false,
-      isAlive: true,
-      isReady: true,
-      isConnected: true,
-      isAI: true,
-    };
-
-    await set(ref(db, `sessions/${sessionId}/players/${aiId}`), player);
-    
-    const logRef = push(ref(db, `sessions/${sessionId}/logs`));
-    await set(logRef, {
-      id: logRef.key,
-      type: 'info',
-      content: `${nickname} (AI)가 참가했습니다.`,
-      timestamp: Date.now()
-    });
-  },
-
   async kickPlayer(sessionId: string, playerId: string) {
     if (!db) return;
     await remove(ref(db, `sessions/${sessionId}/players/${playerId}`));
@@ -354,8 +327,8 @@ export const sessionService = {
     });
 
     // 2. Resolve actions
-    let eliminatedId: string | undefined = undefined;
-    let savedId: string | undefined = undefined;
+    let eliminatedId: string | null = null;
+    let savedId: string | null = null;
 
     if (mafiaTargetId) {
       if (mafiaTargetId === mafiaGame.doctorTarget) {
@@ -373,8 +346,8 @@ export const sessionService = {
       'mafiaGame/nightResult': {
         eliminatedPlayerId: eliminatedId,
         savedPlayerId: savedId,
-        investigatedPlayerId: mafiaGame.policeTarget,
-        investigatedRole: mafiaGame.policeTarget ? players[mafiaGame.policeTarget]?.role : undefined,
+        investigatedPlayerId: mafiaGame.policeTarget || null,
+        investigatedRole: mafiaGame.policeTarget ? players[mafiaGame.policeTarget]?.role : null,
       }
     };
 
@@ -637,7 +610,7 @@ export const sessionService = {
     });
   },
 
-  async startOmokGame(sessionId: string, blackPlayerId: string, whitePlayerId: string, isAIMatch: boolean = false, difficulty: number = 1) {
+  async startOmokGame(sessionId: string, blackPlayerId: string, whitePlayerId: string) {
     if (!db) return;
     
     // Initialize 15x15 board
@@ -651,8 +624,6 @@ export const sessionService = {
       winner: null,
       winningLine: null,
       isDraw: false,
-      isAIMatch,
-      difficulty,
       startTime: Date.now(),
       moveCount: 0
     };
@@ -662,30 +633,8 @@ export const sessionService = {
       omokGame
     };
 
-    if (isAIMatch) {
-      // Add AI player if not exists
-      const aiNicknames = ['알파고_인턴', '알파고_사원', '알파고_주임', '알파고_대리', '알파고_과장', '알파고_차장', '알파고_부장'];
-      const aiPlayer: Player = {
-        id: 'AI_PLAYER',
-        nickname: aiNicknames[difficulty - 1] || '알파고_인턴',
-        isHost: false,
-        isAlive: true,
-        isReady: true,
-        isConnected: true,
-        isAI: true
-      };
-      updates[`players/AI_PLAYER`] = aiPlayer;
-    }
-
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, isAIMatch ? `AI와의 오목 대전이 시작되었습니다.` : `오목 대전이 시작되었습니다.`, 'success');
-
-    // Trigger AI move if AI is the first player
-    if (isAIMatch && blackPlayerId === 'AI_PLAYER') {
-      setTimeout(() => {
-        this.makeOmokAIMove(sessionId, 'AI_PLAYER');
-      }, 1000);
-    }
+    await this.addLog(sessionId, `오목 대전이 시작되었습니다.`, 'success');
   },
 
   async startBingoSetup(sessionId: string, settings: any) {
@@ -1048,292 +997,9 @@ export const sessionService = {
     if (updates['omokGame/winner']) {
       await this.addLog(sessionId, `${player}님이 오목 대전에서 승리했습니다!`, 'success');
       await this.updateStats(sessionId, playerId);
-      
-      // AI Match Leaderboard
-      if (game.isAIMatch && playerId !== 'AI_PLAYER' && game.difficulty === 7) {
-        const timeTaken = (Date.now() - (game.startTime || Date.now())) / 1000;
-        const moveCount = (game.moveCount || 0) + 1;
-        // Score calculation: Base 10000 - (time * 10) - (moves * 50)
-        const score = Math.max(0, 10000 - Math.floor(timeTaken * 10) - (moveCount * 50));
-        
-        // Record to Hall of Fame
-        await this.recordLeaderboard(sessionId, 'OMOK_HOF', playerId, player, score, { timeTaken, moveCount });
-        updates['omokGame/lastScore'] = score;
-      }
     }
     
     if (updates['omokGame/isDraw']) await this.addLog(sessionId, `오목 대전이 무승부로 종료되었습니다.`, 'warning');
-
-    // Trigger AI move if next player is AI
-    if (!updates['omokGame/winner'] && !updates['omokGame/isDraw'] && nextPlayerId === 'AI_PLAYER') {
-      setTimeout(() => {
-        this.makeOmokAIMove(sessionId, nextPlayerId);
-      }, 600);
-    }
-  },
-
-  async makeOmokAIMove(sessionId: string, aiPlayerId: string) {
-    if (!db) return;
-    const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
-    const session = sessionSnap.val();
-    if (!session || !session.omokGame || session.omokGame.currentPlayerId !== aiPlayerId) return;
-
-    const game = session.omokGame;
-    
-    // Normalize board to 15x15 matrix
-    const ensureOmokMatrix = (data: any) => {
-      const matrix = Array(15).fill(0).map(() => Array(15).fill(0));
-      if (!data) return matrix;
-      const rows = Array.isArray(data) ? data : Object.values(data);
-      const rowKeys = Array.isArray(data) ? null : Object.keys(data);
-      
-      rows.forEach((row: any, ri: number) => {
-        const actualRowIdx = rowKeys ? parseInt(rowKeys[ri]) : ri;
-        if (actualRowIdx >= 15) return;
-        
-        const cells = Array.isArray(row) ? row : Object.values(row);
-        const cellKeys = Array.isArray(row) ? null : Object.keys(row);
-        
-        cells.forEach((cell: any, ci: number) => {
-          const actualCellIdx = cellKeys ? parseInt(cellKeys[ci]) : ci;
-          if (actualCellIdx >= 15) return;
-          matrix[actualRowIdx][actualCellIdx] = parseInt(String(cell)) || 0;
-        });
-      });
-      return matrix;
-    };
-
-    const boardMatrix = ensureOmokMatrix(game.board);
-    
-    const aiStone = String(aiPlayerId).trim() === String(game.blackPlayerId).trim() ? 1 : 2;
-    const playerStone = aiStone === 1 ? 2 : 1;
-    const difficulty = game.difficulty || 1;
-
-    const bestMove = this.getOmokBestMove(boardMatrix, aiStone, playerStone, difficulty);
-    if (bestMove) {
-      await this.placeOmokStone(sessionId, aiPlayerId, bestMove.x, bestMove.y);
-    }
-  },
-
-  getOmokBestMove(board: number[][], aiStone: number, playerStone: number, difficulty: number) {
-    // Difficulty adjustments for 7 levels
-    // Level 1: 55% mistake chance, Level 2: 30%, Level 3: 15%, Level 4+: 0%
-    const mistakeChance = difficulty === 1 ? 0.55 : (difficulty === 2 ? 0.30 : (difficulty === 3 ? 0.15 : 0));
-    const randomness = Math.max(0, (7 - difficulty) * 1000); 
-    const searchRange = difficulty >= 6 ? 3 : (difficulty >= 4 ? 2 : 1);
-
-    // Chance to make a completely random move near existing stones
-    if (Math.random() < mistakeChance) {
-      const validMoves: {x: number, y: number}[] = [];
-      for (let y = 0; y < 15; y++) {
-        for (let x = 0; x < 15; x++) {
-          if (board[y][x] === 0) {
-            let hasNeighbor = false;
-            for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                const ny = y + dy, nx = x + dx;
-                if (ny >= 0 && ny < 15 && nx >= 0 && nx < 15 && board[ny][nx] !== 0) {
-                  hasNeighbor = true;
-                  break;
-                }
-              }
-              if (hasNeighbor) break;
-            }
-            if (hasNeighbor) {
-              if (aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, aiStone)) continue;
-              validMoves.push({x, y});
-            }
-          }
-        }
-      }
-      if (validMoves.length > 0) return validMoves[Math.floor(Math.random() * validMoves.length)];
-    }
-
-    const getCandidates = (currentBoard: number[][], stone: number, opponent: number) => {
-      const candidates: {x: number, y: number, score: number}[] = [];
-      for (let y = 0; y < 15; y++) {
-        for (let x = 0; x < 15; x++) {
-          if (currentBoard[y][x] === 0) {
-            let hasNeighbor = false;
-            for (let dy = -searchRange; dy <= searchRange; dy++) {
-              for (let dx = -searchRange; dx <= searchRange; dx++) {
-                const ny = y + dy, nx = x + dx;
-                if (ny >= 0 && ny < 15 && nx >= 0 && nx < 15 && currentBoard[ny][nx] !== 0) {
-                  hasNeighbor = true;
-                  break;
-                }
-              }
-              if (hasNeighbor) break;
-            }
-            if (!hasNeighbor && currentBoard.some(row => row.some(cell => cell !== 0))) continue;
-            if (stone === 1 && this.checkOmokForbiddenMove(currentBoard, x, y, stone)) continue;
-
-            const score = this.evaluateOmokPosition(currentBoard, x, y, stone, opponent, difficulty);
-            candidates.push({x, y, score});
-          }
-        }
-      }
-      return candidates.sort((a, b) => b.score - a.score);
-    };
-
-    const aiCandidates = getCandidates(board, aiStone, playerStone);
-    if (aiCandidates.length === 0) return null;
-
-    // For Level 7, use 2-ply Minimax
-    if (difficulty === 7) {
-      let bestMinimaxScore = -Infinity;
-      let bestMove = aiCandidates[0];
-
-      // Only check top 15 candidates for performance
-      const topCandidates = aiCandidates.slice(0, 15);
-      
-      for (const move of topCandidates) {
-        // AI wins immediately
-        if (move.score >= 1000000) return move;
-
-        board[move.y][move.x] = aiStone;
-        
-        // Find player's best response
-        const playerCandidates = getCandidates(board, playerStone, aiStone);
-        let playerBestScore = 0;
-        if (playerCandidates.length > 0) {
-          playerBestScore = playerCandidates[0].score;
-        }
-        
-        // Minimax score: AI score - Player's best response score
-        const minimaxScore = move.score - playerBestScore;
-        
-        if (minimaxScore > bestMinimaxScore) {
-          bestMinimaxScore = minimaxScore;
-          bestMove = move;
-        }
-        
-        board[move.y][move.x] = 0; // Backtrack
-      }
-      return bestMove;
-    }
-
-    // For other levels, pick from best moves with randomness
-    const maxScore = aiCandidates[0].score;
-    const bestMoves = aiCandidates.filter(c => c.score >= maxScore - randomness);
-    return bestMoves[Math.floor(Math.random() * bestMoves.length)];
-  },
-
-  evaluateOmokPosition(board: number[][], x: number, y: number, aiStone: number, playerStone: number, difficulty: number) {
-    let aiTotalScore = 0;
-    let playerTotalScore = 0;
-    let aiThreats = { fours: 0, openThrees: 0 };
-    let playerThreats = { fours: 0, openThrees: 0 };
-
-    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
-    
-    for (const [dx, dy] of directions) {
-      const aiScore = this.evaluateOmokLine(board, x, y, dx, dy, aiStone, playerStone, difficulty);
-      const playerScore = this.evaluateOmokLine(board, x, y, dx, dy, playerStone, aiStone, difficulty);
-      
-      aiTotalScore += aiScore;
-      playerTotalScore += playerScore;
-
-      // Identify specific threats for combination detection
-      if (aiScore >= 100000) aiThreats.fours++; // Open 4
-      else if (aiScore >= 10000) {
-        if (this.isOpenThree(board, x, y, dx, dy, aiStone)) aiThreats.openThrees++;
-        else aiThreats.fours++; // Blocked 4
-      }
-
-      if (playerScore >= 100000) playerThreats.fours++;
-      else if (playerScore >= 10000) {
-        if (this.isOpenThree(board, x, y, dx, dy, playerStone)) playerThreats.openThrees++;
-        else playerThreats.fours++;
-      }
-    }
-
-    // Combination bonuses (Double Three, Four-Three, etc.)
-    // These are extremely powerful for White (AI if White)
-    if (aiThreats.fours >= 2 || (aiThreats.fours >= 1 && aiThreats.openThrees >= 1)) aiTotalScore += 500000;
-    if (aiThreats.openThrees >= 2) aiTotalScore += 300000;
-
-    if (playerThreats.fours >= 2 || (playerThreats.fours >= 1 && playerThreats.openThrees >= 1)) playerTotalScore += 500000;
-    if (playerThreats.openThrees >= 2) playerTotalScore += 300000;
-
-    // Prioritize defense if player is about to win
-    let defenseMultiplier = 1.1;
-    if (difficulty >= 5) defenseMultiplier = 1.5;
-    else if (difficulty <= 2) defenseMultiplier = 0.8;
-    
-    // If player is Black, their forbidden moves are not threats
-    if (playerStone === 1) {
-      board[y][x] = playerStone;
-      if (this.checkOmokForbiddenMove(board, x, y, playerStone)) {
-        playerTotalScore = 0;
-      }
-      board[y][x] = 0;
-    }
-
-    if (playerTotalScore >= 10000) return playerTotalScore * defenseMultiplier;
-    
-    if (difficulty === 7 && aiTotalScore >= 10000) return aiTotalScore * 2;
-
-    return aiTotalScore + playerTotalScore;
-  },
-
-  evaluateOmokLine(board: number[][], x: number, y: number, dx: number, dy: number, stone: number, opponent: number, difficulty: number) {
-    let count = 1;
-    let blocked = 0;
-
-    // Forward
-    for (let i = 1; i < 5; i++) {
-      const nx = x + dx * i;
-      const ny = y + dy * i;
-      if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
-        blocked++;
-        break;
-      }
-      if (board[ny][nx] === stone) count++;
-      else if (board[ny][nx] === 0) break;
-      else {
-        blocked++;
-        break;
-      }
-    }
-
-    // Backward
-    for (let i = 1; i < 5; i++) {
-      const nx = x - dx * i;
-      const ny = y - dy * i;
-      if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
-        blocked++;
-        break;
-      }
-      if (board[ny][nx] === stone) count++;
-      else if (board[ny][nx] === 0) break;
-      else {
-        blocked++;
-        break;
-      }
-    }
-
-    let score = count;
-    if (count === 5) score = 1000000; // Win
-    else if (count > 5) {
-      score = (stone === 1 ? 0 : 1000000); // Overline is win for White, forbidden for Black
-    }
-    else if (count === 4) {
-      score = (blocked === 0 ? 100000 : 10000); // Open 4 vs Blocked 4
-    }
-    else if (count === 3) {
-      score = (blocked === 0 ? 10000 : 500);    // Open 3 vs Blocked 3
-    }
-    else if (count === 2) {
-      score = (blocked === 0 ? 200 : 20);       // Open 2 vs Blocked 2
-    }
-
-    // Scale score by difficulty for levels 1-3 to make AI "blind" to some threats
-    if (difficulty <= 3) {
-      const awareness = difficulty / 4; // Lv.1: 0.25, Lv.2: 0.5, Lv.3: 0.75
-      score = Math.floor(score * awareness);
-    }
-    return score;
   },
 
   checkOmokForbiddenMove(board: number[][], x: number, y: number, stone: number) {
@@ -2556,5 +2222,17 @@ export const sessionService = {
       winnerId
     });
     await this.addLog(sessionId, `사건의 전말이 밝혀졌습니다!`, 'success');
+  },
+
+  async submitMysteryGuess(sessionId: string, playerId: string, nickname: string, text: string) {
+    if (!db) return;
+    const guessRef = push(ref(db, `sessions/${sessionId}/mysteryReportGame/guesses`));
+    await set(guessRef, {
+      id: guessRef.key,
+      playerId,
+      nickname,
+      text,
+      timestamp: Date.now()
+    });
   }
 };
