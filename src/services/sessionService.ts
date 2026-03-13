@@ -1776,6 +1776,16 @@ export const sessionService = {
       officeLifeGame
     });
     await this.addLog(sessionId, "오피스 라이프: 승진 대작전 프로젝트가 시작되었습니다!", "success");
+
+    // Trigger AI if first player is AI
+    const firstPlayerId = order[0];
+    if (players[firstPlayerId]?.isAI) {
+      const snapshot = await get(ref(db, `sessions/${sessionId}`));
+      const session = snapshot.val();
+      if (session) {
+        await this.processOfficeLifeAITurn(sessionId, session);
+      }
+    }
   },
 
   async rollOfficeLifeDice(sessionId: string, playerId: string, session: Session) {
@@ -2099,6 +2109,24 @@ export const sessionService = {
       const allSelected = turnOrder.every(pid => latestGame.playerStates?.[pid]?.roleId);
       if (allSelected) {
         await update(ref(db, `sessions/${sessionId}/officeLifeGame`), { waitingForAction: 'NONE' });
+        
+        // Trigger AI if current player is AI
+        const currentTurnPlayerId = turnOrder[0];
+        if (session.players[currentTurnPlayerId]?.isAI) {
+          const updatedSnapshot = await get(ref(db, `sessions/${sessionId}`));
+          const updatedSession = updatedSnapshot.val();
+          if (updatedSession) {
+            await this.processOfficeLifeAITurn(sessionId, updatedSession);
+          }
+        }
+      } else {
+        // If not all selected, find the next AI that needs to select a role
+        for (const pid of turnOrder) {
+          if (session.players[pid]?.isAI && !latestGame.playerStates?.[pid]?.roleId) {
+             await this.processOfficeLifeAITurn(sessionId, session, pid);
+             break;
+          }
+        }
       }
     }
   },

@@ -2048,8 +2048,6 @@ export default function App() {
               </div>
             ) : session.gameType === GameType.OFFICE_LIFE ? (
               <OfficeLifeBoard session={session} currentUser={currentUser} />
-            ) : session.gameType === GameType.MYSTERY_REPORT ? (
-              <MysteryReportBoard session={session} currentUser={currentUser} />
             ) : session.gameType === GameType.OFFICE_2048 ? (
               <div className="max-w-md mx-auto space-y-6">
                 <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">

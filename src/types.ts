@@ -8,7 +8,6 @@ export enum GameType {
   OFFICE_2048 = 'OFFICE_2048',
   SUDOKU = 'SUDOKU',
   OFFICE_LIFE = 'OFFICE_LIFE',
-  MYSTERY_REPORT = 'MYSTERY_REPORT',
 }
 
 export enum SessionStatus {
@@ -193,33 +192,6 @@ export interface OfficeLifeGameState {
   waitingForAction?: 'SELECT_ROLE' | 'BUY_PROJECT' | 'CHANCE_CARD' | 'BUY_ITEM' | 'PROMOTION_TEST' | 'END_TURN' | 'NONE';
 }
 
-export interface MysteryReportGameState {
-  mystery: string;
-  solution: string;
-  status: 'PLAYING' | 'SOLVED';
-  questions: {
-    id: string;
-    playerId: string;
-    nickname: string;
-    text: string;
-    answer?: 'YES' | 'NO' | 'IRRELEVANT' | 'HINT';
-    hintText?: string;
-    timestamp: number;
-  }[];
-  guesses?: Record<string, {
-    id: string;
-    playerId: string;
-    nickname: string;
-    text: string;
-    timestamp: number;
-  }>;
-  hints: string[];
-  winnerId?: string;
-  turnOrder?: string[];
-  currentTurnIndex?: number;
-  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
-}
-
 export interface LeaderboardEntry {
   playerId: string;
   nickname: string;
@@ -244,7 +216,6 @@ export interface Session {
   office2048Game?: Office2048GameState;
   sudokuGame?: SudokuGameState;
   officeLifeGame?: OfficeLifeGameState;
-  mysteryReportGame?: MysteryReportGameState;
   leaderboards?: Record<string, LeaderboardEntry[]>;
   settings: {
     maxPlayers: number;
