@@ -954,30 +954,7 @@ export const sessionService = {
     const game = session.omokGame;
     if (game.currentPlayerId !== playerId) return;
     
-    // Normalize board to 15x15 matrix
-    const ensureOmokMatrix = (data: any) => {
-      const matrix = Array(15).fill(0).map(() => Array(15).fill(0));
-      if (!data) return matrix;
-      const rows = Array.isArray(data) ? data : Object.values(data);
-      const rowKeys = Array.isArray(data) ? null : Object.keys(data);
-      
-      rows.forEach((row: any, ri: number) => {
-        const actualRowIdx = rowKeys ? parseInt(rowKeys[ri]) : ri;
-        if (actualRowIdx >= 15) return;
-        
-        const cells = Array.isArray(row) ? row : Object.values(row);
-        const cellKeys = Array.isArray(row) ? null : Object.keys(row);
-        
-        cells.forEach((cell: any, ci: number) => {
-          const actualCellIdx = cellKeys ? parseInt(cellKeys[ci]) : ci;
-          if (actualCellIdx >= 15) return;
-          matrix[actualRowIdx][actualCellIdx] = parseInt(String(cell)) || 0;
-        });
-      });
-      return matrix;
-    };
-
-    const boardMatrix = ensureOmokMatrix(game.board);
+    const boardMatrix = this.ensureOmokMatrix(game.board);
     if (boardMatrix[y][x] !== 0) return;
 
     const isBlack = String(playerId).trim() === String(game.blackPlayerId).trim();
@@ -1045,12 +1022,12 @@ export const sessionService = {
     }
 
     await update(sessionRef, updates);
-    const player = session.players[playerId].nickname;
-    await this.addLog(sessionId, `${player}님이 (${x}, ${y}) 위치에 돌을 놓았습니다.`);
+    const playerName = playerId === 'AI' ? 'AI 봇' : (session.players[playerId]?.nickname || '알 수 없는 플레이어');
+    await this.addLog(sessionId, `${playerName}님이 (${x}, ${y}) 위치에 돌을 놓았습니다.`);
     
     if (updates['omokGame/winner']) {
-      await this.addLog(sessionId, `${player}님이 오목 대전에서 승리했습니다!`, 'success');
-      await this.updateStats(sessionId, playerId);
+      await this.addLog(sessionId, `${playerName}님이 오목 대전에서 승리했습니다!`, 'success');
+      if (playerId !== 'AI') await this.updateStats(sessionId, playerId);
     }
     
     if (updates['omokGame/isDraw']) await this.addLog(sessionId, `오목 대전이 무승부로 종료되었습니다.`, 'warning');
@@ -1364,62 +1341,6 @@ export const sessionService = {
     const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
     let fourCount = 0;
 
-    for (const [dx, dy] of directions) {
-      // For each direction, check if placing a stone at (x,y) creates a 4
-      // A 4 is exactly 4 stones in a row (or more, but overline is checked separately)
-      // Actually, for double four, any 4 counts.
-      
-      // We need to check all possible 5-cell windows that include (x,y)
-      for (let startOffset = -4; startOffset <= 0; startOffset++) {
-        let stones = 0;
-        let possible = true;
-        for (let i = 0; i < 5; i++) {
-          const nx = x + dx * (startOffset + i);
-          const ny = y + dy * (startOffset + i);
-          if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
-            possible = false;
-            break;
-          }
-          if (board[ny][nx] === stone || (nx === x && ny === y)) stones++;
-          else if (board[ny][nx] !== 0) {
-            possible = false;
-            break;
-          }
-        }
-        
-        if (possible && stones === 4) {
-          // This window can become a 5. Is it a 4 right now?
-          // To be a "4", it must be able to become a 5 in ONE move.
-          // Since we just placed a stone at (x,y), we check if this line has 4 stones.
-          
-          // Count consecutive stones in this direction
-          let count = 1;
-          for (let i = 1; i < 5; i++) {
-            const nx = x + dx * i, ny = y + dy * i;
-            if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== stone) break;
-            count++;
-          }
-          for (let i = 1; i < 5; i++) {
-            const nx = x - dx * i, ny = y - dy * i;
-            if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15 || board[ny][nx] !== stone) break;
-            count++;
-          }
-          
-          if (count === 4) {
-            fourCount++;
-            break; // Found a 4 in this direction
-          }
-          
-          // Also check for "jump" fours like OO.OO
-          // This is more complex. Let's use a simpler check:
-          // If we place a stone, how many ways can we win in one more move?
-          // If there are two or more ways to win (creating a 5), it's a double four.
-        }
-      }
-    }
-    
-    // Re-implementing more accurately:
-    fourCount = 0;
     for (const [dx, dy] of directions) {
       let createdWinPoints = 0;
       // Check all empty spots in this line
