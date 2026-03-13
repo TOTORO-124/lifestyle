@@ -8,8 +8,6 @@ import { BINGO_TOPICS } from './data/bingoTopics';
 import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
 import { OfficeLifeBoard } from './components/OfficeLifeBoard';
-import { MysteryReportBoard } from './components/MysteryReportBoard';
-import { mysteryService } from './services/mysteryService';
 import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2 } from 'lucide-react';
 
 const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], title: string, sessionId?: string | null, gameType?: string }) => {
@@ -493,17 +491,6 @@ export default function App() {
         await sessionService.startSudokuGame(session.id, session.settings.sudokuDifficulty || 'EASY');
       } else if (session.gameType === GameType.OFFICE_LIFE) {
         await sessionService.startOfficeLifeGame(session.id, session.players, session.turnOrder, session.settings.officeLifeMode || 'INDIVIDUAL');
-      } else if (session.gameType === GameType.MYSTERY_REPORT) {
-        if (loading) return;
-        setLoading(true);
-        try {
-          const res = await mysteryService.generateMystery();
-          await sessionService.startMysteryReport(session.id, res.mystery, res.solution, res.difficulty, session.players, session.turnOrder);
-        } catch (err) {
-          console.error(err);
-        } finally {
-          setLoading(false);
-        }
       }
     } catch (e: any) {
       setError(e.message || '게임을 시작하는 중 오류가 발생했습니다.');
@@ -727,14 +714,6 @@ export default function App() {
                           <span className="font-bold">승진 대작전</span>
                           <span className="text-[9px] font-normal opacity-80">오피스 라이프 보드</span>
                         </button>
-                        <button 
-                          onClick={() => handleCreateSession(GameType.MYSTERY_REPORT)} 
-                          className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
-                          disabled={loading}
-                        >
-                          <span className="font-bold">미스테리 보고서</span>
-                          <span className="text-[9px] font-normal opacity-80">추리 게임</span>
-                        </button>
                       </div>
                     </div>
                   ) : (
@@ -857,8 +836,7 @@ export default function App() {
                session.gameType === GameType.BINGO ? '오피스_빙고_매칭.xlsx' : 
                session.gameType === GameType.DRAW ? '오피스_캐치마인드.xlsx' :
                session.gameType === GameType.MINESWEEPER ? '데이터_오류_검수.xlsx' :
-               session.gameType === GameType.OFFICE_2048 ? '직급_승진_프로세스.xlsx' : 
-               session.gameType === GameType.MYSTERY_REPORT ? '미스테리_보고서_분석.xlsx' : '데이터_무결성_검증.xlsx'}
+               session.gameType === GameType.OFFICE_2048 ? '직급_승진_프로세스.xlsx' : '데이터_무결성_검증.xlsx'}
             </span>
             {isSpectator && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-normal">(관전 모드)</span>}
           </h1>
@@ -923,6 +901,14 @@ export default function App() {
               <div className="lg:col-span-2 excel-grid rounded overflow-hidden shadow-sm">
                 <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
                   <span className="text-[10px] font-bold text-[#666]">참가자_데이터_그리드</span>
+                  {isHost && (
+                    <button 
+                      onClick={() => sessionService.addAIPlayer(session.id)}
+                      className="text-[10px] text-[#217346] hover:underline flex items-center gap-1"
+                    >
+                      <Play size={10} /> AI 봇 추가
+                    </button>
+                  )}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="excel-grid">

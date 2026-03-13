@@ -1,7 +1,7 @@
 import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
-import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, MysteryReportGameState } from '../types';
+import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState } from '../types';
 import { LIAR_TOPICS } from '../data/topics';
 import { DRAW_TOPICS } from '../data/drawTopics';
 import { OFFICE_LIFE_BOARD } from '../data/officeLifeBoard';
@@ -114,6 +114,26 @@ export const sessionService = {
         timestamp: Date.now()
       });
     }
+  },
+
+  async addAIPlayer(sessionId: string) {
+    if (!db) return;
+    const aiId = `ai_${Math.random().toString(36).substr(2, 9)}`;
+    const aiNicknames = ['인턴_봇', '사원_봇', '주임_봇', '대리_봇', '과장_봇', '차장_봇', '부장_봇'];
+    const nickname = aiNicknames[Math.floor(Math.random() * aiNicknames.length)];
+    
+    const aiPlayer: Player = {
+      id: aiId,
+      nickname: `${nickname}(AI)`,
+      isHost: false,
+      isAlive: true,
+      isReady: true,
+      isConnected: true,
+      isAI: true,
+      lastActive: Date.now(),
+    };
+
+    await set(ref(db, `sessions/${sessionId}/players/${aiId}`), aiPlayer);
   },
 
   async kickPlayer(sessionId: string, playerId: string) {
@@ -2190,77 +2210,49 @@ export const sessionService = {
     }
     
     await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
+
+    // Trigger AI turn if next player is AI
+    const nextPlayerId = turnOrder[game.currentTurnIndex];
+    if (session.players[nextPlayerId]?.isAI && game.status === 'PLAYING') {
+      await this.processOfficeLifeAITurn(sessionId, session);
+    }
   },
 
-  async startMysteryReport(sessionId: string, mystery: string, solution: string, difficulty: 'EASY' | 'MEDIUM' | 'HARD', players: Record<string, Player>, turnOrder?: string[]) {
-    if (!db) return;
-    
-    const activePlayers = Object.values(players).filter(p => !p.isSpectator);
-    const order = turnOrder && turnOrder.length > 0 
-      ? turnOrder 
-      : activePlayers.map(p => p.id).sort(() => Math.random() - 0.5);
+  async processOfficeLifeAITurn(sessionId: string, session: Session, targetPlayerId?: string) {
+    if (!db || !session.officeLifeGame) return;
+    const game = session.officeLifeGame;
+    const turnOrder = game.turnOrder || [];
+    const currentPlayerId = targetPlayerId || turnOrder[game.currentTurnIndex || 0];
+    const player = session.players[currentPlayerId];
 
-    const mysteryReportGame: MysteryReportGameState = {
-      mystery,
-      solution,
-      difficulty,
-      status: 'PLAYING',
-      questions: [],
-      hints: [],
-      turnOrder: order,
-      currentTurnIndex: 0
-    };
-    await update(ref(db, `sessions/${sessionId}`), {
-      status: SessionStatus.PLAYING,
-      mysteryReportGame
-    });
-    await this.addLog(sessionId, `미스테리 보고서 분석이 시작되었습니다. 상황을 파악하고 질문을 던지세요!`, 'success');
-  },
+    if (!player || !player.isAI) return;
 
-  async submitMysteryQuestion(sessionId: string, playerId: string, nickname: string, text: string, currentTurnIndex: number, turnOrder: string[]) {
-    if (!db) return;
-    const questionRef = push(ref(db, `sessions/${sessionId}/mysteryReportGame/questions`));
-    await set(questionRef, {
-      id: questionRef.key,
-      playerId,
-      nickname,
-      text,
-      timestamp: Date.now()
-    });
+    setTimeout(async () => {
+      // Re-fetch session to get latest waitingForAction
+      const snapshot = await get(ref(db, `sessions/${sessionId}`));
+      const currentSession = snapshot.val() as Session;
+      if (!currentSession || !currentSession.officeLifeGame) return;
+      const currentGame = currentSession.officeLifeGame;
 
-    // Advance turn
-    const nextTurnIndex = (currentTurnIndex + 1) % turnOrder.length;
-    await update(ref(db, `sessions/${sessionId}/mysteryReportGame`), {
-      currentTurnIndex: nextTurnIndex
-    });
-  },
-
-  async answerMysteryQuestion(sessionId: string, questionId: string, answer: 'YES' | 'NO' | 'IRRELEVANT' | 'HINT', text: string) {
-    if (!db) return;
-    await update(ref(db, `sessions/${sessionId}/mysteryReportGame/questions/${questionId}`), {
-      answer,
-      hintText: answer === 'HINT' ? (text || '') : ''
-    });
-  },
-
-  async solveMystery(sessionId: string, winnerId: string) {
-    if (!db) return;
-    await update(ref(db, `sessions/${sessionId}/mysteryReportGame`), {
-      status: 'SOLVED',
-      winnerId
-    });
-    await this.addLog(sessionId, `사건의 전말이 밝혀졌습니다!`, 'success');
-  },
-
-  async submitMysteryGuess(sessionId: string, playerId: string, nickname: string, text: string) {
-    if (!db) return;
-    const guessRef = push(ref(db, `sessions/${sessionId}/mysteryReportGame/guesses`));
-    await set(guessRef, {
-      id: guessRef.key,
-      playerId,
-      nickname,
-      text,
-      timestamp: Date.now()
-    });
+      if (currentGame.waitingForAction === 'NONE' || !currentGame.waitingForAction) {
+        await this.rollOfficeLifeDice(sessionId, currentPlayerId, currentSession);
+      } else if (currentGame.waitingForAction === 'BUY_PROJECT') {
+        await this.buyOfficeLifeProject(sessionId, currentPlayerId, currentSession);
+        await this.endOfficeLifeTurn(sessionId, currentPlayerId, currentSession);
+      } else if (currentGame.waitingForAction === 'CHANCE_CARD') {
+        await this.drawOfficeLifeChanceCard(sessionId, currentPlayerId, currentSession);
+        await this.endOfficeLifeTurn(sessionId, currentPlayerId, currentSession);
+      } else if (currentGame.waitingForAction === 'BUY_ITEM') {
+        await this.endOfficeLifeTurn(sessionId, currentPlayerId, currentSession);
+      } else if (currentGame.waitingForAction === 'PROMOTION_TEST') {
+        await this.takeOfficeLifePromotionTest(sessionId, currentPlayerId, true, currentSession);
+      } else if (currentGame.waitingForAction === 'END_TURN') {
+        await this.endOfficeLifeTurn(sessionId, currentPlayerId, currentSession);
+      } else if (currentGame.waitingForAction === 'SELECT_ROLE') {
+        const roles = ['PLANNER', 'DEV', 'DESIGN', 'SALES'];
+        const randomRole = roles[Math.floor(Math.random() * roles.length)];
+        await this.selectOfficeLifeRole(sessionId, currentPlayerId, randomRole, currentSession);
+      }
+    }, 2000);
   }
 };
