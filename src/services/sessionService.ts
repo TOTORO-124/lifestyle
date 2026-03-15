@@ -1,13 +1,16 @@
 import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
-import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState } from '../types';
+import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, EscapeRoomGameState, CyberArenaGameState, ArenaProjectile, ArenaCharacter, ArenaItem } from '../types';
 import { LIAR_TOPICS } from '../data/topics';
 import { DRAW_TOPICS } from '../data/drawTopics';
+import { BINGO_TOPICS } from '../data/bingoTopics';
 import { OFFICE_LIFE_BOARD } from '../data/officeLifeBoard';
 import { CHANCE_CARDS } from '../data/chanceCards';
 import { OFFICE_ITEMS } from '../data/officeItems';
 import { OFFICE_RANKS, OFFICE_ROLES } from '../data/officeRanks';
+import { ESCAPE_ROOM_DATA } from '../data/escapeRoomData';
+import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS } from '../data/cyberArenaData';
 
 export const sessionService = {
   async authenticate() {
@@ -15,7 +18,37 @@ export const sessionService = {
     if (!auth.currentUser) {
       await signInAnonymously(auth);
     }
+    
+    // Ensure user profile exists
+    if (auth.currentUser && db) {
+      const userRef = ref(db, `users/${auth.currentUser.uid}`);
+      const snapshot = await get(userRef);
+      if (!snapshot.exists()) {
+        const initialProfile = {
+          uid: auth.currentUser.uid,
+          nickname: '익명 사원',
+          department: 'DEV',
+          xp: 0,
+          level: 1,
+          totalWins: 0,
+          joinedAt: Date.now()
+        };
+        await set(userRef, initialProfile);
+      }
+    }
+    
     return auth.currentUser;
+  },
+
+  async getUserProfile(uid: string) {
+    if (!db) return null;
+    const snapshot = await get(ref(db, `users/${uid}`));
+    return snapshot.val();
+  },
+
+  async updateUserProfile(uid: string, updates: any) {
+    if (!db) return;
+    await update(ref(db, `users/${uid}`), updates);
   },
 
   async updatePresence(sessionId: string, playerId: string, isConnected: boolean) {
@@ -55,6 +88,8 @@ export const sessionService = {
         mafiaCount: 1,
         doctorCount: 1,
         policeCount: 1,
+        escapeRoomDifficulty: 'NORMAL',
+        cyberArenaPvE: true,
       },
     };
 
@@ -119,7 +154,7 @@ export const sessionService = {
   async addAIPlayer(sessionId: string) {
     if (!db) return;
     const aiId = `ai_${Math.random().toString(36).substr(2, 9)}`;
-    const aiNicknames = ['인턴_봇', '사원_봇', '주임_봇', '대리_봇', '과장_봇', '차장_봇', '부장_봇'];
+    const aiNicknames = ['인턴_봇', '사원_봇', '주임_봇', '대리_봇', '과장_봇', '차장_봇', '부장_봇', '이사_봇', '상무_봇'];
     const nickname = aiNicknames[Math.floor(Math.random() * aiNicknames.length)];
     
     const aiPlayer: Player = {
@@ -134,6 +169,147 @@ export const sessionService = {
     };
 
     await set(ref(db, `sessions/${sessionId}/players/${aiId}`), aiPlayer);
+  },
+
+  async processAllAIMoves(sessionId: string, session: Session) {
+    if (!db || !session || session.status === SessionStatus.LOBBY) return;
+
+    const players = Object.values(session.players || {}) as Player[];
+    const aiPlayers = players.filter(p => p.isAI && p.isConnected !== false);
+    if (aiPlayers.length === 0) return;
+
+    // 1. Handle Role Confirmation
+    if (session.status === SessionStatus.REVEAL) {
+      for (const ai of aiPlayers) {
+        if (!ai.hasConfirmedRole) {
+          await update(ref(db, `sessions/${sessionId}/players/${ai.id}`), { hasConfirmedRole: true });
+        }
+      }
+      return;
+    }
+
+    // 2. Handle Voting
+    if (session.status === SessionStatus.VOTING) {
+      const alivePlayers = players.filter(p => p.isAlive);
+      for (const ai of aiPlayers) {
+        if (ai.isAlive && !ai.voteTarget) {
+          const targets = alivePlayers.filter(p => p.id !== ai.id);
+          if (targets.length > 0) {
+            const target = targets[Math.floor(Math.random() * targets.length)];
+            await this.submitVote(sessionId, ai.id, target.id);
+            await this.addLog(sessionId, `${ai.nickname}님이 투표를 마쳤습니다.`, 'info');
+          }
+        }
+      }
+      return;
+    }
+
+    // 3. Game Specific AI Logic
+    switch (session.gameType) {
+      case GameType.OMOK:
+        if (session.omokGame?.currentPlayerId?.startsWith('ai_')) {
+          await this.processOmokAIMove(sessionId);
+        }
+        break;
+      case GameType.BINGO:
+        if (session.status === SessionStatus.PLAYING && session.bingoGame) {
+          for (const ai of aiPlayers) {
+            if (!session.bingoGame.boards?.[ai.id]) {
+              const words = BINGO_TOPICS.find(t => t.category === session.bingoGame?.category)?.words || [];
+              const shuffled = [...words].sort(() => Math.random() - 0.5);
+              const board = [];
+              for (let i = 0; i < 5; i++) {
+                board.push(shuffled.slice(i * 5, (i + 1) * 5));
+              }
+              await this.submitBingoBoard(sessionId, ai.id, board);
+              await this.addLog(sessionId, `${ai.nickname}님이 빙고판 작성을 마쳤습니다.`, 'info');
+            }
+          }
+          const turnOrder = session.turnOrder || [];
+          const currentPlayerId = session.bingoGame.currentPlayerId;
+          if (currentPlayerId?.startsWith('ai_')) {
+             const aiBoard = session.bingoGame.boards?.[currentPlayerId];
+             if (aiBoard) {
+               const flatBoard = aiBoard.flat();
+               const unpicked = flatBoard.filter(w => !session.bingoGame?.markedWords?.includes(w));
+               if (unpicked.length > 0) {
+                 const word = unpicked[Math.floor(Math.random() * unpicked.length)];
+                 await this.pickBingoWord(sessionId, word, session);
+               }
+             }
+          }
+        }
+        break;
+      case GameType.MAFIA:
+        if (session.status === SessionStatus.NIGHT && session.mafiaGame) {
+           for (const ai of aiPlayers) {
+             if (!ai.isAlive) continue;
+             if (ai.role === 'MAFIA') {
+                if (!session.mafiaGame.mafiaTargets?.[ai.id]) {
+                  const targets = players.filter(p => p.isAlive && p.role !== 'MAFIA');
+                  if (targets.length > 0) {
+                    const target = targets[Math.floor(Math.random() * targets.length)];
+                    await this.submitNightAction(sessionId, ai.id, 'MAFIA', target.id);
+                    await this.addLog(sessionId, `${ai.nickname}님이 밤의 행동을 마쳤습니다.`, 'info');
+                  }
+                }
+             } else if (ai.role === 'DOCTOR' && !session.mafiaGame.doctorTarget) {
+                const targets = players.filter(p => p.isAlive);
+                if (targets.length > 0) {
+                  const target = targets[Math.floor(Math.random() * targets.length)];
+                  await this.submitNightAction(sessionId, ai.id, 'DOCTOR', target.id);
+                  await this.addLog(sessionId, `${ai.nickname}님이 밤의 행동을 마쳤습니다.`, 'info');
+                }
+             } else if (ai.role === 'POLICE' && !session.mafiaGame.policeTarget) {
+                const targets = players.filter(p => p.isAlive && p.id !== ai.id);
+                if (targets.length > 0) {
+                  const target = targets[Math.floor(Math.random() * targets.length)];
+                  await this.submitNightAction(sessionId, ai.id, 'POLICE', target.id);
+                  await this.addLog(sessionId, `${ai.nickname}님이 밤의 행동을 마쳤습니다.`, 'info');
+                }
+             }
+           }
+        } else if (session.status === SessionStatus.PLAYING && session.mafiaGame) {
+           // AI debating simulation
+           if (Math.random() < 0.1) {
+             const ai = aiPlayers[Math.floor(Math.random() * aiPlayers.length)];
+             if (ai.isAlive) {
+               const messages = [
+                 "누가 마피아일까요? 수상한 사람이 있나요?",
+                 "저는 시민입니다. 저를 믿어주세요.",
+                 "조용히 있는 사람이 수상한 것 같아요.",
+                 "어젯밤 일이 너무 충격적이네요.",
+                 "빨리 투표를 시작했으면 좋겠어요.",
+                 "제 생각에는... 음, 아직 잘 모르겠네요."
+               ];
+               const msg = messages[Math.floor(Math.random() * messages.length)];
+               await this.addLog(sessionId, `[${ai.nickname}] ${msg}`, 'info');
+             }
+           }
+        }
+        break;
+      case GameType.DRAW:
+        if (session.status === SessionStatus.PLAYING && session.drawGame) {
+          const currentPlayerId = session.drawGame.presenterId;
+          if (currentPlayerId?.startsWith('ai_')) {
+            if (session.drawGame.timer > 5) {
+               await update(ref(db, `sessions/${sessionId}/drawGame`), { timer: 5 });
+            }
+          } else {
+            for (const ai of aiPlayers) {
+              if (ai.id !== currentPlayerId && !(session.drawGame.scores?.[ai.id] > 0)) {
+                if (Math.random() < 0.1) {
+                  await this.submitDrawGuess(sessionId, ai.id, session.drawGame.word || '', session);
+                }
+              }
+            }
+          }
+        }
+        break;
+      case GameType.OFFICE_LIFE:
+        // Already handled by processOfficeLifeAITurn
+        break;
+    }
   },
 
   async kickPlayer(sessionId: string, playerId: string) {
@@ -155,9 +331,9 @@ export const sessionService = {
   },
 
   async startLiarGame(sessionId: string, players: Record<string, Player>, settings: any, currentTurnOrder?: string[]) {
-    if (!db) return;
+    if (!db || !players) return;
     
-    const playerIds = Object.keys(players).filter(id => !players[id].isSpectator);
+    const playerIds = Object.keys(players || {}).filter(id => !players[id]?.isSpectator);
     const shuffledOrder = [...playerIds].sort(() => Math.random() - 0.5);
     
     const liarIdx = Math.floor(Math.random() * shuffledOrder.length);
@@ -216,7 +392,8 @@ export const sessionService = {
   },
 
   async startMafiaGame(sessionId: string, players: Record<string, Player>, settings: any, currentTurnOrder?: string[]) {
-    const playerIds = Object.keys(players);
+    if (!db || !players) return;
+    const playerIds = Object.keys(players || {}).filter(id => !players[id]?.isSpectator);
     const count = playerIds.length;
     
     const mafiaCount = settings.mafiaCount ?? 1;
@@ -230,7 +407,7 @@ export const sessionService = {
     // Determine Turn Order
     const finalTurnOrder = [...playerIds].sort(() => Math.random() - 0.5);
     
-    // Assign Roles Randomly (independent of turn order)
+    // Assign Roles Randomly
     const roleAssignmentOrder = [...playerIds].sort(() => Math.random() - 0.5);
     const roles: Record<string, string> = {};
     
@@ -268,6 +445,14 @@ export const sessionService = {
       updates[`players/${pid}/voteTarget`] = null;
     });
 
+    // Also reset spectators or other players not in the game
+    Object.keys(players).forEach(pid => {
+      if (!roles[pid]) {
+        updates[`players/${pid}/role`] = 'SPECTATOR';
+        updates[`players/${pid}/isAlive`] = false;
+      }
+    });
+
     const mafiaGame: MafiaGameState = {
       phase: MafiaPhase.NIGHT,
       round: 1,
@@ -279,7 +464,7 @@ export const sessionService = {
     updates['turnOrder'] = finalTurnOrder;
 
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, `마피아 시트가 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, `마피아 게임이 시작되었습니다. 역할을 확인해주세요.`, 'success');
   },
 
   async shuffleTurnOrder(sessionId: string, players: Record<string, Player>) {
@@ -327,7 +512,7 @@ export const sessionService = {
   },
 
   async processNightPhase(sessionId: string, players: Record<string, Player>, mafiaGame: MafiaGameState) {
-    if (!db) return;
+    if (!db || !players) return;
 
     // 1. Calculate Mafia target (majority vote)
     const mafiaVotes: Record<string, number> = {};
@@ -353,9 +538,14 @@ export const sessionService = {
     if (mafiaTargetId) {
       if (mafiaTargetId === mafiaGame.doctorTarget) {
         savedId = mafiaTargetId;
+        await this.addLog(sessionId, `의사가 마피아의 공격으로부터 누군가를 살려냈습니다!`, 'success');
       } else {
         eliminatedId = mafiaTargetId;
+        const victimName = players[eliminatedId]?.nickname || '누군가';
+        await this.addLog(sessionId, `어젯밤, 마피아의 공격으로 ${victimName}님이 사망하셨습니다.`, 'warning');
       }
+    } else {
+      await this.addLog(sessionId, `어젯밤에는 아무 일도 일어나지 않았습니다.`, 'info');
     }
 
     // 3. Update state
@@ -390,11 +580,13 @@ export const sessionService = {
       updates['mafiaGame/winner'] = 'CITIZEN';
       const winners = Object.values(players).filter(p => p.role !== 'MAFIA').map(p => p.id);
       await this.updateStats(sessionId, winners);
+      await this.addLog(sessionId, `모든 마피아가 소탕되었습니다! 시민 팀의 승리입니다.`, 'success');
     } else if (mafiaCount >= citizenCount) {
       updates['status'] = SessionStatus.SUMMARY;
       updates['mafiaGame/winner'] = 'MAFIA';
       const winners = Object.values(players).filter(p => p.role === 'MAFIA').map(p => p.id);
       await this.updateStats(sessionId, winners);
+      await this.addLog(sessionId, `마피아가 도시를 점령했습니다! 마피아 팀의 승리입니다.`, 'warning');
     }
 
     // Reset votes for the next day
@@ -433,13 +625,29 @@ export const sessionService = {
     const updates: any = {};
     const currentStats = session.stats || {};
 
-    ids.forEach(pid => {
+    for (const pid of ids) {
       const playerStats = currentStats[pid] || { wins: 0, totalScore: 0 };
       updates[`stats/${pid}`] = {
-        wins: playerStats.wins + 1,
-        totalScore: playerStats.totalScore + score
+        wins: (playerStats.wins || 0) + 1,
+        totalScore: (playerStats.totalScore || 0) + score
       };
-    });
+
+      // Award Global XP and Wins
+      const userRef = ref(db, `users/${pid}`);
+      const userSnap = await get(userRef);
+      if (userSnap.exists()) {
+        const profile = userSnap.val();
+        const xpGain = 100 + (score > 0 ? Math.floor(score / 10) : 0);
+        const newXp = (profile.xp || 0) + xpGain;
+        const newLevel = Math.floor(newXp / 1000) + 1;
+        
+        await update(userRef, {
+          xp: newXp,
+          level: newLevel,
+          totalWins: (profile.totalWins || 0) + 1
+        });
+      }
+    }
 
     await update(ref(db, `sessions/${sessionId}`), updates);
   },
@@ -463,6 +671,8 @@ export const sessionService = {
       office2048Game: null,
       sudokuGame: null,
       officeLifeGame: null,
+      escapeRoomGame: null,
+      cyberArenaGame: null,
       mysteryReportGame: null,
     };
     
@@ -482,7 +692,7 @@ export const sessionService = {
   },
 
   async processMafiaVote(sessionId: string, players: Record<string, Player>) {
-    if (!db) return;
+    if (!db || !players) return;
     
     const voteCounts: Record<string, number> = {};
     Object.values(players).forEach(p => {
@@ -548,7 +758,7 @@ export const sessionService = {
   },
 
   async processLiarVote(sessionId: string, players: Record<string, Player>, liarGame: LiarGameState) {
-    if (!db) return;
+    if (!db || !players) return;
     
     const voteCounts: Record<string, number> = {};
     Object.values(players).forEach(p => {
@@ -711,10 +921,10 @@ export const sessionService = {
   },
 
   async startBingoGame(sessionId: string, players: Record<string, Player>, turnOrder: string[]) {
-    if (!db) return;
+    if (!db || !players) return;
     
     // Shuffle turnOrder for fairness
-    const playerIds = Object.keys(players).filter(id => !players[id].isSpectator);
+    const playerIds = Object.keys(players || {}).filter(id => !players[id]?.isSpectator);
     const shuffledOrder = [...playerIds].sort(() => Math.random() - 0.5);
     
     const updates: any = {
@@ -753,18 +963,18 @@ export const sessionService = {
       updates['bingoGame/winner'] = winners[0]; // First one detected
       updates['status'] = SessionStatus.SUMMARY;
       
-      const player = session.players[playerId].nickname;
+      const player = session.players?.[playerId]?.nickname || '알 수 없는 플레이어';
       await this.addLog(sessionId, `${player}님이 [${word}] 단어를 선택했습니다.`);
-      await this.addLog(sessionId, `${session.players[winners[0]].nickname}님이 빙고를 완성하여 승리했습니다!`, 'success');
+      await this.addLog(sessionId, `${session.players?.[winners[0]]?.nickname || '알 수 없는 플레이어'}님이 빙고를 완성하여 승리했습니다!`, 'success');
       await this.updateStats(sessionId, winners[0]);
     } else {
       // Next turn
-      const turnOrder = session.turnOrder || Object.keys(session.players);
+      const turnOrder = session.turnOrder || Object.keys(session.players || {});
       const currentIndex = turnOrder.indexOf(playerId);
       const nextIndex = (currentIndex + 1) % turnOrder.length;
       updates['bingoGame/currentPlayerId'] = turnOrder[nextIndex];
       
-      const player = session.players[playerId].nickname;
+      const player = session.players?.[playerId]?.nickname || '알 수 없는 플레이어';
       await this.addLog(sessionId, `${player}님이 [${word}] 단어를 선택했습니다.`);
     }
 
@@ -772,9 +982,9 @@ export const sessionService = {
   },
 
   async startDrawGame(sessionId: string, players: Record<string, Player>, settings: any, turnOrder: string[]) {
-    if (!db) return;
+    if (!db || !players) return;
     
-    const playerIds = Object.keys(players).filter(id => !players[id].isSpectator);
+    const playerIds = Object.keys(players || {}).filter(id => !players[id]?.isSpectator);
     const shuffledOrder = [...playerIds].sort(() => Math.random() - 0.5);
     
     const category = settings.drawCategory || '랜덤';
@@ -843,7 +1053,7 @@ export const sessionService = {
       updates['drawGame/scores'] = newScores;
       updates['drawGame/lastGuesserId'] = playerId;
       
-      const player = session.players[playerId].nickname;
+      const player = session.players?.[playerId]?.nickname || '알 수 없는 플레이어';
       await this.addLog(sessionId, `${player}님이 정답 [${game.word}]을 맞혔습니다! (+10점)`, 'success');
       await this.updateStats(sessionId, playerId, 10);
       await this.updateStats(sessionId, game.presenterId, 5);
@@ -852,7 +1062,7 @@ export const sessionService = {
       await this.nextDrawTurn(sessionId, session, newScores);
     } else {
       // Incorrect guess - Log it or send a message
-      const player = session.players[playerId].nickname;
+      const player = session.players?.[playerId]?.nickname || '알 수 없는 플레이어';
       // We can add a log or just a chat message. Let's add a system message to chat for better visibility
       await this.sendMessage(sessionId, playerId, player, `오답: ${guess}`, false, false);
     }
@@ -862,7 +1072,7 @@ export const sessionService = {
     if (!db || !session.drawGame) return;
     
     const game = session.drawGame;
-    const turnOrder = session.turnOrder || Object.keys(session.players);
+    const turnOrder = session.turnOrder || Object.keys(session.players || {});
     const currentIndex = turnOrder.indexOf(game.presenterId);
     let nextIndex = (currentIndex + 1) % turnOrder.length;
     let nextRound = game.round;
@@ -995,7 +1205,7 @@ export const sessionService = {
         const score = Math.max(1000, 100000 - (timeTaken * 10) - (moveCount * 200));
         updates['omokGame/lastScore'] = score;
         
-        const player = session.players[playerId];
+        const player = session.players?.[playerId];
         if (player) {
           this.recordLeaderboard(sessionId, 'OMOK_AI', playerId, player.nickname, score, {
             timeTaken,
@@ -1022,7 +1232,7 @@ export const sessionService = {
     }
 
     await update(sessionRef, updates);
-    const playerName = playerId === 'AI' ? 'AI 봇' : (session.players[playerId]?.nickname || '알 수 없는 플레이어');
+    const playerName = playerId === 'AI' ? 'AI 봇' : (session.players?.[playerId]?.nickname || '알 수 없는 플레이어');
     await this.addLog(sessionId, `${playerName}님이 (${x}, ${y}) 위치에 돌을 놓았습니다.`);
     
     if (updates['omokGame/winner']) {
@@ -1649,10 +1859,10 @@ export const sessionService = {
         const difficultyBonus = { 'EASY': 1000, 'MEDIUM': 5000, 'HARD': 15000 }[game.difficulty as 'EASY' | 'MEDIUM' | 'HARD'];
         const score = Math.max(0, difficultyBonus + 100000 - Math.floor(timeTaken / 10));
         const user = auth?.currentUser;
-        if (user && session.players[user.uid]) {
-          await this.recordLeaderboard(sessionId, 'MINESWEEPER', user.uid, session.players[user.uid].nickname, score);
+        if (user && session.players?.[user.uid]) {
+          await this.recordLeaderboard(sessionId, 'MINESWEEPER', user.uid, session.players[user.uid]?.nickname || '플레이어', score);
         } else {
-          await this.recordLeaderboard(sessionId, 'MINESWEEPER', session.players[session.hostId].id, session.players[session.hostId].nickname, score);
+          await this.recordLeaderboard(sessionId, 'MINESWEEPER', session.players?.[session.hostId]?.id || '', session.players?.[session.hostId]?.nickname || '', score);
         }
       }
     }
@@ -1747,8 +1957,8 @@ export const sessionService = {
           const difficultyBonus = { 'EASY': 1000, 'MEDIUM': 5000, 'HARD': 15000 }[game.difficulty as 'EASY' | 'MEDIUM' | 'HARD'];
           const score = Math.max(0, difficultyBonus + 100000 - Math.floor(timeTaken / 10));
           const user = auth?.currentUser;
-          if (user && session.players[user.uid]) {
-            await this.recordLeaderboard(sessionId, 'MINESWEEPER', user.uid, session.players[user.uid].nickname, score);
+          if (user && session.players?.[user.uid]) {
+            await this.recordLeaderboard(sessionId, 'MINESWEEPER', user.uid, session.players[user.uid]?.nickname || '플레이어', score);
           }
         }
       }
@@ -1848,20 +2058,20 @@ export const sessionService = {
         game.status = 'LOST';
         await this.addLog(sessionId, `더 이상 움직일 수 없습니다. 최종 점수: ${game.score}점`, 'warning');
         const user = auth?.currentUser;
-        if (user && session.players[user.uid]) {
-          await this.recordLeaderboard(sessionId, 'OFFICE_2048', user.uid, session.players[user.uid].nickname, game.score);
+        if (user && session.players?.[user.uid]) {
+          await this.recordLeaderboard(sessionId, 'OFFICE_2048', user.uid, session.players[user.uid]?.nickname || '플레이어', game.score);
         } else {
-          await this.recordLeaderboard(sessionId, 'OFFICE_2048', session.players[session.hostId].id, session.players[session.hostId].nickname, game.score);
+          await this.recordLeaderboard(sessionId, 'OFFICE_2048', session.players?.[session.hostId]?.id || '', session.players?.[session.hostId]?.nickname || '', game.score);
         }
       }
       if (game.board.some((row: any) => row.includes(2048))) {
         game.status = 'WON';
         await this.addLog(sessionId, `축하합니다! 사장(2048)으로 승진했습니다!`, 'success');
         const user = auth?.currentUser;
-        if (user && session.players[user.uid]) {
-          await this.recordLeaderboard(sessionId, 'OFFICE_2048', user.uid, session.players[user.uid].nickname, game.score);
+        if (user && session.players?.[user.uid]) {
+          await this.recordLeaderboard(sessionId, 'OFFICE_2048', user.uid, session.players[user.uid]?.nickname || '플레이어', game.score);
         } else {
-          await this.recordLeaderboard(sessionId, 'OFFICE_2048', session.players[session.hostId].id, session.players[session.hostId].nickname, game.score);
+          await this.recordLeaderboard(sessionId, 'OFFICE_2048', session.players?.[session.hostId]?.id || '', session.players?.[session.hostId]?.nickname || '', game.score);
         }
       }
       
@@ -1981,10 +2191,10 @@ export const sessionService = {
       const difficultyBonus = { 'EASY': 1000, 'MEDIUM': 5000, 'HARD': 15000 }[game.difficulty as 'EASY' | 'MEDIUM' | 'HARD'];
       const score = Math.max(0, difficultyBonus + 10000 - (game.mistakes * 1000));
       const user = auth?.currentUser;
-      if (user && session.players[user.uid]) {
-        await this.recordLeaderboard(sessionId, 'SUDOKU', user.uid, session.players[user.uid].nickname, score);
+      if (user && session.players?.[user.uid]) {
+        await this.recordLeaderboard(sessionId, 'SUDOKU', user.uid, session.players[user.uid]?.nickname || '플레이어', score);
       } else {
-        await this.recordLeaderboard(sessionId, 'SUDOKU', session.players[session.hostId].id, session.players[session.hostId].nickname, score);
+        await this.recordLeaderboard(sessionId, 'SUDOKU', session.players?.[session.hostId]?.id || '', session.players?.[session.hostId]?.nickname || '', score);
       }
     }
 
@@ -1993,16 +2203,16 @@ export const sessionService = {
 
   // --- Office Life ---
   async startOfficeLifeGame(sessionId: string, players: Record<string, Player>, turnOrder?: string[], mode: 'INDIVIDUAL' | 'TEAM' = 'INDIVIDUAL') {
-    if (!db) return;
+    if (!db || !players) return;
     
-    const order = turnOrder || Object.keys(players);
+    const order = turnOrder || Object.keys(players || {});
     const playerStates: Record<string, any> = {};
     
     order.forEach(pid => {
       playerStates[pid] = {
         position: 0,
         assets: 5000,
-        teamId: mode === 'TEAM' ? (players[pid].teamId || 'TEAM_A') : 'INDIVIDUAL',
+        teamId: mode === 'TEAM' ? (players[pid]?.teamId || 'TEAM_A') : 'INDIVIDUAL',
         items: [],
         isJailed: false,
         jailTurns: 0,
@@ -2363,7 +2573,7 @@ export const sessionService = {
         
         // Trigger AI if current player is AI
         const currentTurnPlayerId = turnOrder[0];
-        if (session.players[currentTurnPlayerId]?.isAI) {
+        if (session.players?.[currentTurnPlayerId]?.isAI) {
           const updatedSnapshot = await get(ref(db, `sessions/${sessionId}`));
           const updatedSession = updatedSnapshot.val();
           if (updatedSession) {
@@ -2373,7 +2583,7 @@ export const sessionService = {
       } else {
         // If not all selected, find the next AI that needs to select a role
         for (const pid of turnOrder) {
-          if (session.players[pid]?.isAI && !latestGame.playerStates?.[pid]?.roleId) {
+          if (session.players?.[pid]?.isAI && !latestGame.playerStates?.[pid]?.roleId) {
              await this.processOfficeLifeAITurn(sessionId, session, pid);
              break;
           }
@@ -2444,7 +2654,7 @@ export const sessionService = {
 
     // Trigger AI turn if next player is AI
     const nextPlayerId = turnOrder[game.currentTurnIndex];
-    if (session.players[nextPlayerId]?.isAI && game.status === 'PLAYING') {
+    if (session.players?.[nextPlayerId]?.isAI && game.status === 'PLAYING') {
       await this.processOfficeLifeAITurn(sessionId, session);
     }
   },
@@ -2454,7 +2664,7 @@ export const sessionService = {
     const game = session.officeLifeGame;
     const turnOrder = game.turnOrder || [];
     const currentPlayerId = targetPlayerId || turnOrder[game.currentTurnIndex || 0];
-    const player = session.players[currentPlayerId];
+    const player = session.players?.[currentPlayerId];
 
     if (!player || !player.isAI) return;
 
@@ -2466,9 +2676,13 @@ export const sessionService = {
       const currentGame = currentSession.officeLifeGame;
 
       if (currentGame.waitingForAction === 'NONE' || !currentGame.waitingForAction) {
+        await this.addLog(sessionId, `${player.nickname}님이 주사위를 굴립니다...`, 'info');
         await this.rollOfficeLifeDice(sessionId, currentPlayerId, currentSession);
       } else if (currentGame.waitingForAction === 'BUY_PROJECT') {
-        await this.buyOfficeLifeProject(sessionId, currentPlayerId, currentSession);
+        const shouldBuy = Math.random() > 0.3;
+        if (shouldBuy) {
+          await this.buyOfficeLifeProject(sessionId, currentPlayerId, currentSession);
+        }
         await this.endOfficeLifeTurn(sessionId, currentPlayerId, currentSession);
       } else if (currentGame.waitingForAction === 'CHANCE_CARD') {
         await this.drawOfficeLifeChanceCard(sessionId, currentPlayerId, currentSession);
@@ -2485,5 +2699,414 @@ export const sessionService = {
         await this.selectOfficeLifeRole(sessionId, currentPlayerId, randomRole, currentSession);
       }
     }, 2000);
+  },
+
+  // --- Escape Room ---
+  async startEscapeRoom(sessionId: string, settings: any) {
+    if (!db) return;
+    const escapeRoomGame: EscapeRoomGameState = {
+      currentRoomId: 'room_1',
+      solvedPuzzles: [],
+      inventory: [],
+      startTime: Date.now(),
+      timeLimit: settings.escapeRoomDifficulty === 'EASY' ? 1800 : settings.escapeRoomDifficulty === 'HARD' ? 600 : 1200,
+      status: 'PLAYING',
+      hintsUsed: 0
+    };
+    await update(ref(db, `sessions/${sessionId}`), {
+      status: SessionStatus.PLAYING,
+      escapeRoomGame
+    });
+    await this.addLog(sessionId, '방탈출이 시작되었습니다. 첫 번째 방을 탐색하세요!', 'success');
+  },
+
+  async submitEscapeRoomAnswer(sessionId: string, puzzleId: string, answer: string, session: Session) {
+    if (!db || !session.escapeRoomGame) return;
+    const room = ESCAPE_ROOM_DATA[session.escapeRoomGame.currentRoomId];
+    const puzzle = room.puzzles.find(p => p.id === puzzleId);
+    if (!puzzle) return;
+
+    if (puzzle.answer === answer.trim()) {
+      const solvedPuzzles = [...(session.escapeRoomGame.solvedPuzzles || []), puzzleId];
+      const inventory = [...(session.escapeRoomGame.inventory || [])];
+      if (puzzle.rewardItem) inventory.push(puzzle.rewardItem);
+
+      const allSolved = room.puzzles.every(p => solvedPuzzles.includes(p.id));
+      let nextRoomId = session.escapeRoomGame.currentRoomId;
+      let status = session.escapeRoomGame.status;
+
+      if (allSolved) {
+        if (room.nextRoomId) {
+          nextRoomId = room.nextRoomId;
+          await this.addLog(sessionId, `방을 탈출했습니다! 다음 방: ${ESCAPE_ROOM_DATA[nextRoomId].name}`, 'success');
+        } else {
+          status = 'WON';
+          await this.addLog(sessionId, '축하합니다! 모든 방을 탈출했습니다!', 'success');
+          await this.advanceStatus(sessionId, SessionStatus.SUMMARY);
+        }
+      } else {
+        await this.addLog(sessionId, '정답입니다! 퍼즐을 해결했습니다.', 'success');
+      }
+
+      await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+        solvedPuzzles,
+        inventory,
+        currentRoomId: nextRoomId,
+        status
+      });
+    } else {
+      await this.addLog(sessionId, '틀렸습니다. 다시 생각해보세요.', 'warning');
+    }
+  },
+  
+  async useEscapeRoomHint(sessionId: string, puzzleId: string, session: Session) {
+    if (!db || !session.escapeRoomGame) return;
+    const room = ESCAPE_ROOM_DATA[session.escapeRoomGame.currentRoomId];
+    const puzzle = room.puzzles.find(p => p.id === puzzleId);
+    if (!puzzle) return;
+
+    await this.addLog(sessionId, `힌트 사용: ${puzzle.hint}`, 'info');
+    await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+      hintsUsed: (session.escapeRoomGame.hintsUsed || 0) + 1
+    });
+  },
+
+  // --- Cyber Arena (Real-time Action) ---
+  async startCyberArena(sessionId: string, players: Record<string, Player>, settings: any) {
+    if (!db || !players) return;
+    const playerIds = Object.keys(players || {}).filter(id => !players[id]?.isSpectator);
+    
+    if (settings.cyberArenaPvE && playerIds.length === 1) {
+      playerIds.push('ai_bot_1');
+    }
+
+    const playerStats: Record<string, any> = {};
+    const inventory: Record<string, string[]> = {};
+    
+    playerIds.forEach((pid, idx) => {
+      playerStats[pid] = {
+        hp: 100,
+        maxHp: 100,
+        energy: 50,
+        maxEnergy: 100,
+        shield: 0,
+        level: 1,
+        exp: 0,
+        credits: 100,
+        characterId: pid.startsWith('ai_') ? 'AI' : null,
+        x: idx === 0 ? 100 : 700,
+        y: 300,
+        vx: 0,
+        vy: 0,
+        rotation: 0,
+        lastSkillTime: {}
+      };
+      inventory[pid] = [];
+    });
+
+    const roundsWon: Record<string, number> = {};
+    playerIds.forEach(pid => roundsWon[pid] = 0);
+
+    const cyberArenaGame: CyberArenaGameState = {
+      playerStats,
+      projectiles: {},
+      inventory,
+      status: 'PLAYING',
+      isPvE: !!settings.cyberArenaPvE,
+      aiDifficulty: 1,
+      startTime: Date.now(),
+      lastUpdate: Date.now(),
+      currentRound: 1,
+      roundsWon
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), {
+      status: SessionStatus.PLAYING,
+      cyberArenaGame
+    });
+    await this.addLog(sessionId, '사이버 아레나에 입장했습니다! 실시간 전투가 시작됩니다.', 'success');
+  },
+
+  async updateArenaPlayerPosition(sessionId: string, playerId: string, x: number, y: number, vx: number, vy: number, rotation: number) {
+    if (!db) return;
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/x`] = x;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/y`] = y;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/vx`] = vx;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/vy`] = vy;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/rotation`] = rotation;
+    updates[`sessions/${sessionId}/cyberArenaGame/lastUpdate`] = Date.now();
+    await update(ref(db), updates);
+  },
+
+  async triggerArenaSkill(sessionId: string, playerId: string, skillId: string, x: number, y: number, rotation: number, session: Session) {
+    if (!db || !session.cyberArenaGame) return;
+    const game = session.cyberArenaGame;
+    const stats = game.playerStats[playerId];
+    const skill = ARENA_SKILLS.find(s => s.id === skillId);
+    
+    if (!skill || stats.energy < skill.energyCost) return;
+
+    const now = Date.now();
+    const lastUsed = stats.lastSkillTime?.[skillId] || 0;
+    if (now - lastUsed < skill.cooldown) return;
+
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/energy`] = stats.energy - skill.energyCost;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/lastSkillTime/${skillId}`] = now;
+
+    if (skill.type === 'PROJECTILE') {
+      const projectileId = `proj_${now}_${playerId}`;
+      const vx = Math.cos(rotation) * (skill.speed || 5);
+      const vy = Math.sin(rotation) * (skill.speed || 5);
+      
+      const projectile: ArenaProjectile = {
+        id: projectileId,
+        ownerId: playerId,
+        x: x + Math.cos(rotation) * 30,
+        y: y + Math.sin(rotation) * 30,
+        vx,
+        vy,
+        damage: skill.damage || 10,
+        radius: skill.radius || 10,
+        createdAt: now,
+        expiresAt: now + (skill.range || 1000) / (skill.speed || 5) * 16 // Approx life in ms
+      };
+      updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${projectileId}`] = projectile;
+    } else if (skill.type === 'DASH') {
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/x`] = x + Math.cos(rotation) * (skill.range || 100);
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/y`] = y + Math.sin(rotation) * (skill.range || 100);
+    } else if (skill.type === 'INSTANT') {
+      // Handle instant effects (heal, shield, etc.)
+      if (skill.heal) updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/hp`] = Math.min(stats.maxHp, stats.hp + skill.heal);
+      if (skill.shield) updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/shield`] = stats.shield + skill.shield;
+    }
+
+    await update(ref(db), updates);
+  },
+
+  async handleArenaProjectileHit(sessionId: string, projectileId: string, targetId: string, session: Session) {
+    if (!db || !session.cyberArenaGame) return;
+    const game = session.cyberArenaGame;
+    const projectile = game.projectiles[projectileId];
+    const targetStats = game.playerStats[targetId];
+    const shooterId = projectile?.ownerId;
+    const shooterStats = shooterId ? game.playerStats[shooterId] : null;
+
+    if (!projectile || !targetStats) return;
+
+    const damage = Math.max(0, projectile.damage - (targetStats.shield || 0));
+    const newShield = Math.max(0, (targetStats.shield || 0) - projectile.damage);
+    const newHp = Math.max(0, targetStats.hp - damage);
+
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${targetId}/hp`] = newHp;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${targetId}/shield`] = newShield;
+
+    // Award XP to shooter
+    if (shooterStats && !shooterId.startsWith('ai_')) {
+      const xpGain = Math.floor(projectile.damage);
+      const newExp = (shooterStats.exp || 0) + xpGain;
+      const currentLevel = shooterStats.level || 1;
+      const nextLevelExp = currentLevel * 100;
+
+      if (newExp >= nextLevelExp) {
+        // Level Up!
+        const nextLevel = currentLevel + 1;
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/level`] = nextLevel;
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/exp`] = newExp - nextLevelExp;
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/maxHp`] = (shooterStats.maxHp || 100) + 20;
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/hp`] = (shooterStats.maxHp || 100) + 20; // Full heal on level up
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/maxEnergy`] = (shooterStats.maxEnergy || 100) + 10;
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/credits`] = (shooterStats.credits || 0) + 50;
+        await this.addLog(sessionId, `${session.players?.[shooterId]?.nickname}님이 레벨 업! (Lv.${nextLevel})`, 'success');
+      } else {
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/exp`] = newExp;
+      }
+    }
+
+    if (newHp <= 0) {
+      const currentRounds = (game.roundsWon?.[shooterId] || 0) + 1;
+      updates[`sessions/${sessionId}/cyberArenaGame/roundsWon/${shooterId}`] = currentRounds;
+      
+      if (currentRounds >= 3) {
+        updates[`sessions/${sessionId}/cyberArenaGame/status`] = 'FINISHED';
+        updates[`sessions/${sessionId}/cyberArenaGame/winnerId`] = shooterId;
+        updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${projectileId}`] = null; // Remove specific projectile
+        await this.addLog(sessionId, `최종 승리! ${session.players?.[shooterId]?.nickname || '플레이어'}님이 챔피언이 되었습니다!`, 'success');
+      } else {
+        updates[`sessions/${sessionId}/cyberArenaGame/status`] = 'SHOP';
+        updates[`sessions/${sessionId}/cyberArenaGame/projectiles`] = null; // Remove ALL projectiles (Ancestor path)
+        // Give bonus credits for winning round
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/credits`] = (shooterStats.credits || 0) + 200;
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${targetId}/credits`] = (targetStats.credits || 0) + 100;
+        await this.addLog(sessionId, `라운드 종료! ${session.players?.[shooterId]?.nickname || '플레이어'}님이 승리했습니다. 상점으로 이동합니다.`, 'info');
+      }
+    } else {
+      updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${projectileId}`] = null; // Remove specific projectile
+    }
+
+    await update(ref(db), updates);
+  },
+
+  async cleanupArenaProjectiles(sessionId: string, projectileIds: string[]) {
+    if (!db || projectileIds.length === 0) return;
+    const updates: any = {};
+    projectileIds.forEach(id => {
+      updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${id}`] = null;
+    });
+    await update(ref(db), updates);
+  },
+
+  async buyArenaItem(sessionId: string, playerId: string, itemId: string, session: Session) {
+    if (!db || !session.cyberArenaGame) return;
+    const game = session.cyberArenaGame;
+    const stats = game.playerStats[playerId];
+    const item = ARENA_ITEMS.find(i => i.id === itemId);
+
+    if (!item || stats.credits < item.cost) return;
+
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/credits`] = stats.credits - item.cost;
+    
+    // Apply item effect
+    const newStats = item.effect(stats);
+    Object.keys(newStats).forEach(key => {
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/${key}`] = (newStats as any)[key];
+    });
+
+    await update(ref(db), updates);
+    await this.addLog(sessionId, `${session.players?.[playerId]?.nickname}님이 ${item.name}을(를) 구매했습니다.`, 'info');
+  },
+
+  async startNextRound(sessionId: string, session: Session) {
+    if (!db || !session.cyberArenaGame) return;
+    const game = session.cyberArenaGame;
+    const playerIds = Object.keys(game.playerStats);
+    
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/status`] = 'PLAYING';
+    updates[`sessions/${sessionId}/cyberArenaGame/currentRound`] = (game.currentRound || 1) + 1;
+    updates[`sessions/${sessionId}/cyberArenaGame/projectiles`] = null;
+
+    playerIds.forEach((pid, idx) => {
+      const stats = game.playerStats[pid];
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/hp`] = stats.maxHp;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/energy`] = Math.floor(stats.maxEnergy / 2);
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/shield`] = 0;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/x`] = idx === 0 ? 100 : 700;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/y`] = 300;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/vx`] = 0;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/vy`] = 0;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/rotation`] = idx === 0 ? 0 : Math.PI;
+    });
+
+    await update(ref(db), updates);
+    await this.addLog(sessionId, `${game.currentRound + 1} 라운드가 시작됩니다!`, 'warning');
+  },
+
+  async selectArenaCharacter(sessionId: string, playerId: string, characterId: string, session: Session) {
+    if (!db || !session.cyberArenaGame) return;
+    
+    const character = ARENA_CHARACTERS.find(c => c.id === characterId);
+    if (!character) return;
+
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/characterId`] = characterId;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/hp`] = character.baseHp;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/maxHp`] = character.baseHp;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/energy`] = Math.floor(character.baseEnergy / 2);
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/maxEnergy`] = character.baseEnergy;
+
+    await update(ref(db), updates);
+    await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 ${character.name} 캐릭터를 선택했습니다.`, 'success');
+  },
+
+  async updateArenaAI(sessionId: string, session: Session) {
+    if (!db || !session.cyberArenaGame || session.cyberArenaGame.status !== 'PLAYING') return;
+    const game = session.cyberArenaGame;
+    const aiIds = Object.keys(game.playerStats).filter(id => id.startsWith('ai_'));
+    if (aiIds.length === 0) return;
+
+    const updates: any = {};
+    const now = Date.now();
+
+    aiIds.forEach(aiId => {
+      const stats = game.playerStats[aiId];
+      // Find nearest player
+      const targetId = Object.keys(game.playerStats).find(id => !id.startsWith('ai_'));
+      if (!targetId) return;
+      const targetStats = game.playerStats[targetId];
+
+      const dx = targetStats.x - stats.x;
+      const dy = targetStats.y - stats.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const rotation = Math.atan2(dy, dx);
+
+      // Move towards target if far, or away if too close
+      let vx = 0;
+      let vy = 0;
+      const speed = 1.8;
+
+      if (dist > 250) {
+        vx = Math.cos(rotation) * speed;
+        vy = Math.sin(rotation) * speed;
+      } else if (dist < 150) {
+        vx = -Math.cos(rotation) * speed;
+        vy = -Math.sin(rotation) * speed;
+      }
+
+      // Dodging logic
+      Object.values(game.projectiles || {}).forEach((proj: any) => {
+        if (proj && proj.ownerId !== aiId) {
+          const pdx = proj.x - stats.x;
+          const pdy = proj.y - stats.y;
+          const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
+          if (pdist < 120) {
+            // Move perpendicular to projectile to dodge
+            vx += -proj.vy * 0.8;
+            vy += proj.vx * 0.8;
+          }
+        }
+      });
+
+      // Normalize velocity if it exceeds speed
+      const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+      if (currentSpeed > speed) {
+        vx = (vx / currentSpeed) * speed;
+        vy = (vy / currentSpeed) * speed;
+      }
+
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/x`] = stats.x + vx;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/y`] = stats.y + vy;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/vx`] = vx;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/vy`] = vy;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/rotation`] = rotation;
+
+      // Try to attack
+      if (dist < 450 && now - (stats.lastSkillTime?.['basic_attack'] || 0) > 1200) {
+        const projectileId = `proj_${now}_${aiId}`;
+        const pvx = Math.cos(rotation) * 5;
+        const pvy = Math.sin(rotation) * 5;
+        
+        const projectile: ArenaProjectile = {
+          id: projectileId,
+          ownerId: aiId,
+          x: stats.x + Math.cos(rotation) * 30,
+          y: stats.y + Math.sin(rotation) * 30,
+          vx: pvx,
+          vy: pvy,
+          damage: 10,
+          radius: 10,
+          createdAt: now,
+          expiresAt: now + 3000
+        };
+        updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${projectileId}`] = projectile;
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/lastSkillTime/basic_attack`] = now;
+      }
+    });
+
+    updates[`sessions/${sessionId}/cyberArenaGame/lastUpdate`] = now;
+    await update(ref(db), updates);
   }
 };

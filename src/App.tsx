@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Session, Player, SessionStatus, GameType, LiarMode, MafiaRole, MafiaPhase, GameLog } from './types';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
+import { Session, Player, SessionStatus, GameType, LiarMode, MafiaRole, MafiaPhase, GameLog, UserProfile, Department } from './types';
 import { sessionService } from './services/sessionService';
 import { isConfigured } from './firebase';
 import { Chat } from './components/Chat';
@@ -8,7 +9,44 @@ import { BINGO_TOPICS } from './data/bingoTopics';
 import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
 import { OfficeLifeBoard } from './components/OfficeLifeBoard';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2 } from 'lucide-react';
+import { UserProfileCard } from './components/UserProfileCard';
+import { ESCAPE_ROOM_DATA } from './data/escapeRoomData';
+import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS } from './data/cyberArenaData';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, EyeOff, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2, Coffee, StickyNote, Zap, Skull, ShieldCheck, Activity, Key, DoorOpen, Sword, ZapOff, Heart, ShieldAlert, Cpu, Coins, Package, Target, ShoppingBag, ChevronRight } from 'lucide-react';
+
+const LogTicker = ({ logs }: { logs: GameLog[] }) => {
+  const latestLogs = [...Object.values(logs || {})].sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
+  
+  return (
+    <div className="fixed top-20 right-4 md:top-auto md:bottom-4 md:right-4 w-[calc(100%-2rem)] md:w-72 bg-white/90 backdrop-blur border border-gray-200 rounded-lg shadow-xl overflow-hidden z-40 pointer-events-none">
+      <div className="bg-gray-100 px-3 py-1 border-b border-gray-200 flex justify-between items-center">
+        <span className="text-[9px] md:text-[10px] font-bold text-gray-500 flex items-center gap-1">
+          <Activity size={10} /> 실시간 시스템 로그
+        </span>
+      </div>
+      <div className="p-1.5 md:p-2 space-y-1">
+        {latestLogs.slice(0, window.innerWidth < 768 ? 1 : 3).map((log) => (
+          <motion.div 
+            key={log.id}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="text-[9px] md:text-[10px] flex gap-2 items-start"
+          >
+            <span className={`mt-1 w-1 h-1 md:w-1.5 md:h-1.5 rounded-full shrink-0 ${
+              log.type === 'success' ? 'bg-green-500' :
+              log.type === 'warning' ? 'bg-yellow-500' :
+              'bg-blue-500'
+            }`} />
+            <span className="text-gray-700 line-clamp-1 md:line-clamp-2">{log.content}</span>
+          </motion.div>
+        ))}
+        {latestLogs.length === 0 && (
+          <p className="text-[9px] text-gray-400 italic text-center py-1">대기 중...</p>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], title: string, sessionId?: string | null, gameType?: string }) => {
   const rankNames = ['사장', '부사장', '전무', '상무', '이사', '부장', '차장', '과장', '대리', '사원'];
@@ -155,6 +193,812 @@ const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], 
   );
 };
 
+const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session, currentUser: any, isSpectator: boolean }) => {
+  const game = session.escapeRoomGame;
+  if (!game) return null;
+  const room = ESCAPE_ROOM_DATA[game.currentRoomId];
+  const [answer, setAnswer] = useState('');
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="bg-white border-2 border-[#217346] rounded shadow-xl overflow-hidden">
+        <div className="bg-[#217346] text-white px-4 py-2 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <DoorOpen size={16} />
+            <span className="text-xs font-bold uppercase tracking-widest">{room.name}</span>
+          </div>
+          <div className="flex items-center gap-3 text-[10px] font-mono">
+            <Timer size={12} />
+            <span>남은 시간: {Math.max(0, Math.floor((game.startTime + game.timeLimit * 1000 - Date.now()) / 1000))}초</span>
+          </div>
+        </div>
+
+        <div className="p-8 space-y-8">
+          <div className="bg-gray-50 p-6 rounded border border-gray-200">
+            <p className="text-sm text-gray-700 leading-relaxed italic">"{room.description}"</p>
+          </div>
+
+          <div className="space-y-6">
+            {room.puzzles.map((puzzle) => (
+              <div key={puzzle.id} className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 bg-[#217346] text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">?</div>
+                  <p className="text-sm font-medium text-gray-800">{puzzle.question}</p>
+                </div>
+
+                {game.solvedPuzzles?.includes(puzzle.id) ? (
+                  <div className="bg-green-50 border border-green-200 p-3 rounded flex items-center gap-2 text-green-700 text-xs font-bold">
+                    <CheckCircle2 size={14} /> 해결됨! {puzzle.rewardItem && `(획득: ${puzzle.rewardItem})`}
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={answer}
+                      onChange={(e) => setAnswer(e.target.value)}
+                      placeholder={isSpectator ? "관전자 모드입니다..." : "정답을 입력하세요..."}
+                      disabled={isSpectator}
+                      className="flex-1 office-input py-2"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && answer.trim() && !isSpectator) {
+                          sessionService.submitEscapeRoomAnswer(session.id, puzzle.id, answer, session);
+                          setAnswer('');
+                        }
+                      }}
+                    />
+                    <button 
+                      onClick={() => {
+                        if (answer.trim() && !isSpectator) {
+                          sessionService.submitEscapeRoomAnswer(session.id, puzzle.id, answer, session);
+                          setAnswer('');
+                        }
+                      }}
+                      disabled={isSpectator}
+                      className="office-btn-primary px-6"
+                    >
+                      확인
+                    </button>
+                    <button 
+                      onClick={() => !isSpectator && sessionService.useEscapeRoomHint(session.id, puzzle.id, session)}
+                      disabled={isSpectator}
+                      className="office-btn-secondary px-3"
+                      title="힌트 보기"
+                    >
+                      <HelpCircle size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-gray-100 px-4 py-3 border-t border-gray-200 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Key size={14} className="text-yellow-600" />
+            <span className="text-[10px] font-bold text-gray-500 uppercase">인벤토리:</span>
+            <div className="flex gap-1">
+              {game.inventory?.map((item, i) => (
+                <span key={i} className="bg-white border border-gray-300 px-2 py-0.5 rounded text-[9px] font-bold text-gray-600">{item}</span>
+              ))}
+              {(!game.inventory || game.inventory.length === 0) && <span className="text-[9px] text-gray-400 italic">비어 있음</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CyberArenaShop = ({ session, currentUser }: { session: Session, currentUser: any }) => {
+  const game = session.cyberArenaGame;
+  const myStats = game?.playerStats?.[currentUser?.uid];
+  
+  if (!game || !myStats) return null;
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6 animate-in zoom-in duration-500">
+      <div className="flex items-center justify-between bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-yellow-100 rounded-2xl flex items-center justify-center text-yellow-600">
+            <ShoppingBag size={24} />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-gray-800 tracking-tight">사이버 상점</h2>
+            <p className="text-xs text-gray-500 font-medium">라운드 종료! 장비를 정비하세요.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-2xl border border-yellow-100">
+          <Coins size={18} className="text-yellow-600" />
+          <span className="text-lg font-black text-yellow-700">{myStats.credits}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {ARENA_ITEMS.map(item => (
+          <button
+            key={item.id}
+            disabled={myStats.credits < item.cost}
+            onClick={() => sessionService.buyArenaItem(session.id, currentUser.uid, item.id, session)}
+            className={`group relative bg-white border-2 rounded-3xl p-6 text-left transition-all overflow-hidden ${
+              myStats.credits < item.cost 
+                ? 'border-gray-100 opacity-60 grayscale' 
+                : 'border-gray-200 hover:border-blue-500 hover:shadow-xl'
+            }`}
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                item.id.includes('hp') ? 'bg-red-100 text-red-600' :
+                item.id.includes('energy') ? 'bg-yellow-100 text-yellow-600' :
+                item.id.includes('shield') ? 'bg-blue-100 text-blue-600' :
+                'bg-purple-100 text-purple-600'
+              }`}>
+                {item.id.includes('hp') ? <Heart size={20} /> :
+                 item.id.includes('energy') ? <Zap size={20} /> :
+                 item.id.includes('shield') ? <Shield size={20} /> :
+                 <Cpu size={20} />}
+              </div>
+              <div className="flex items-center gap-1 text-xs font-bold text-yellow-600">
+                <Coins size={12} /> {item.cost}
+              </div>
+            </div>
+            <h3 className="font-bold text-gray-800 mb-1">{item.name}</h3>
+            <p className="text-[10px] text-gray-500 leading-tight mb-4">{item.description}</p>
+            
+            <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600 group-hover:gap-2 transition-all">
+              구매하기 <ChevronRight size={10} />
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div className="flex justify-center pt-4">
+        <button
+          onClick={() => sessionService.startNextRound(session.id, session)}
+          className="px-12 py-4 bg-gray-900 text-white rounded-2xl font-black tracking-tight hover:bg-blue-600 transition-all shadow-xl active:scale-95 flex items-center gap-2"
+        >
+          다음 라운드 시작 <Play size={18} fill="currentColor" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const CyberArenaUI = ({ session, currentUser, isSpectator }: { session: Session, currentUser: any, isSpectator: boolean }) => {
+  const game = session.cyberArenaGame;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [keys, setKeys] = useState<Record<string, boolean>>({});
+  const [joystick, setJoystick] = useState({ x: 0, y: 0, active: false });
+  const [screenShake, setScreenShake] = useState({ x: 0, y: 0 });
+  const particlesRef = useRef<any[]>([]);
+  const lastUpdateRef = useRef<number>(0);
+  const lastAIUpdateRef = useRef<number>(0);
+  const requestRef = useRef<number>(0);
+  
+  const obstacles = [
+    { x: 150, y: 100, w: 30, h: 120 },
+    { x: 620, y: 100, w: 30, h: 120 },
+    { x: 150, y: 330, w: 30, h: 120 },
+    { x: 620, y: 330, w: 30, h: 120 },
+    { x: 350, y: 200, w: 100, h: 50 },
+  ];
+
+  const addParticles = (x: number, y: number, color: string, count: number = 10, speed: number = 2) => {
+    for (let i = 0; i < count; i++) {
+      particlesRef.current.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * speed * 2,
+        vy: (Math.random() - 0.5) * speed * 2,
+        life: 1.0,
+        decay: 0.02 + Math.random() * 0.03,
+        color,
+        size: 2 + Math.random() * 3
+      });
+    }
+  };
+
+  const triggerScreenShake = (intensity: number = 5) => {
+    let count = 0;
+    const interval = setInterval(() => {
+      setScreenShake({
+        x: (Math.random() - 0.5) * intensity,
+        y: (Math.random() - 0.5) * intensity
+      });
+      count++;
+      if (count > 10) {
+        clearInterval(interval);
+        setScreenShake({ x: 0, y: 0 });
+      }
+    }, 20);
+  };
+
+  if (!game) return null;
+  const myStats = game.playerStats?.[currentUser?.uid];
+  const opponents = Object.keys(session?.players || {}).filter(pid => pid !== currentUser?.uid && game.playerStats?.[pid]);
+  const targetId = opponents[0];
+  const targetStats = game.playerStats?.[targetId];
+
+  const prevLevelRef = useRef<number>(myStats?.level || 1);
+  useEffect(() => {
+    if (myStats?.level && myStats.level > prevLevelRef.current) {
+      addParticles(myStats.x, myStats.y, '#fbbf24', 50, 8);
+      triggerScreenShake(15);
+      prevLevelRef.current = myStats.level;
+    }
+  }, [myStats?.level, myStats?.x, myStats?.y]);
+
+  // Input Handling
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => setKeys(prev => ({ ...prev, [e.key.toLowerCase()]: true }));
+    const handleKeyUp = (e: KeyboardEvent) => setKeys(prev => ({ ...prev, [e.key.toLowerCase()]: false }));
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Game Loop
+  useEffect(() => {
+    if (!myStats?.characterId || game.status !== 'PLAYING') return;
+
+    const animate = (time: number) => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (!canvas || !ctx) return;
+
+      const now = Date.now();
+
+      // Update particles
+      particlesRef.current = particlesRef.current.filter(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+        return p.life > 0;
+      });
+
+      // Clear & Start Shake
+      ctx.save();
+      ctx.translate(screenShake.x, screenShake.y);
+      
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw Grid
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.1)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < canvas.width; i += 40) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+      }
+      for (let i = 0; i < canvas.height; i += 40) {
+        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+      }
+
+      // Draw Obstacles
+      ctx.fillStyle = '#1e293b';
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 2;
+      obstacles.forEach(obs => {
+        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+        
+        // Glow effect for obstacles
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#3b82f6';
+        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+        ctx.shadowBlur = 0;
+      });
+
+      // Draw Particles
+      particlesRef.current.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1.0;
+
+      // Update My Position (Client-side prediction placeholder)
+      if (!isSpectator) {
+        let vx = 0;
+        let vy = 0;
+        const speed = 3;
+        if (keys['w']) vy -= speed;
+        if (keys['s']) vy += speed;
+        if (keys['a']) vx -= speed;
+        if (keys['d']) vx += speed;
+
+        // Joystick Input
+        if (joystick.active) {
+          vx = joystick.x * speed;
+          vy = joystick.y * speed;
+        }
+
+        if (vx !== 0 || vy !== 0) {
+          if (now - lastUpdateRef.current > 50) { // Throttle updates
+            let newX = myStats.x + vx;
+            let newY = myStats.y + vy;
+            
+            // Obstacle Collision for Player
+            obstacles.forEach(obs => {
+              if (newX > obs.x - 15 && newX < obs.x + obs.w + 15 && newY > obs.y - 15 && newY < obs.y + obs.h + 15) {
+                newX = myStats.x;
+                newY = myStats.y;
+              }
+            });
+
+            const rotation = Math.atan2(vy, vx);
+            sessionService.updateArenaPlayerPosition(session.id, currentUser.uid, newX, newY, vx, vy, rotation);
+            lastUpdateRef.current = now;
+          }
+        }
+
+        // Host handles AI updates & AI hit detection
+        if (currentUser.uid === session.hostId && game.isPvE) {
+          if (now - lastAIUpdateRef.current > 100) {
+            sessionService.updateArenaAI(session.id, session);
+            lastAIUpdateRef.current = now;
+          }
+
+          // Check if AI is hit by player projectiles
+          const aiIds = Object.keys(game.playerStats).filter(id => id.startsWith('ai_'));
+          Object.values(game.projectiles || {}).forEach((proj: any) => {
+            if (!proj || proj.ownerId.startsWith('ai_')) return;
+            
+            const elapsed = now - proj.createdAt;
+            const currentX = proj.x + proj.vx * (elapsed / 16);
+            const currentY = proj.y + proj.vy * (elapsed / 16);
+
+            // Obstacle collision for projectiles
+            obstacles.forEach(obs => {
+              if (currentX > obs.x && currentX < obs.x + obs.w && currentY > obs.y && currentY < obs.y + obs.h) {
+                addParticles(currentX, currentY, '#3b82f6', 5);
+                sessionService.cleanupArenaProjectiles(session.id, [proj.id]);
+              }
+            });
+
+            aiIds.forEach(aiId => {
+              const aiStats = game.playerStats[aiId];
+              const dx = currentX - aiStats.x;
+              const dy = currentY - aiStats.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist < 20 + proj.radius) {
+                addParticles(currentX, currentY, '#3b82f6', 15, 3);
+                sessionService.handleArenaProjectileHit(session.id, proj.id, aiId, session);
+              }
+            });
+          });
+        }
+      }
+
+      // Draw Projectiles & Handle Collisions
+      Object.values(game.projectiles || {}).forEach((proj: any) => {
+        if (!proj) return;
+        
+        // Calculate current position based on velocity and time
+        const elapsed = now - proj.createdAt;
+        const currentX = proj.x + proj.vx * (elapsed / 16); // 16ms per frame approx
+        const currentY = proj.y + proj.vy * (elapsed / 16);
+
+        // Remove expired projectiles (client-side cleanup)
+        if (now > proj.expiresAt) {
+          if (proj.ownerId === currentUser.uid) {
+            sessionService.cleanupArenaProjectiles(session.id, [proj.id]);
+          }
+          return;
+        }
+
+        // Collision Detection (I check if I am hit by someone else's projectile)
+        if (!isSpectator && proj.ownerId !== currentUser.uid && game.status === 'PLAYING') {
+          const dx = currentX - myStats.x;
+          const dy = currentY - myStats.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          
+          if (dist < 20 + proj.radius) { // 20 is player radius
+            addParticles(currentX, currentY, '#ef4444', 20, 4);
+            triggerScreenShake(10);
+            sessionService.handleArenaProjectileHit(session.id, proj.id, currentUser.uid, session);
+          }
+        }
+
+        // Draw Projectile
+        ctx.save();
+        ctx.translate(currentX, currentY);
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = proj.ownerId === currentUser.uid ? '#3b82f6' : '#ef4444';
+        ctx.fillStyle = proj.ownerId === currentUser.uid ? '#60a5fa' : '#f87171';
+        ctx.beginPath();
+        ctx.arc(0, 0, proj.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Draw Players
+      Object.entries(game.playerStats).forEach(([pid, stats]) => {
+        const isMe = pid === currentUser?.uid;
+        ctx.save();
+        ctx.translate(stats.x, stats.y);
+        
+        // HP Bar above head
+        ctx.save();
+        ctx.translate(0, -35);
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(-25, 0, 50, 6);
+        ctx.fillStyle = isMe ? '#10b981' : '#f43f5e';
+        ctx.fillRect(-25, 0, 50 * (stats.hp / stats.maxHp), 6);
+        
+        // Level Indicator
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 9px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Lv.${stats.level || 1}`, 0, -5);
+        ctx.restore();
+
+        ctx.rotate(stats.rotation);
+
+        // Body
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = isMe ? '#3b82f6' : '#ef4444';
+        ctx.fillStyle = isMe ? '#3b82f6' : '#ef4444';
+        
+        // Triangle shape for better directionality
+        ctx.beginPath();
+        ctx.moveTo(18, 0);
+        ctx.lineTo(-12, 12);
+        ctx.lineTo(-12, -12);
+        ctx.closePath();
+        ctx.fill();
+
+        // Engine glow
+        if (Math.random() > 0.3) {
+          ctx.fillStyle = isMe ? '#60a5fa' : '#f87171';
+          ctx.beginPath();
+          ctx.arc(-15, 0, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+        
+        // Name
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = 'bold 10px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText(session.players?.[pid]?.nickname || 'Player', stats.x, stats.y + 35);
+      });
+
+      ctx.restore(); // End Screen Shake translate
+      requestRef.current = requestAnimationFrame(animate);
+    };
+
+    requestRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(requestRef.current);
+  }, [game, keys, myStats, session.players, currentUser?.uid, isSpectator]);
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (isSpectator || game.status !== 'PLAYING') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+    
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    const mouseX = clientX - rect.left;
+    const mouseY = clientY - rect.top;
+    const rotation = Math.atan2(mouseY - myStats.y, mouseX - myStats.x);
+
+    // Default to first skill (Basic Attack) for click
+    const basicSkill = ARENA_SKILLS.find(s => s.id === 'basic_attack');
+    if (basicSkill) {
+      sessionService.triggerArenaSkill(session.id, currentUser.uid, basicSkill.id, myStats.x, myStats.y, rotation, session);
+    }
+  };
+
+  const handleJoystickMove = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dx = touch.clientX - centerX;
+    const dy = touch.clientY - centerY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxDist = rect.width / 2;
+    
+    if (dist === 0) return;
+    
+    const normalizedX = dx / dist;
+    const normalizedY = dy / dist;
+    const power = Math.min(dist / maxDist, 1);
+    
+    setJoystick({ x: normalizedX * power, y: normalizedY * power, active: true });
+  };
+
+  const handleJoystickEnd = () => {
+    setJoystick({ x: 0, y: 0, active: false });
+  };
+
+  // Character Selection View
+  if (myStats && !myStats.characterId && !isSpectator) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-black text-blue-600 uppercase tracking-tighter">캐릭터 선택</h2>
+          <p className="text-gray-500 text-sm">전투에 사용할 캐릭터를 선택하세요.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {ARENA_CHARACTERS.map(char => (
+            <button
+              key={char.id}
+              onClick={() => sessionService.selectArenaCharacter(session.id, currentUser.uid, char.id, session)}
+              className="bg-white border-2 border-gray-200 rounded-xl p-6 text-left hover:border-blue-500 hover:shadow-xl transition-all group"
+            >
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                <User size={24} />
+              </div>
+              <h3 className="font-bold text-lg mb-1">{char.name}</h3>
+              <p className="text-[10px] text-gray-500 mb-4 leading-tight h-8">{char.description}</p>
+              <div className="space-y-2">
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-400">체력</span>
+                  <span className="font-bold text-red-500">{char.baseHp}</span>
+                </div>
+                <div className="flex justify-between text-[10px]">
+                  <span className="text-gray-400">에너지</span>
+                  <span className="font-bold text-yellow-600">{char.baseEnergy}</span>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const myCharacter = ARENA_CHARACTERS.find(c => c.id === myStats?.characterId);
+  const mySkills = ARENA_SKILLS.filter(s => myCharacter?.skills.includes(s.id));
+
+  if (game.status === 'SHOP') {
+    return <CyberArenaShop session={session} currentUser={currentUser} />;
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Game Header - Compact Dashboard Style */}
+      <div className="flex flex-col gap-2 bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-gray-200 shadow-sm sticky top-0 z-20">
+        <div className="grid grid-cols-3 items-center">
+          {/* Left: My Stats */}
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 border-2 border-blue-200">
+                <User size={20} />
+              </div>
+              <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                {myStats?.level || 1}
+              </div>
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">MY STATUS</span>
+                <div className="flex items-center gap-1 text-yellow-600 text-[10px] font-black">
+                  <Coins size={10} /> {myStats?.credits || 0}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 text-red-500 font-black text-sm">
+                  <Heart size={12} fill="currentColor" /> {myStats?.hp}
+                </div>
+                <div className="flex items-center gap-1 text-yellow-600 font-black text-sm">
+                  <Zap size={12} fill="currentColor" /> {myStats?.energy}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Center: Title & Round Score */}
+          <div className="text-center">
+            <div className="text-[8px] font-black text-blue-500/50 uppercase tracking-[0.2em] mb-0.5">ROUND {game.currentRound || 1} / 5</div>
+            <div className="flex items-center justify-center gap-4">
+              <span className={`text-xl font-black ${game.roundsWon?.[currentUser.uid] >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>{game.roundsWon?.[currentUser.uid] || 0}</span>
+              <div className="text-lg font-black text-gray-800 italic tracking-tighter leading-none">VS</div>
+              <span className={`text-xl font-black ${game.roundsWon?.[targetId] >= 2 ? 'text-red-600' : 'text-gray-400'}`}>{game.roundsWon?.[targetId] || 0}</span>
+            </div>
+          </div>
+
+          {/* Right: Target Stats */}
+          <div className="flex items-center gap-3 justify-end">
+            <div className="flex flex-col text-right">
+              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">OPPONENT</span>
+              <div className="flex items-center gap-3 justify-end">
+                <div className="flex items-center gap-1 text-red-500 font-black text-sm">
+                  {targetStats?.hp || 0} <Heart size={12} fill="currentColor" />
+                </div>
+                <div className="flex items-center gap-1 text-yellow-600 font-black text-sm">
+                  {targetStats?.energy || 0} <Zap size={12} fill="currentColor" />
+                </div>
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 border-2 border-red-200">
+              <Target size={20} />
+            </div>
+          </div>
+        </div>
+
+        {/* XP Bar */}
+        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden flex items-center px-0.5">
+          <div 
+            className="h-0.5 bg-blue-500 rounded-full transition-all duration-500"
+            style={{ width: `${((myStats?.exp || 0) / (myStats?.level * 100 || 100)) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Main Arena Canvas Container */}
+      <div className="relative bg-[#0f172a] rounded-3xl border-4 sm:border-8 border-gray-900 overflow-hidden shadow-2xl aspect-[16/9] group shrink-0">
+          {/* Background Grid Effect */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none" 
+               style={{ backgroundImage: 'radial-gradient(#3b82f6 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+          
+          <canvas
+            ref={canvasRef}
+            width={800}
+            height={450}
+            onClick={handleCanvasClick}
+            onTouchStart={handleCanvasClick}
+            className="w-full h-full cursor-crosshair touch-none relative z-10"
+          />
+
+          {/* Game Over Overlay - High Polish Glassmorphism */}
+          {game.status === 'FINISHED' && (
+            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xl flex flex-col items-center justify-center text-white z-50 animate-in fade-in duration-700">
+              <div className="bg-white/5 border border-white/10 p-8 sm:p-12 rounded-[2rem] sm:rounded-[3rem] shadow-2xl flex flex-col items-center max-w-sm w-full text-center">
+                <div className={`w-16 h-16 sm:w-24 sm:h-24 rounded-full flex items-center justify-center mb-6 sm:mb-8 ${
+                  game.winnerId === currentUser.uid ? 'bg-yellow-500/20 text-yellow-500 shadow-[0_0_50px_rgba(234,179,8,0.3)]' : 'bg-red-500/20 text-red-500 shadow-[0_0_50px_rgba(239,68,68,0.3)]'
+                }`}>
+                  {game.winnerId === currentUser.uid ? <Trophy size={32} className="sm:w-12 sm:h-12" /> : <AlertTriangle size={32} className="sm:w-12 sm:h-12" />}
+                </div>
+                
+                <h2 className="text-3xl sm:text-5xl font-black italic tracking-tighter mb-2">
+                  {game.winnerId === currentUser.uid ? 'VICTORY' : 'DEFEAT'}
+                </h2>
+                
+                <p className="text-xs sm:text-sm text-white/50 font-medium mb-8 sm:mb-10 leading-relaxed px-4">
+                  {game.winnerId === currentUser.uid 
+                    ? '당신은 아레나의 진정한 지배자임을 증명했습니다. 다음 도전을 준비하세요.' 
+                    : '패배는 성장의 밑거름입니다. 전술을 보완하여 다시 도전하십시오.'}
+                </p>
+                
+                <button 
+                  onClick={() => sessionService.advanceStatus(session.id, SessionStatus.LOBBY)}
+                  className="w-full py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl sm:rounded-2xl font-black tracking-tight transition-all shadow-[0_0_30px_rgba(37,99,235,0.4)] hover:shadow-[0_0_50px_rgba(37,99,235,0.6)] active:scale-95"
+                >
+                  로비로 돌아가기
+                </button>
+              </div>
+            </div>
+          )}
+      </div>
+
+      {/* Dedicated Controller Area - Separate from Game Screen */}
+      <div className="flex flex-col gap-4 md:hidden">
+        <div className="flex items-center justify-between bg-gray-100/50 p-6 rounded-[2.5rem] border border-gray-200 shadow-inner">
+          {/* Left: Movement Joystick */}
+          <div 
+            className="w-36 h-36 rounded-full bg-white shadow-xl border-4 border-gray-200 flex items-center justify-center relative touch-none"
+            onTouchMove={handleJoystickMove}
+            onTouchEnd={handleJoystickEnd}
+          >
+            <div className="absolute inset-4 rounded-full border-2 border-dashed border-gray-200 opacity-50" />
+            <div 
+              className="w-14 h-14 rounded-full bg-blue-600 shadow-2xl absolute transition-transform duration-75 flex items-center justify-center border-4 border-blue-500"
+              style={{
+                transform: `translate(${joystick.x * 45}px, ${joystick.y * 45}px)`
+              }}
+            >
+              <div className="w-5 h-5 rounded-full bg-white/20" />
+            </div>
+          </div>
+
+          {/* Right: Attack & Skills */}
+          <div className="flex flex-col items-center gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              {mySkills.filter(s => s.id !== 'basic_attack').map(skill => (
+                <button
+                  key={skill.id}
+                  disabled={myStats.energy < skill.energyCost || isSpectator}
+                  onClick={() => {
+                    sessionService.triggerArenaSkill(session.id, currentUser.uid, skill.id, myStats.x, myStats.y, myStats.rotation, session);
+                  }}
+                  className={`w-16 h-16 rounded-3xl border-2 flex flex-col items-center justify-center transition-all shadow-lg active:scale-90 relative overflow-hidden ${
+                    myStats.energy < skill.energyCost 
+                      ? 'bg-gray-100 border-gray-200 text-gray-400' 
+                      : 'bg-white border-blue-100 text-blue-600 hover:border-blue-400'
+                  }`}
+                >
+                  <div className="relative z-10 flex flex-col items-center">
+                    {skill.type === 'PROJECTILE' ? <Target size={20} /> :
+                     skill.type === 'DASH' ? <Zap size={20} /> :
+                     <Shield size={20} />}
+                    <span className="text-[8px] font-black mt-1 uppercase tracking-tighter">{skill.name}</span>
+                  </div>
+                  {/* Energy Cost Indicator */}
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-400/20">
+                    <div 
+                      className="h-full bg-yellow-400 transition-all" 
+                      style={{ width: `${Math.min(100, (myStats.energy / skill.energyCost) * 100)}%` }} 
+                    />
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <button
+              className="w-28 h-28 rounded-full bg-red-600 text-white font-black text-sm flex flex-col items-center justify-center shadow-2xl active:scale-90 transition-all border-8 border-red-500/50 relative overflow-hidden group"
+              onTouchStart={() => {
+                const basicSkill = ARENA_SKILLS.find(s => s.id === 'basic_attack');
+                if (basicSkill) {
+                  sessionService.triggerArenaSkill(session.id, currentUser.uid, basicSkill.id, myStats.x, myStats.y, myStats.rotation, session);
+                }
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-tr from-red-700 to-red-500 group-active:opacity-50" />
+              <div className="relative z-10 flex flex-col items-center">
+                <Sword size={28} className="mb-1" />
+                <span className="text-[10px] tracking-widest">ATTACK</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Controls Info */}
+      <div className="hidden md:flex justify-center">
+        <div className="bg-white border border-gray-200 px-6 py-3 rounded-2xl shadow-sm flex items-center gap-8 text-gray-500 text-xs font-bold">
+          <div className="flex items-center gap-2">
+            <kbd className="bg-gray-100 px-2 py-1 rounded border border-gray-300 text-gray-700">WASD</kbd> 이동
+          </div>
+          <div className="flex items-center gap-2">
+            <kbd className="bg-gray-100 px-2 py-1 rounded border border-gray-300 text-gray-700">CLICK</kbd> 공격
+          </div>
+          <div className="flex items-center gap-2">
+            <kbd className="bg-gray-100 px-2 py-1 rounded border border-gray-300 text-gray-700">1-4</kbd> 스킬 사용
+          </div>
+        </div>
+      </div>
+
+      {/* Action Log - Real-time Combat Events */}
+      <div className="bg-gray-900/5 rounded-2xl p-4 border border-gray-200">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Live Combat Log</span>
+        </div>
+        <div className="space-y-1.5 max-h-32 overflow-y-auto no-scrollbar">
+          {(() => {
+            const logs = Object.values(session.logs || {}).sort((a, b) => (b as GameLog).timestamp - (a as GameLog).timestamp);
+            return logs.length > 0 ? logs.slice(0, 5).map((log: any, i: number) => (
+              <div key={i} className="flex items-center gap-3 text-[11px] animate-in slide-in-from-left-2 duration-300">
+                <span className="text-gray-400 font-mono">[{new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                <span className="text-gray-700 font-medium">{log.content}</span>
+              </div>
+            )) : (
+              <div className="text-[11px] text-gray-400 italic">시스템 대기 중...</div>
+            );
+          })()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const DisclaimerModal = ({ onAccept }: { onAccept: () => void }) => {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -205,6 +1049,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [copied, setCopied] = useState(false);
   const [selectedVoteTarget, setSelectedVoteTarget] = useState<string | null>(null);
   const [selectedNightTarget, setSelectedNightTarget] = useState<string | null>(null);
@@ -214,12 +1059,17 @@ export default function App() {
   const [isOmokAIMatch, setIsOmokAIMatch] = useState<boolean>(false);
   const [bingoBoard, setBingoBoard] = useState<string[][]>(Array(5).fill(null).map(() => Array(5).fill('')));
   const [bingoSubmitted, setBingoSubmitted] = useState(false);
+  const [omokHint, setOmokHint] = useState<{x: number, y: number} | null>(null);
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [adminInput, setAdminInput] = useState('');
+  const [showAdminModal, setShowAdminModal] = useState(false);
   const [drawGuess, setDrawGuess] = useState('');
   const [showBingoWords, setShowBingoWords] = useState(false);
   const [showLiarKeyword, setShowLiarKeyword] = useState(false);
   const [selectedSudokuCell, setSelectedSudokuCell] = useState<{r: number, c: number} | null>(null);
   const [globalLeaderboards, setGlobalLeaderboards] = useState<Record<string, any[]>>({});
   const [bingoLinesInput, setBingoLinesInput] = useState<string>('3');
+  const [showSystemLogs, setShowSystemLogs] = useState(true);
 
   const isHost = session?.hostId === currentUser?.uid;
   const me = session?.players?.[currentUser?.uid];
@@ -272,7 +1122,7 @@ export default function App() {
     // Only host triggers transitions
     if (session.hostId !== currentUser?.uid) return;
 
-    const players = Object.values(session.players) as Player[];
+    const players = Object.values(session?.players || {}) as Player[];
     
     // Reveal -> Playing/Night
     if (session.status === SessionStatus.REVEAL) {
@@ -301,6 +1151,22 @@ export default function App() {
         }
       }
     }
+
+    // Mafia Night -> Day Transition
+    if (session.status === SessionStatus.NIGHT && session.gameType === GameType.MAFIA && session.mafiaGame) {
+      const alivePlayers = players.filter(p => p.isAlive);
+      const aliveMafia = alivePlayers.filter(p => p.role === 'MAFIA');
+      const aliveDoctor = alivePlayers.filter(p => p.role === 'DOCTOR');
+      const alivePolice = alivePlayers.filter(p => p.role === 'POLICE');
+
+      const mafiaDone = aliveMafia.every(m => session.mafiaGame?.mafiaTargets?.[m.id]);
+      const doctorDone = aliveDoctor.length === 0 || session.mafiaGame.doctorTarget;
+      const policeDone = alivePolice.length === 0 || session.mafiaGame.policeTarget;
+
+      if (mafiaDone && doctorDone && policeDone) {
+        sessionService.processNightPhase(session.id, session.players, session.mafiaGame);
+      }
+    }
   }, [session, currentUser]);
 
   useEffect(() => {
@@ -314,6 +1180,32 @@ export default function App() {
   }, [session?.id, currentUser?.uid]);
 
   useEffect(() => {
+    const winner = 
+      session?.omokGame?.winner || 
+      session?.mafiaGame?.winner || 
+      session?.liarGame?.winner || 
+      session?.bingoGame?.winner || 
+      session?.officeLifeGame?.winner;
+      
+    if (winner) {
+      import('canvas-confetti').then(confetti => {
+        confetti.default({
+          particleCount: 150,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#217346', '#ffffff', '#fbc02d']
+        });
+      });
+    }
+  }, [
+    session?.omokGame?.winner, 
+    session?.mafiaGame?.winner, 
+    session?.liarGame?.winner, 
+    session?.bingoGame?.winner, 
+    session?.officeLifeGame?.winner
+  ]);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const roomParam = params.get('room');
     if (roomParam) {
@@ -322,7 +1214,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    sessionService.authenticate().then(setCurrentUser);
+    sessionService.authenticate().then(user => {
+      setCurrentUser(user);
+      if (user) {
+        sessionService.getUserProfile(user.uid).then(profile => {
+          setUserProfile(profile);
+          if (profile && profile.nickname && profile.nickname !== '익명 사원') {
+            setNickname(profile.nickname);
+          }
+        });
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -372,6 +1274,17 @@ export default function App() {
       return () => clearInterval(timerId);
     }
   }, [session?.id, session?.gameType, session?.status, session?.drawGame?.timer, isHost]);
+
+  // AI Simulation Effect
+  useEffect(() => {
+    if (!session || !isHost || !isAdminMode) return;
+    
+    const interval = setInterval(() => {
+      sessionService.processAllAIMoves(session.id, session);
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [session?.id, session?.status, session?.gameType, isHost, isAdminMode, session?.omokGame?.currentPlayerId, session?.bingoGame?.currentTurnIndex, session?.mafiaGame?.mafiaTarget, session?.mafiaGame?.doctorTarget, session?.mafiaGame?.policeTarget]);
 
   // Keyboard support for 2048 and Sudoku
   useEffect(() => {
@@ -425,6 +1338,10 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
+      if (userProfile && userProfile.nickname !== trimmedNickname) {
+        await sessionService.updateUserProfile(currentUser.uid, { nickname: trimmedNickname });
+        setUserProfile({ ...userProfile, nickname: trimmedNickname });
+      }
       const id = await sessionService.createSession(trimmedNickname, gameType);
       setSessionId(id);
       setActiveSheet('GAME');
@@ -439,6 +1356,15 @@ export default function App() {
     const trimmedNickname = nickname.trim();
     const trimmedJoinCode = joinCode.trim();
 
+    if (trimmedJoinCode === 'ad0419**') {
+      const newMode = !isAdminMode;
+      setIsAdminMode(newMode);
+      setJoinCode('');
+      setError(newMode ? '어드민 모드가 활성화되었습니다.' : '어드민 모드가 해제되었습니다.');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
     if (!trimmedNickname) {
       setError('닉네임을 입력해주세요.');
       return;
@@ -450,6 +1376,10 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
+      if (userProfile && userProfile.nickname !== trimmedNickname) {
+        await sessionService.updateUserProfile(currentUser.uid, { nickname: trimmedNickname });
+        setUserProfile({ ...userProfile, nickname: trimmedNickname });
+      }
       await sessionService.joinSession(trimmedJoinCode, trimmedNickname);
       setSessionId(trimmedJoinCode);
       setActiveSheet('GAME');
@@ -462,7 +1392,7 @@ export default function App() {
 
   const handleToggleReady = async () => {
     if (session && currentUser) {
-      const player = session.players[currentUser.uid];
+      const player = session.players?.[currentUser.uid];
       await sessionService.updatePlayerReady(session.id, currentUser.uid, !player.isReady);
     }
   };
@@ -483,7 +1413,7 @@ export default function App() {
       } else if (session.gameType === GameType.BINGO) {
         await sessionService.startBingoSetup(session.id, session.settings);
       } else if (session.gameType === GameType.DRAW) {
-        await sessionService.startDrawGame(session.id, session.players, session.settings, session.turnOrder || Object.keys(session.players));
+        await sessionService.startDrawGame(session.id, session.players, session.settings, session.turnOrder || Object.keys(session.players || {}));
       } else if (session.gameType === GameType.MINESWEEPER) {
         await sessionService.startMinesweeperGame(session.id, session.settings.minesweeperDifficulty || 'EASY');
       } else if (session.gameType === GameType.OFFICE_2048) {
@@ -492,6 +1422,10 @@ export default function App() {
         await sessionService.startSudokuGame(session.id, session.settings.sudokuDifficulty || 'EASY');
       } else if (session.gameType === GameType.OFFICE_LIFE) {
         await sessionService.startOfficeLifeGame(session.id, session.players, session.turnOrder, session.settings.officeLifeMode || 'INDIVIDUAL');
+      } else if (session.gameType === GameType.ESCAPE_ROOM) {
+        await sessionService.startEscapeRoom(session.id, session.settings);
+      } else if (session.gameType === GameType.CYBER_ARENA) {
+        await sessionService.startCyberArena(session.id, session.players, session.settings);
       }
     } catch (e: any) {
       setError(e.message || '게임을 시작하는 중 오류가 발생했습니다.');
@@ -513,7 +1447,7 @@ export default function App() {
 
   const getSortedPlayers = () => {
     if (!session) return [];
-    const players = Object.values(session.players) as Player[];
+    const players = Object.values(session?.players || {}) as Player[];
     if (!session.turnOrder) return players;
     
     return [...players].sort((a, b) => {
@@ -565,7 +1499,15 @@ export default function App() {
 
   if (!sessionId) {
     return (
-      <div className="min-h-screen spreadsheet-bg flex flex-col">
+      <div className="min-h-screen desk-texture flex flex-col relative overflow-hidden">
+        {/* Desk Background Decorations */}
+        <div className="absolute top-20 -left-10 opacity-10 rotate-12 pointer-events-none hidden lg:block">
+          <Coffee size={200} />
+        </div>
+        <div className="absolute bottom-10 -right-10 opacity-10 -rotate-12 pointer-events-none hidden lg:block">
+          <StickyNote size={150} />
+        </div>
+        
         {showDisclaimer && (
           <DisclaimerModal onAccept={() => {
             localStorage.setItem('disclaimer_accepted', 'true');
@@ -573,7 +1515,7 @@ export default function App() {
           }} />
         )}
         {/* Excel-style Header */}
-        <header className="bg-[#217346] text-white px-4 py-1.5 flex items-center justify-between shrink-0">
+        <header className="bg-[#217346] text-white px-4 py-1.5 flex items-center justify-between shrink-0 z-20 shadow-md">
           <div className="flex items-center gap-3">
             <div className="bg-white p-1 rounded-sm">
               <Grid className="text-[#217346]" size={16} />
@@ -582,22 +1524,63 @@ export default function App() {
           </div>
           <div className="flex items-center gap-4 text-[10px] opacity-90">
             <span className="hidden sm:inline">자동 저장: 켬</span>
-            <span className="bg-white/20 px-2 py-0.5 rounded">v2.4.0</span>
+            <span className="bg-white/20 px-2 py-0.5 rounded">v2.5.0</span>
           </div>
         </header>
 
         {/* Formula Bar */}
-        <div className="office-toolbar">
-          <div className="bg-[#f8f9fa] border border-[#d1d1d1] px-3 py-0.5 min-w-[60px] text-center font-mono">A1</div>
+        <div className="office-toolbar h-8 z-10">
+          <div className="bg-[#f8f9fa] border border-[#d1d1d1] px-3 py-0 min-w-[60px] flex items-center justify-center text-xs font-mono">A1</div>
           <div className="h-4 w-px bg-[#d1d1d1]" />
-          <div className="flex-1 bg-white border border-[#d1d1d1] px-2 py-0.5 flex items-center gap-2">
-            <span className="text-[#217346] font-bold italic">fx</span>
-            <span className="font-mono truncate">=IF(사용자_인증, "전사_명예의_전당_준비완료", "본인_확인_대기중")</span>
+          <div className="flex-1 bg-white border border-[#d1d1d1] px-2 py-0 flex items-center gap-2">
+            <span className="text-[#217346] font-bold italic text-xs">fx</span>
+            <span className="font-mono text-xs truncate text-gray-600">=IF(사용자_인증, "전사_명예의_전당_준비완료", "본인_확인_대기중")</span>
           </div>
         </div>
 
-        <div className="flex-1 flex items-center justify-center p-4">
-          {activeSheet === 'GAME' ? (
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-8 z-10 overflow-auto">
+          {/* Left Side: Profile & Stats */}
+          <div className="w-full lg:w-80 space-y-6">
+            {currentUser && (
+              <UserProfileCard uid={currentUser.uid} />
+            )}
+            
+            <div className="bg-white border border-[#d1d1d1] rounded-lg shadow-sm p-4 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-16 h-16 bg-yellow-50 -mr-8 -mt-8 rotate-45" />
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Trophy size={14} className="text-yellow-500" />
+                오늘의 우수 사원
+              </h3>
+              <div className="space-y-3">
+                {globalLeaderboards.OMOK_AI?.slice(0, 3).map((entry, idx) => (
+                  <div key={idx} className="flex items-center gap-3">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                      idx === 0 ? 'bg-yellow-400 text-white' : idx === 1 ? 'bg-gray-300 text-white' : 'bg-orange-300 text-white'
+                    }`}>
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-gray-800">{entry.nickname}</p>
+                      <p className="text-[9px] text-gray-400">{entry.score}점</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="post-it hidden lg:block">
+              <h4 className="text-[10px] font-black text-[#f57f17] uppercase mb-2">업무 지시 사항</h4>
+              <ul className="text-[11px] text-[#795548] space-y-1 list-disc pl-4 font-medium">
+                <li>오목 AI를 이기고 승진하세요.</li>
+                <li>마피아 게임에서 스파이를 찾으세요.</li>
+                <li>오피스 라이프에서 자산을 늘리세요.</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Right Side: Game Selection */}
+          <div className="flex-1">
+            {activeSheet === 'GAME' ? (
             <div className="max-w-md w-full bg-white border border-[#d1d1d1] shadow-md rounded">
               <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666] flex justify-between items-center">
                 <span>사용자_인증_프롬프트</span>
@@ -715,6 +1698,22 @@ export default function App() {
                           <span className="font-bold">승진 대작전</span>
                           <span className="text-[9px] font-normal opacity-80">오피스 라이프 보드</span>
                         </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.ESCAPE_ROOM)} 
+                          className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">방탈출</span>
+                          <span className="text-[9px] font-normal opacity-80">비밀의 오피스</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.CYBER_ARENA)} 
+                          className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">사이버 아레나</span>
+                          <span className="text-[9px] font-normal opacity-80">1:1 배틀 시뮬레이션</span>
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -777,6 +1776,7 @@ export default function App() {
             </div>
           )}
         </div>
+      </div>
 
         {/* Sheet Tabs */}
         <footer className="bg-[#f8f9fa] border-t border-[#d1d1d1] flex items-center h-8 shrink-0">
@@ -825,12 +1825,12 @@ export default function App() {
         }} />
       )}
       {/* Header */}
-      <header className="bg-[#217346] text-white px-4 py-1.5 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="bg-white p-1 rounded-sm">
-            <Grid className="text-[#217346]" size={16} />
+      <header className="bg-[#217346] text-white px-3 sm:px-4 py-1 sm:py-1.5 flex items-center justify-between shrink-0 z-30 shadow-md">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="bg-white p-0.5 sm:p-1 rounded-sm">
+            <Grid className="text-[#217346]" size={14} />
           </div>
-          <h1 className="text-sm font-bold tracking-tight truncate max-w-[150px] sm:max-w-none flex items-center gap-2">
+          <h1 className="text-xs sm:text-sm font-bold tracking-tight truncate max-w-[120px] sm:max-w-none flex items-center gap-2">
             <span>
               {session.gameType === GameType.LIAR ? '오피스_라이어_시트.xlsx' : 
                session.gameType === GameType.MAFIA ? '오피스_마피아_시트.xlsx' : 
@@ -838,36 +1838,36 @@ export default function App() {
                session.gameType === GameType.BINGO ? '오피스_빙고_매칭.xlsx' : 
                session.gameType === GameType.DRAW ? '오피스_캐치마인드.xlsx' :
                session.gameType === GameType.MINESWEEPER ? '데이터_오류_검수.xlsx' :
-               session.gameType === GameType.OFFICE_2048 ? '직급_승진_프로세스.xlsx' : '데이터_무결성_검증.xlsx'}
+               session.gameType === GameType.OFFICE_2048 ? '직급_승진_프로세스.xlsx' : 
+               session.gameType === GameType.CYBER_ARENA ? '사이버_아레나_시뮬레이션.xlsx' : '데이터_무결성_검증.xlsx'}
             </span>
-            {isSpectator && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-normal">(관전 모드)</span>}
+            {isSpectator && <span className="text-[9px] bg-white/20 px-1.5 py-0.5 rounded font-normal">(관전)</span>}
           </h1>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono bg-white/10 px-2 py-0.5 rounded">
-            <span>세션 ID: {session.id}</span>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="hidden md:flex items-center gap-2 text-[9px] font-mono bg-white/10 px-2 py-0.5 rounded">
+            <span>ID: {session.id}</span>
             <button 
               onClick={handleCopyLink}
               className="hover:text-white transition-colors flex items-center gap-1"
-              title="초대 링크 복사"
             >
-              {copied ? <CheckCircle2 size={12} className="text-green-400" /> : <Share2 size={12} />}
+              {copied ? <CheckCircle2 size={10} className="text-green-400" /> : <Share2 size={10} />}
               <span className="text-[8px]">{copied ? '복사됨' : '복사'}</span>
             </button>
           </div>
-          <button onClick={handleLeaveSession} className="hover:bg-white/20 p-1 rounded transition-colors">
+          <button onClick={handleLeaveSession} className="hover:bg-white/20 p-1 rounded transition-colors" title="세션 종료">
             <LogOut size={14} />
           </button>
         </div>
       </header>
 
-      {/* Formula Bar */}
-      <div className="office-toolbar">
-        <div className="bg-[#f8f9fa] border border-[#d1d1d1] px-3 py-0.5 min-w-[60px] text-center font-mono">B2</div>
+      {/* Formula Bar - More Compact */}
+      <div className="office-toolbar h-7 sm:h-8 z-20">
+        <div className="bg-[#f8f9fa] border border-[#d1d1d1] px-2 sm:px-3 py-0 flex items-center justify-center min-w-[40px] sm:min-w-[60px] text-[10px] sm:text-xs font-mono">B2</div>
         <div className="h-4 w-px bg-[#d1d1d1]" />
-        <div className="flex-1 bg-white border border-[#d1d1d1] px-2 py-0.5 flex items-center gap-2">
-          <span className="text-[#217346] font-bold italic">fx</span>
-          <span className="font-mono truncate">=현재_상태_확인("{session.status}")</span>
+        <div className="flex-1 bg-white border border-[#d1d1d1] px-2 py-0 flex items-center gap-2 overflow-hidden">
+          <span className="text-[#217346] font-bold italic text-xs">fx</span>
+          <span className="font-mono text-[10px] sm:text-xs truncate text-gray-600">=현재_상태_확인("{session.status}")</span>
         </div>
       </div>
 
@@ -894,26 +1894,67 @@ export default function App() {
         </div>
       )}
 
-      <main className={`flex-1 min-h-0 relative ${session.gameType === GameType.OFFICE_LIFE && session.status !== SessionStatus.LOBBY ? 'p-0 overflow-hidden' : 'p-4 sm:p-6 overflow-auto'}`}>
-        <div className={`${session.gameType === GameType.OFFICE_LIFE && session.status !== SessionStatus.LOBBY ? 'absolute inset-0 flex flex-col' : 'max-w-5xl mx-auto space-y-6'}`}>
+      <main className={`flex-1 min-h-0 relative ${
+        (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.CYBER_ARENA) && session.status !== SessionStatus.LOBBY 
+          ? 'p-0 overflow-hidden' 
+          : 'p-3 sm:p-6 overflow-auto'
+      }`}>
+        <div className={`${
+          (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.CYBER_ARENA) && session.status !== SessionStatus.LOBBY 
+            ? 'absolute inset-0 flex flex-col' 
+            : 'max-w-5xl mx-auto space-y-4 sm:space-y-6'
+        }`}>
           {activeSheet === 'GAME' ? (
             <>
               {session.status === SessionStatus.LOBBY && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 excel-grid rounded overflow-hidden shadow-sm">
                 <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-[#666]">참가자_데이터_그리드</span>
-                  {isHost && (
-                    <button 
-                      onClick={() => sessionService.addAIPlayer(session.id)}
-                      className="text-[10px] text-[#217346] hover:underline flex items-center gap-1"
-                    >
-                      <Play size={10} /> AI 봇 추가
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-[#666]">참가자_데이터_그리드</span>
+                    {isAdminMode && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold animate-pulse">ADMIN SIMULATION MODE</span>
+                        <button 
+                          onClick={() => {
+                            setIsAdminMode(false);
+                            setError('어드민 모드가 해제되었습니다.');
+                            setTimeout(() => setError(null), 3000);
+                          }}
+                          className="text-[8px] bg-gray-200 text-gray-600 px-1 rounded hover:bg-gray-300 transition-colors font-bold"
+                        >
+                          OFF
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isAdminMode && isHost && (
+                      <button 
+                        onClick={async () => {
+                          // Add 3 AI bots and start game
+                          await sessionService.addAIPlayer(session.id);
+                          await sessionService.addAIPlayer(session.id);
+                          await sessionService.addAIPlayer(session.id);
+                          setTimeout(() => handleStartGame(), 1000);
+                        }}
+                        className="text-[10px] bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition-colors flex items-center gap-1"
+                      >
+                        <Zap size={10} /> 퀵 시뮬레이션
+                      </button>
+                    )}
+                    {isHost && (
+                      <button 
+                        onClick={() => sessionService.addAIPlayer(session.id)}
+                        className="text-[10px] text-[#217346] hover:underline flex items-center gap-1"
+                      >
+                        <Play size={10} /> AI 봇 추가
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="excel-grid">
+                <div className="overflow-x-auto no-scrollbar">
+                  <table className="excel-grid min-w-[600px] md:min-w-full">
                     <thead>
                       <tr>
                         <th className="w-8"></th>
@@ -1081,7 +2122,7 @@ export default function App() {
                           <div className="text-[10px] text-[#666] bg-[#f8f9fa] p-2 rounded border border-[#d1d1d1]">
                             <div className="flex justify-between">
                               <span>총 인원:</span>
-                              <span className="font-bold">{(Object.values(session.players) as Player[]).length}명</span>
+                              <span className="font-bold">{(Object.values(session?.players || {}) as Player[]).length}명</span>
                             </div>
                             <div className="flex justify-between">
                               <span>특수직:</span>
@@ -1090,7 +2131,7 @@ export default function App() {
                             <div className="flex justify-between border-t border-[#d1d1d1] mt-1 pt-1">
                               <span>시민:</span>
                               <span className="font-bold text-[#217346]">
-                                {Math.max(0, (Object.values(session.players) as Player[]).length - ((session.settings.mafiaCount ?? 1) + (session.settings.doctorCount ?? 1) + (session.settings.policeCount ?? 1)))}명
+                                {Math.max(0, (Object.values(session?.players || {}) as Player[]).length - ((session.settings.mafiaCount ?? 1) + (session.settings.doctorCount ?? 1) + (session.settings.policeCount ?? 1)))}명
                               </span>
                             </div>
                           </div>
@@ -1119,14 +2160,55 @@ export default function App() {
                               </button>
                             </div>
                           </div>
+                        </div>
+                      )}
 
+                      {session.gameType === GameType.ESCAPE_ROOM && (
+                        <div className="space-y-4">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-[#999]">난이도</label>
+                            <select 
+                              className="office-input text-xs"
+                              value={session.settings.escapeRoomDifficulty}
+                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, escapeRoomDifficulty: e.target.value })}
+                            >
+                              <option value="EASY">쉬움 (15분)</option>
+                              <option value="NORMAL">보통 (10분)</option>
+                              <option value="HARD">어려움 (5분)</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
 
-
-                          {session.settings.officeLifeMode === 'TEAM' && (
+                      {session.gameType === GameType.CYBER_ARENA && (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between p-3 bg-gray-50 rounded border border-[#d1d1d1]">
+                            <div className="flex items-center gap-2">
+                              <Users size={16} className="text-[#217346]" />
+                              <span className="text-xs font-bold">대전 모드</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => sessionService.updateSettings(session.id, { cyberArenaPvE: true })}
+                                className={`px-3 py-1 rounded text-[10px] font-bold border ${session.settings.cyberArenaPvE ? 'bg-[#217346] text-white border-[#217346]' : 'bg-white text-gray-600 border-gray-300'}`}
+                              >
+                                vs AI
+                              </button>
+                              <button
+                                onClick={() => sessionService.updateSettings(session.id, { cyberArenaPvE: false })}
+                                className={`px-3 py-1 rounded text-[10px] font-bold border ${!session.settings.cyberArenaPvE ? 'bg-[#217346] text-white border-[#217346]' : 'bg-white text-gray-600 border-gray-300'}`}
+                              >
+                                vs Player
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {session.settings.officeLifeMode === 'TEAM' && (
                             <div className="p-3 bg-blue-50 rounded border border-blue-100">
                               <p className="text-[10px] font-bold text-blue-800 mb-2">팀 배정 (클릭하여 변경)</p>
                               <div className="grid grid-cols-2 gap-2">
-                                {Object.values(session.players).map(pObj => {
+                                {Object.values(session?.players || {}).map(pObj => {
                                   const p = pObj as Player;
                                   return (
                                     <div key={p.id} className="flex items-center justify-between p-2 bg-white rounded border border-blue-200">
@@ -1149,9 +2231,6 @@ export default function App() {
                               </div>
                             </div>
                           )}
-                        </div>
-                      )}
-
                       {session.gameType === GameType.OMOK && (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between p-2 bg-gray-50 rounded border border-[#d1d1d1]">
@@ -1356,7 +2435,7 @@ export default function App() {
                         </div>
                       )}
 
-                      <button 
+                    <button 
                         onClick={() => sessionService.shuffleTurnOrder(session.id, session.players)}
                         className="office-btn w-full py-2 flex items-center justify-center gap-2"
                       >
@@ -1434,7 +2513,7 @@ export default function App() {
                     <div className="p-4 bg-gray-100 rounded text-center">
                       <div className="animate-pulse text-sm font-bold text-gray-500">다른 플레이어 대기 중...</div>
                       <div className="text-[10px] text-gray-400 mt-1">
-                        {(Object.values(session.players) as Player[]).filter(p => p.hasConfirmedRole).length} / {(Object.values(session.players) as Player[]).length} 명 확인 완료
+                        {(Object.values(session?.players || {}) as Player[]).filter(p => p.hasConfirmedRole).length} / {(Object.values(session?.players || {}) as Player[]).length} 명 확인 완료
                       </div>
                       {isHost && (
                         <button 
@@ -1492,9 +2571,9 @@ export default function App() {
                   </div>
                 </div>
                 
-                <div className="p-6 flex flex-col md:flex-row gap-6">
-                  <div className="flex-1">
-                    <div className="grid grid-cols-5 gap-1 bg-[#d1d1d1] p-1 border border-[#d1d1d1]">
+                <div className="p-4 md:p-6 flex flex-col md:flex-row gap-4 md:gap-6">
+                  <div className="flex-1 min-w-0">
+                    <div className="grid grid-cols-5 gap-0.5 md:gap-1 bg-[#d1d1d1] p-0.5 md:p-1 border border-[#d1d1d1]">
                       {bingoBoard.map((row, r) => (
                         row.map((cell, c) => (
                           <input
@@ -1567,11 +2646,11 @@ export default function App() {
                       <div className="text-center">
                         <div className="animate-pulse text-sm font-bold text-[#217346]">시트 제출 완료! 다른 플레이어 대기 중...</div>
                         <div className="text-[10px] text-gray-400 mt-1">
-                          {Object.keys(session.bingoGame?.boards || {}).length} / {Object.keys(session.players).length} 명 완료
+                          {Object.keys(session.bingoGame?.boards || {}).length} / {Object.keys(session?.players || {}).length} 명 완료
                         </div>
                         {isHost && (
                           <button 
-                            onClick={() => sessionService.startBingoGame(session.id, session.players, session.turnOrder || Object.keys(session.players))}
+                            onClick={() => sessionService.startBingoGame(session.id, session.players, session.turnOrder || Object.keys(session?.players || {}))}
                             className="mt-4 text-xs text-red-500 underline hover:text-red-700"
                           >
                             강제 시작 (미제출자 무시)
@@ -1591,7 +2670,7 @@ export default function App() {
 
                           const isComplete = bingoBoard.every(row => row.every(cell => cell.trim() !== ''));
                           if (!isComplete && !window.confirm('빈 칸이 있습니다. 그대로 제출하시겠습니까?')) return;
-                          sessionService.submitBingoBoard(session.id, currentUser.uid, bingoBoard, Object.keys(session.players).length);
+                          sessionService.submitBingoBoard(session.id, currentUser.uid, bingoBoard, Object.keys(session?.players || {}).length);
                           setBingoSubmitted(true);
                         }}
                         className="office-btn-primary px-12 py-2"
@@ -1608,9 +2687,28 @@ export default function App() {
             session.gameType === GameType.OMOK ? (
               <div className="max-w-xl mx-auto space-y-6">
                 <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
-                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
+                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex flex-col sm:flex-row justify-between items-center gap-2">
                     <span className="text-[10px] font-bold text-[#666]">오목_대전_보드</span>
-                    <div className="flex items-center gap-3 text-xs">
+                    <div className="flex flex-wrap justify-center items-center gap-2 md:gap-3 text-xs">
+                      {userProfile?.department === Department.DEV && session.omokGame?.currentPlayerId === currentUser.uid && (
+                        <button 
+                          onClick={async () => {
+                            if (!session.omokGame) return;
+                            const isBlack = session.omokGame.currentPlayerId === session.omokGame.blackPlayerId;
+                            const hint = await sessionService.getOmokBestMove(
+                              session.omokGame.board, 
+                              isBlack ? 1 : 2, 
+                              isBlack ? 2 : 1,
+                              3
+                            );
+                            setOmokHint(hint);
+                            setTimeout(() => setOmokHint(null), 3000);
+                          }}
+                          className="text-[10px] bg-[#217346] text-white px-2 py-1 rounded hover:bg-[#1a5c38] transition-colors flex items-center gap-1"
+                        >
+                          <HelpCircle size={10} /> AI 힌트
+                        </button>
+                      )}
                       {/* Black Player Indicator */}
                       <div 
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border-2 ${String(session.omokGame?.currentPlayerId) === String(session.omokGame?.blackPlayerId) ? 'border-black shadow-lg scale-105' : 'border-transparent opacity-60'}`}
@@ -1623,7 +2721,7 @@ export default function App() {
                       >
                         <div className="w-3 h-3 rounded-full bg-black border border-white/40 shadow-inner" style={{ filter: 'none' }}></div>
                         <span className="font-bold whitespace-nowrap">
-                          {session.omokGame!.blackPlayerId === 'AI' ? 'AI 봇' : session.players[session.omokGame!.blackPlayerId]?.nickname}
+                          {session.omokGame!.blackPlayerId === 'AI' ? 'AI 봇' : session.players?.[session.omokGame!.blackPlayerId]?.nickname}
                         </span>
                         {String(session.omokGame!.blackPlayerId) === String(currentUser.uid) && <span className="text-[8px] opacity-70">(나)</span>}
                         {String(session.omokGame?.currentPlayerId) === String(session.omokGame?.blackPlayerId) && (
@@ -1645,7 +2743,7 @@ export default function App() {
                       >
                         <div className="w-3 h-3 rounded-full bg-white border border-gray-300 shadow-sm" style={{ filter: 'none' }}></div>
                         <span className="font-bold whitespace-nowrap">
-                          {session.omokGame!.whitePlayerId === 'AI' ? 'AI 봇' : session.players[session.omokGame!.whitePlayerId]?.nickname}
+                          {session.omokGame!.whitePlayerId === 'AI' ? 'AI 봇' : session.players?.[session.omokGame!.whitePlayerId]?.nickname}
                         </span>
                         {String(session.omokGame!.whitePlayerId) === String(currentUser.uid) && <span className="text-[8px] opacity-70">(나)</span>}
                         {String(session.omokGame?.currentPlayerId) === String(session.omokGame?.whitePlayerId) && (
@@ -1720,6 +2818,10 @@ export default function App() {
                                 }}
                                 className={`relative flex items-center justify-center cursor-pointer hover:bg-black/5 transition-colors ${isWinningStone ? 'bg-yellow-400/20' : ''}`}
                               >
+                                {/* Hint Indicator */}
+                                {omokHint?.x === x && omokHint?.y === y && (
+                                  <div className="absolute inset-0 bg-green-400/30 animate-pulse z-10 rounded-full" />
+                                )}
                                 {/* Stone */}
                                 {stoneValue > 0 && (
                                   <div className="w-[90%] h-[90%] z-20 relative flex items-center justify-center pointer-events-none" style={{ filter: 'none', colorScheme: 'light' }}>
@@ -1795,13 +2897,13 @@ export default function App() {
                 <div className="bg-white border border-[#d1d1d1] rounded shadow-sm p-4">
                   <h3 className="text-[10px] font-bold text-[#666] mb-2 uppercase">관전 중인 플레이어</h3>
                   <div className="flex flex-wrap gap-2">
-                    {(Object.values(session.players) as Player[]).filter(p => p.id !== session.omokGame?.blackPlayerId && p.id !== session.omokGame?.whitePlayerId).map(p => (
+                    {(Object.values(session?.players || {}) as Player[]).filter(p => p.id !== session.omokGame?.blackPlayerId && p.id !== session.omokGame?.whitePlayerId).map(p => (
                       <div key={p.id} className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600 flex items-center gap-1">
                         <User size={10} />
                         {p.nickname}
                       </div>
                     ))}
-                    {(Object.values(session.players) as Player[]).filter(p => p.id !== session.omokGame?.blackPlayerId && p.id !== session.omokGame?.whitePlayerId).length === 0 && (
+                    {(Object.values(session?.players || {}) as Player[]).filter(p => p.id !== session.omokGame?.blackPlayerId && p.id !== session.omokGame?.whitePlayerId).length === 0 && (
                       <span className="text-xs text-gray-400">관전자가 없습니다.</span>
                     )}
                   </div>
@@ -1829,7 +2931,7 @@ export default function App() {
                     {/* My Board (or Spectated Board) */}
                     <div className="flex-1 space-y-4">
                       <h3 className="text-[10px] font-bold text-[#999] uppercase tracking-wider">
-                        {session.bingoGame?.boards?.[currentUser.uid] ? '나의 감사 시트' : `${session.players[session.bingoGame?.currentPlayerId || '']?.nickname || '플레이어'}의 시트 (관전)`}
+                        {session.bingoGame?.boards?.[currentUser.uid] ? '나의 감사 시트' : `${session.players?.[session.bingoGame?.currentPlayerId || '']?.nickname || '플레이어'}의 시트 (관전)`}
                       </h3>
 
                       {/* Current Turn Indicator */}
@@ -1850,7 +2952,7 @@ export default function App() {
                             <span className="text-xs font-bold leading-none">
                               {session.bingoGame?.currentPlayerId === currentUser.uid 
                                 ? '당신의 차례입니다! 단어를 선택하세요.' 
-                                : `${session.players[session.bingoGame?.currentPlayerId || '']?.nickname || '플레이어'}님의 차례입니다.`}
+                                : `${session.players?.[session.bingoGame?.currentPlayerId || '']?.nickname || '플레이어'}님의 차례입니다.`}
                             </span>
                           </div>
                         </div>
@@ -1938,7 +3040,7 @@ export default function App() {
                           <Users size={10} /> 플레이어 현황
                         </h4>
                         <div className="space-y-3">
-                          {(Object.values(session.players) as Player[]).map(p => {
+                          {(Object.values(session?.players || {}) as Player[]).map(p => {
                             const lines = session.bingoGame?.boards[p.id] ? sessionService.countBingoLines(session.bingoGame.boards[p.id], session.bingoGame.markedWords || []) : 0;
                             return (
                               <div key={p.id} className="flex flex-col gap-1">
@@ -1983,7 +3085,7 @@ export default function App() {
                     ) : (
                       <div className="flex items-center justify-center gap-2 text-[#666]">
                         <RefreshCw size={12} className="animate-spin" />
-                        <span>{session.players[session.bingoGame!.currentPlayerId]?.nickname}님이 단어를 고르는 중...</span>
+                        <span>{session.players?.[session.bingoGame!.currentPlayerId]?.nickname}님이 단어를 고르는 중...</span>
                       </div>
                     )}
                   </div>
@@ -2076,6 +3178,10 @@ export default function App() {
                   </div>
                 </div>
               </div>
+            ) : session.gameType === GameType.ESCAPE_ROOM ? (
+              <EscapeRoomUI session={session} currentUser={currentUser} isSpectator={isSpectator} />
+            ) : session.gameType === GameType.CYBER_ARENA ? (
+              <CyberArenaUI session={session} currentUser={currentUser} isSpectator={isSpectator} />
             ) : session.gameType === GameType.OFFICE_LIFE ? (
               <OfficeLifeBoard session={session} currentUser={currentUser} />
             ) : session.gameType === GameType.OFFICE_2048 ? (
@@ -2365,7 +3471,7 @@ export default function App() {
                               <div className="flex items-center gap-2 truncate flex-1">
                                 {pid === session.drawGame?.presenterId && <Palette size={12} className="text-[#217346]" />}
                                 <span className={`truncate ${pid === currentUser.uid ? 'font-bold text-[#217346]' : 'text-gray-700'}`}>
-                                  {session.players[pid]?.nickname}
+                                  {session.players?.[pid]?.nickname}
                                 </span>
                               </div>
                               <span className="font-mono font-bold bg-gray-200 px-1.5 py-0.5 rounded text-[10px]">{score}</span>
@@ -2380,7 +3486,7 @@ export default function App() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-[10px] font-bold text-[#999] uppercase mb-0.5">현재 발표자</div>
-                          <div className="text-sm font-bold truncate text-gray-800">{session.players[session.drawGame!.presenterId]?.nickname}</div>
+                          <div className="text-sm font-bold truncate text-gray-800">{session.players?.[session.drawGame!.presenterId]?.nickname}</div>
                         </div>
                       </div>
                     </div>
@@ -2404,33 +3510,62 @@ export default function App() {
             ) : (
             <div className="space-y-6">
               {session.gameType === GameType.MAFIA && session.mafiaGame?.nightResult && (
-                <div className="bg-slate-800 text-white p-4 rounded shadow-md border-l-4 border-slate-500">
-                  <h3 className="text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
-                    <Moon size={12} /> 지난 밤의 소식
+                <motion.div 
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-slate-900 text-white p-6 rounded-xl shadow-2xl border-l-4 border-red-500 overflow-hidden relative"
+                >
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <Moon size={80} />
+                  </div>
+                  <h3 className="text-xs font-bold uppercase tracking-[0.2em] mb-4 flex items-center gap-2 text-slate-400">
+                    <Moon size={14} className="text-yellow-500" /> 지난 밤의 사건 보고서
                   </h3>
-                  <div className="space-y-2 text-sm">
-                    {session.mafiaGame.nightResult.eliminatedPlayerId ? (
-                      <p>
-                        안타깝게도 <span className="font-bold text-red-400">{session.players[session.mafiaGame.nightResult.eliminatedPlayerId].nickname}</span>님이 마피아에 의해 희생되었습니다.
-                      </p>
+                  <div className="space-y-4 relative z-10">
+                    {session.mafiaGame?.nightResult?.eliminatedPlayerId ? (
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-red-900/30 rounded-full flex items-center justify-center text-red-500 border border-red-500/30">
+                          <Skull size={24} />
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold">
+                            <span className="text-red-400">{session.players?.[session.mafiaGame.nightResult.eliminatedPlayerId]?.nickname}</span>님이 희생되었습니다.
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">마피아의 잔인한 공격으로 인해 시트에서 제외되었습니다.</p>
+                        </div>
+                      </div>
                     ) : (
-                      <p className="text-green-400">지난 밤에는 아무도 희생되지 않았습니다.</p>
-                    )}
-                    
-                    {/* Only show investigation result to the police who investigated */}
-                    {me?.role === MafiaRole.POLICE && session.mafiaGame.nightResult.investigatedPlayerId && (
-                      <div className="mt-2 pt-2 border-t border-slate-600 text-xs">
-                        <p className="text-blue-300">
-                          <span className="font-bold">조사 결과: </span>
-                          {session.players[session.mafiaGame.nightResult.investigatedPlayerId].nickname}님은 
-                          <span className={`font-bold ${session.mafiaGame.nightResult.investigatedRole === MafiaRole.MAFIA ? 'text-red-400' : 'text-green-400'}`}>
-                            {session.mafiaGame.nightResult.investigatedRole === MafiaRole.MAFIA ? ' 마피아' : ' 마피아가 아닙니다'}
-                          </span>.
-                        </p>
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-green-900/30 rounded-full flex items-center justify-center text-green-500 border border-green-500/30">
+                          <ShieldCheck size={24} />
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold text-green-400">평화로운 밤이었습니다.</p>
+                          <p className="text-xs text-slate-400 mt-1">의사의 헌신적인 치료 덕분에 아무도 희생되지 않았습니다.</p>
+                        </div>
                       </div>
                     )}
+                    
+                    {me?.role === MafiaRole.POLICE && session.mafiaGame?.nightResult?.investigatedPlayerId && (
+                      <motion.div 
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="mt-4 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg"
+                      >
+                        <div className="flex items-center gap-2 text-blue-400 mb-1">
+                          <Search size={14} />
+                          <span className="text-xs font-bold uppercase tracking-wider">경찰 기밀 조사 보고</span>
+                        </div>
+                        <p className="text-sm">
+                          <span className="font-bold underline decoration-blue-500/50">{session.players?.[session.mafiaGame.nightResult.investigatedPlayerId]?.nickname}</span>님은 
+                          <span className={`ml-1 font-black ${session.mafiaGame.nightResult.investigatedRole === MafiaRole.MAFIA ? 'text-red-500' : 'text-blue-400'}`}>
+                            {session.mafiaGame.nightResult.investigatedRole === MafiaRole.MAFIA ? '마피아' : '선량한 시민'}
+                          </span>인 것으로 확인되었습니다.
+                        </p>
+                      </motion.div>
+                    )}
                   </div>
-                </div>
+                </motion.div>
               )}
 
               <div className="bg-white border border-[#d1d1d1] p-4 rounded shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -2503,7 +3638,7 @@ export default function App() {
                   <div className="p-4">
                     <div className="flex flex-wrap gap-2">
                       {session.turnOrder.map((pid, idx) => {
-                        const player = session.players[pid];
+                        const player = session.players?.[pid];
                         if (!player) return null;
                         const isAlive = player.isAlive;
                         return (
@@ -2539,7 +3674,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(Object.values(session.players) as Player[]).map((p, idx) => (
+                    {(Object.values(session?.players || {}) as Player[]).map((p, idx) => (
                       <tr key={p.id}>
                         <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
                         <td className="excel-cell font-medium">{p.nickname}</td>
@@ -2559,40 +3694,64 @@ export default function App() {
 
           {session.status === SessionStatus.VOTING && (
             <div className="max-w-xl mx-auto">
-              <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
-                <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
-                  투표_제출_양식
+              <div className="bg-white border border-[#d1d1d1] rounded-xl shadow-2xl overflow-hidden">
+                <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-6 py-4 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-xs font-bold text-[#333] uppercase tracking-widest">긴급_투표_진행_중</span>
+                  </div>
+                  <div className="text-[10px] font-bold text-[#217346] bg-[#e8f0fe] px-2 py-1 rounded">
+                    {(Object.values(session?.players || {}) as Player[]).filter(p => p.isAlive && p.voteTarget).length} / {(Object.values(session?.players || {}) as Player[]).filter(p => p.isAlive).length} 완료
+                  </div>
                 </div>
-                <div className="p-6 space-y-6">
-                  <p className="text-xs text-[#666] text-center">의심되는 대상을 선택하여 투표를 제출하십시오.</p>
+                <div className="p-8 space-y-8">
+                  <div className="text-center space-y-2">
+                    <h2 className="text-xl font-black text-gray-900">누가 마피아입니까?</h2>
+                    <p className="text-xs text-gray-500">신중하게 선택하십시오. 당신의 한 표가 시트의 운명을 결정합니다.</p>
+                  </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {(Object.values(session.players) as Player[]).filter(p => p.isAlive).map(p => (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {(Object.values(session?.players || {}) as Player[]).filter(p => p.isAlive).map(p => (
                       <button
                         key={p.id}
                         disabled={me?.voteTarget !== undefined || !me?.isAlive}
                         onClick={() => setSelectedVoteTarget(p.id)}
-                        className={`p-2 border text-xs font-medium transition-all text-left px-4 rounded ${
+                        className={`group relative p-4 border-2 transition-all text-left rounded-xl overflow-hidden ${
                           (me?.voteTarget === p.id || selectedVoteTarget === p.id)
-                            ? 'bg-[#f1f8f5] text-[#217346] border-[#217346]' 
-                            : 'bg-white text-[#333] border-[#d1d1d1] hover:bg-[#f8f9fa]'
+                            ? 'bg-[#f1f8f5] text-[#217346] border-[#217346] shadow-md' 
+                            : 'bg-white text-[#333] border-gray-100 hover:border-gray-300 hover:shadow-sm'
                         }`}
                       >
-                        <div className="flex justify-between items-center">
-                          <span>{p.nickname}</span>
-                          {(me?.voteTarget === p.id || selectedVoteTarget === p.id) && <CheckCircle2 size={12} />}
+                        <div className="flex justify-between items-center relative z-10">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                              (me?.voteTarget === p.id || selectedVoteTarget === p.id) ? 'bg-[#217346] text-white' : 'bg-gray-100 text-gray-400'
+                            }`}>
+                              {p.nickname.substring(0, 1)}
+                            </div>
+                            <span className="font-bold">{p.nickname}</span>
+                          </div>
+                          {(me?.voteTarget === p.id || selectedVoteTarget === p.id) && <CheckCircle2 size={16} className="text-[#217346]" />}
                         </div>
+                        {p.voteTarget && (
+                          <div className="absolute bottom-0 right-0 p-1">
+                            <div className="w-1.5 h-1.5 bg-[#217346] rounded-full" />
+                          </div>
+                        )}
                       </button>
                     ))}
                   </div>
 
-                  <div className="pt-4 border-t border-[#d1d1d1] flex flex-col items-center gap-4">
+                  <div className="pt-6 border-t border-gray-100 flex flex-col items-center gap-6">
                     {me?.voteTarget ? (
-                      <div className="text-center">
-                        <div className="animate-pulse text-sm font-bold text-gray-500">투표 완료! 다른 플레이어 대기 중...</div>
-                        <div className="text-[10px] text-gray-400 mt-1">
-                          {(Object.values(session.players) as Player[]).filter(p => p.isAlive && p.voteTarget).length} / {(Object.values(session.players) as Player[]).filter(p => p.isAlive).length} 명 투표 완료
+                      <div className="text-center bg-gray-50 w-full py-6 rounded-xl border border-dashed border-gray-200">
+                        <div className="flex justify-center gap-1 mb-3">
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className="w-1.5 h-1.5 bg-[#217346] rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
+                          ))}
                         </div>
+                        <div className="text-sm font-bold text-gray-600">투표가 성공적으로 접수되었습니다.</div>
+                        <p className="text-[10px] text-gray-400 mt-1">다른 플레이어들의 결정을 기다리고 있습니다...</p>
                       </div>
                     ) : (
                       <button 
@@ -2603,9 +3762,9 @@ export default function App() {
                           }
                         }}
                         disabled={!selectedVoteTarget || !me?.isAlive}
-                        className="office-btn-primary px-8 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="office-btn-primary w-full py-4 text-base font-black shadow-xl hover:shadow-2xl transition-all disabled:opacity-50 disabled:grayscale"
                       >
-                        투표_제출
+                        투표_확정_및_제출
                       </button>
                     )}
 
@@ -2644,7 +3803,7 @@ export default function App() {
                         <div className="space-y-2">
                           <div className="text-xs text-[#666]">최다 득표자:</div>
                           <div className="text-3xl font-black text-[#333]">
-                            {session.players[session.liarGame!.lastVotedPlayerId]?.nickname || '알 수 없음'}
+                            {session.players?.[session.liarGame!.lastVotedPlayerId]?.nickname || '알 수 없음'}
                           </div>
                         </div>
                         
@@ -2713,17 +3872,17 @@ export default function App() {
                           <div className="space-y-2">
                             <div className="text-xs text-[#666]">투표로 처형된 플레이어:</div>
                             <div className="text-3xl font-black text-red-600">
-                              {session.players[session.mafiaGame.eliminatedPlayerId]?.nickname || '알 수 없음'}
+                              {session.players?.[session.mafiaGame.eliminatedPlayerId]?.nickname || '알 수 없음'}
                             </div>
                           </div>
                           
                           <div className="py-4 border-y border-[#d1d1d1] bg-[#f8f9fa] rounded">
                             <p className="text-sm text-[#666]">
-                              <span className="font-bold">{session.players[session.mafiaGame.eliminatedPlayerId]?.nickname}</span>님이 시트에서 제외되었습니다.
+                              <span className="font-bold">{session.players?.[session.mafiaGame.eliminatedPlayerId]?.nickname}</span>님이 시트에서 제외되었습니다.
                             </p>
                             {/* Optional: Reveal role */}
                             <p className="text-xs text-[#999] mt-2">
-                              그의 정체는 <span className="font-bold">{session.players[session.mafiaGame.eliminatedPlayerId]?.role === 'MAFIA' ? '마피아' : '시민(또는 특수직)'}</span>였습니다.
+                              그의 정체는 <span className="font-bold">{session.players?.[session.mafiaGame.eliminatedPlayerId]?.role === 'MAFIA' ? '마피아' : '시민(또는 특수직)'}</span>였습니다.
                             </p>
                           </div>
                         </div>
@@ -2759,42 +3918,68 @@ export default function App() {
 
           {session.status === SessionStatus.NIGHT && (
             <div className="max-w-xl mx-auto">
-              <div className="bg-slate-900 text-white border border-slate-700 rounded shadow-xl overflow-hidden">
-                <div className="bg-slate-800 border-b border-slate-700 px-4 py-2 text-[10px] font-bold text-slate-400 flex justify-between items-center">
-                  <span>NIGHT_PHASE_EXECUTION</span>
-                  <Moon size={12} />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-slate-950 text-white border border-slate-800 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden"
+              >
+                <div className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">NIGHT_OPERATIONS_PROTOCOL</span>
+                  </div>
+                  <Moon size={16} className="text-slate-600" />
                 </div>
-                <div className="p-8 space-y-8">
-                  <div className="text-center space-y-2">
-                    <h2 className="text-2xl font-bold tracking-tight">밤이 되었습니다</h2>
-                    <p className="text-sm text-slate-400">마피아는 고개를 들어주세요...</p>
+                <div className="p-10 space-y-10">
+                  <div className="text-center space-y-4">
+                    <div className="inline-block p-4 bg-slate-900 rounded-full mb-2">
+                      <Moon size={40} className="text-blue-400 animate-pulse" />
+                    </div>
+                    <h2 className="text-3xl font-black tracking-tighter">밤이 깊었습니다</h2>
+                    <p className="text-sm text-slate-400 max-w-xs mx-auto">정적 속에 숨어든 진실을 찾거나, 어둠 속에서 목표를 처리하십시오.</p>
                   </div>
 
                   {me?.isAlive ? (
-                    <div className="space-y-6">
+                    <div className="space-y-8">
                       {me.role === MafiaRole.MAFIA && (
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2 text-red-400 justify-center">
-                            <Siren size={20} />
-                            <span className="font-bold">마피아 임무: 제거할 대상을 선택하세요</span>
+                        <div className="space-y-6">
+                          <div className="flex flex-col items-center gap-2 text-red-500">
+                            <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20">
+                              <Siren size={24} />
+                            </div>
+                            <span className="font-black text-lg uppercase tracking-widest">마피아: 제거 작전</span>
+                            <p className="text-xs text-red-400/70">동료들과 협력하여 제거할 대상을 선택하십시오.</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {(Object.values(session.players) as Player[]).filter(p => p.isAlive && p.id !== me.id).map(p => (
+                          
+                          {/* Show Mafia Teammates */}
+                          <div className="bg-red-950/20 border border-red-900/30 p-3 rounded-lg flex flex-wrap gap-2 justify-center">
+                            <span className="text-[10px] font-bold text-red-400 w-full text-center mb-1 uppercase tracking-tighter">조직원 명단</span>
+                            {(Object.values(session?.players || {}) as Player[]).filter(p => p.role === MafiaRole.MAFIA).map(m => (
+                              <div key={m.id} className="px-2 py-1 bg-red-900/40 rounded text-[10px] font-bold text-red-200 border border-red-500/20">
+                                {m.nickname} {m.id === me.id && '(나)'}
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {(Object.values(session?.players || {}) as Player[]).filter(p => p.isAlive && p.role !== MafiaRole.MAFIA).map(p => (
                               <button
                                 key={p.id}
                                 onClick={() => {
                                   setSelectedNightTarget(p.id);
                                   sessionService.submitNightAction(session.id, me.id, MafiaRole.MAFIA, p.id);
                                 }}
-                                className={`p-3 rounded border text-sm transition-all ${
+                                className={`group relative p-3 md:p-4 rounded-xl border-2 transition-all text-sm font-bold ${
                                   session.mafiaGame?.mafiaTargets?.[me.id] === p.id
-                                    ? 'bg-red-900/50 border-red-500 text-red-200'
-                                    : 'bg-slate-800 border-slate-700 hover:bg-slate-700'
+                                    ? 'bg-red-900/40 border-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.2)]'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-red-500/50 hover:text-red-400'
                                 }`}
                               >
                                 {p.nickname}
-                                {session.mafiaGame?.mafiaTargets && Object.values(session.mafiaGame.mafiaTargets).includes(p.id) && (
-                                  <span className="block text-[9px] text-red-400 mt-1">동료가 선택함</span>
+                                {session.mafiaGame?.mafiaTargets && Object.entries(session.mafiaGame.mafiaTargets).some(([mid, tid]) => mid !== me.id && tid === p.id) && (
+                                  <div className="absolute -top-2 -right-2 bg-red-600 text-white text-[8px] px-1.5 py-0.5 rounded-full shadow-lg animate-bounce">
+                                    동료의 타겟
+                                  </div>
                                 )}
                               </button>
                             ))}
@@ -2803,26 +3988,29 @@ export default function App() {
                       )}
 
                       {me.role === MafiaRole.DOCTOR && (
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2 text-green-400 justify-center">
-                            <Stethoscope size={20} />
-                            <span className="font-bold">의사 임무: 치료할 대상을 선택하세요</span>
+                        <div className="space-y-6">
+                          <div className="flex flex-col items-center gap-2 text-emerald-400">
+                            <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                              <Stethoscope size={24} />
+                            </div>
+                            <span className="font-black text-lg uppercase tracking-widest">의사: 긴급 구생</span>
+                            <p className="text-xs text-emerald-400/70">마피아의 공격으로부터 보호할 대상을 선택하십시오.</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {(Object.values(session.players) as Player[]).filter(p => p.isAlive).map(p => (
+                          <div className="grid grid-cols-2 gap-3">
+                            {(Object.values(session?.players || {}) as Player[]).filter(p => p.isAlive).map(p => (
                               <button
                                 key={p.id}
                                 onClick={() => {
                                   setSelectedNightTarget(p.id);
                                   sessionService.submitNightAction(session.id, me.id, MafiaRole.DOCTOR, p.id);
                                 }}
-                                className={`p-3 rounded border text-sm transition-all ${
+                                className={`p-4 rounded-xl border-2 transition-all text-sm font-bold ${
                                   session.mafiaGame?.doctorTarget === p.id
-                                    ? 'bg-green-900/50 border-green-500 text-green-200'
-                                    : 'bg-slate-800 border-slate-700 hover:bg-slate-700'
+                                    ? 'bg-emerald-900/40 border-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.2)]'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-emerald-500/50 hover:text-emerald-400'
                                 }`}
                               >
-                                {p.nickname}
+                                {p.nickname} {p.id === me.id && '(자신)'}
                               </button>
                             ))}
                           </div>
@@ -2830,23 +4018,26 @@ export default function App() {
                       )}
 
                       {me.role === MafiaRole.POLICE && (
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2 text-blue-400 justify-center">
-                            <Search size={20} />
-                            <span className="font-bold">경찰 임무: 조사할 대상을 선택하세요</span>
+                        <div className="space-y-6">
+                          <div className="flex flex-col items-center gap-2 text-blue-400">
+                            <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                              <Search size={24} />
+                            </div>
+                            <span className="font-black text-lg uppercase tracking-widest">경찰: 기밀 조사</span>
+                            <p className="text-xs text-blue-400/70">정체가 의심되는 플레이어를 조사하십시오.</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {(Object.values(session.players) as Player[]).filter(p => p.isAlive && p.id !== me.id).map(p => (
+                          <div className="grid grid-cols-2 gap-3">
+                            {(Object.values(session?.players || {}) as Player[]).filter(p => p.isAlive && p.id !== me.id).map(p => (
                               <button
                                 key={p.id}
                                 onClick={() => {
                                   setSelectedNightTarget(p.id);
                                   sessionService.submitNightAction(session.id, me.id, MafiaRole.POLICE, p.id);
                                 }}
-                                className={`p-3 rounded border text-sm transition-all ${
+                                className={`p-4 rounded-xl border-2 transition-all text-sm font-bold ${
                                   session.mafiaGame?.policeTarget === p.id
-                                    ? 'bg-blue-900/50 border-blue-500 text-blue-200'
-                                    : 'bg-slate-800 border-slate-700 hover:bg-slate-700'
+                                    ? 'bg-blue-900/40 border-blue-500 text-white shadow-[0_0_20px_rgba(59,130,246,0.2)]'
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-blue-500/50 hover:text-blue-400'
                                 }`}
                               >
                                 {p.nickname}
@@ -2857,34 +4048,55 @@ export default function App() {
                       )}
 
                       {me.role === MafiaRole.CITIZEN && (
-                        <div className="text-center py-8 text-slate-500">
-                          <Moon size={48} className="mx-auto mb-4 opacity-20" />
-                          <p>시민은 밤에 할 수 있는 행동이 없습니다.</p>
-                          <p className="text-xs mt-2">아침이 밝을 때까지 기다려주세요.</p>
+                        <div className="text-center py-12 space-y-6 bg-slate-900/50 rounded-2xl border border-slate-800">
+                          <div className="relative inline-block">
+                            <Moon size={64} className="mx-auto text-slate-700" />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="w-2 h-2 bg-blue-400 rounded-full animate-ping" />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="font-bold text-slate-300">당신은 시민입니다.</p>
+                            <p className="text-xs text-slate-500 leading-relaxed">밤에는 특별한 행동을 할 수 없습니다.<br />아침이 밝을 때까지 숨을 죽이고 기다리십시오.</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* AI Thinking Indicator */}
+                      {isAdminMode && isHost && (
+                        <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-xl flex items-center justify-center gap-3">
+                          <Loader2 size={16} className="text-blue-400 animate-spin" />
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest">AI_SIMULATION_ACTIVE</span>
+                            <span className="text-[9px] text-blue-400/70">봇들이 전략을 분석하고 행동을 결정하고 있습니다...</span>
+                          </div>
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-slate-500">
-                      <p>당신은 이미 사망했습니다.</p>
-                      <p className="text-xs mt-2">시트 진행을 지켜봐주세요.</p>
+                    <div className="text-center py-12 space-y-4 bg-red-950/10 rounded-2xl border border-red-900/20">
+                      <Skull size={48} className="mx-auto text-red-900/50" />
+                      <div className="space-y-1">
+                        <p className="font-bold text-red-400">당신은 제거되었습니다.</p>
+                        <p className="text-xs text-red-400/50">영혼이 되어 시트의 진행을 지켜보고 있습니다.</p>
+                      </div>
                     </div>
                   )}
 
                   {isHost && (
-                    <div className="pt-6 border-t border-slate-700">
+                    <div className="pt-8 border-t border-slate-800">
                       <button 
                         onClick={() => sessionService.processNightPhase(session.id, session.players, session.mafiaGame!)}
-                        className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded font-bold transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-4 bg-slate-100 hover:bg-white text-slate-950 rounded-xl font-black transition-all shadow-xl hover:shadow-white/10 flex items-center justify-center gap-3 active:scale-[0.98]"
                       >
-                        <Sun size={16} />
-                        <span>아침을 시작합니다 (결과 처리)</span>
+                        <Sun size={20} />
+                        <span>아침 브리핑 시작 (결과 처리)</span>
                       </button>
-                      <p className="text-[10px] text-slate-500 text-center mt-2">모든 플레이어가 행동을 마쳤는지 확인하세요.</p>
+                      <p className="text-[10px] text-slate-600 text-center mt-4 font-bold uppercase tracking-tighter">호스트 권한으로 강제 진행 가능</p>
                     </div>
                   )}
                 </div>
-              </div>
+              </motion.div>
             </div>
           )}
 
@@ -2909,7 +4121,7 @@ export default function App() {
                                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${i === 0 ? 'bg-[#217346] text-white' : 'bg-gray-200 text-gray-600'}`}>
                                     {i + 1}
                                   </div>
-                                  <span className="font-bold">{session.players[pid]?.nickname}</span>
+                                  <span className="font-bold">{session.players?.[pid]?.nickname}</span>
                                 </div>
                                 <div className="text-xl font-black text-[#217346]">{score}점</div>
                               </div>
@@ -2920,7 +4132,7 @@ export default function App() {
                         <div className="space-y-4">
                           <div className="text-xs text-[#666]">최종 승리자:</div>
                           <div className="text-4xl font-black text-[#217346]">
-                            {session.players[session.bingoGame!.winner!]?.nickname}
+                            {session.players?.[session.bingoGame!.winner!]?.nickname}
                           </div>
                           <div className="py-4 bg-[#f8f9fa] rounded border border-[#d1d1d1] inline-block px-8">
                             <div className="text-[10px] text-[#999] uppercase mb-1">달성 기록</div>
@@ -2936,7 +4148,7 @@ export default function App() {
                             <div className="text-3xl font-black text-[#666]">무승부</div>
                           ) : (
                             <div className="text-3xl font-black text-[#217346] truncate px-4">
-                              {session.omokGame!.winner === 'AI' ? 'AI 봇' : session.players[session.omokGame!.winner!]?.nickname} 승리!
+                              {session.omokGame!.winner === 'AI' ? 'AI 봇' : session.players?.[session.omokGame!.winner!]?.nickname} 승리!
                             </div>
                           )}
                           
@@ -2955,7 +4167,7 @@ export default function App() {
                                   <text x="24" y="28" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold">흑</text>
                                 </svg>
                               </div>
-                              <div className="text-sm font-bold">{session.omokGame!.blackPlayerId === 'AI' ? 'AI 봇' : session.players[session.omokGame!.blackPlayerId]?.nickname}</div>
+                              <div className="text-sm font-bold">{session.omokGame!.blackPlayerId === 'AI' ? 'AI 봇' : session.players?.[session.omokGame!.blackPlayerId]?.nickname}</div>
                               {session.omokGame?.winner === session.omokGame?.blackPlayerId && <div className="text-[10px] text-[#217346] font-bold mt-1">WINNER</div>}
                             </div>
                             <div className={`text-center p-4 rounded border ${session.omokGame?.winner === session.omokGame?.whitePlayerId ? 'bg-gray-100 border-gray-400' : 'border-transparent'}`}>
@@ -2965,7 +4177,7 @@ export default function App() {
                                   <text x="24" y="28" textAnchor="middle" fill="#000000" fontSize="12" fontWeight="bold">백</text>
                                 </svg>
                               </div>
-                              <div className="text-sm font-bold">{session.omokGame!.whitePlayerId === 'AI' ? 'AI 봇' : session.players[session.omokGame!.whitePlayerId]?.nickname}</div>
+                              <div className="text-sm font-bold">{session.omokGame!.whitePlayerId === 'AI' ? 'AI 봇' : session.players?.[session.omokGame!.whitePlayerId]?.nickname}</div>
                               {session.omokGame?.winner === session.omokGame?.whitePlayerId && <div className="text-[10px] text-[#217346] font-bold mt-1">WINNER</div>}
                             </div>
                           </div>
@@ -2979,14 +4191,14 @@ export default function App() {
                               <div className="text-xs text-[#666]">승리:</div>
                               <div className="text-4xl font-black text-red-600">라이어 승리!</div>
                               <div className="text-sm text-[#666]">
-                                라이어는 <span className="font-bold text-[#333]">{session.players[session.liarGame!.liarPlayerId].nickname}</span> 였습니다.
+                                라이어는 <span className="font-bold text-[#333]">{session.players?.[session.liarGame!.liarPlayerId]?.nickname}</span> 였습니다.
                               </div>
                             </div>
                           ) : (
                             <div className="space-y-2">
                               <div className="text-xs text-[#666]">식별된 라이어:</div>
                               <div className="text-3xl font-black text-[#217346]">
-                                {session.players[session.liarGame!.liarPlayerId].nickname}
+                                {session.players?.[session.liarGame!.liarPlayerId]?.nickname}
                               </div>
                             </div>
                           )}
@@ -3012,56 +4224,80 @@ export default function App() {
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-3">
-                          <div className="text-xs text-[#666]">식별된 마피아:</div>
-                          <div className="text-3xl font-black text-red-600">
-                            {(Object.values(session.players) as Player[]).filter(p => p.role === 'MAFIA').map(p => p.nickname).join(', ')}
-                          </div>
-                          {session.mafiaGame?.winner && (
-                            <div className="mt-4 space-y-2">
-                              <div className={`p-2 text-xs font-bold border rounded ${
-                                session.mafiaGame.winner === 'MAFIA' 
-                                  ? 'bg-red-50 text-red-600 border-red-200' 
-                                  : 'bg-green-50 text-green-600 border-green-200'
-                              }`}>
-                                {session.mafiaGame.winner === 'MAFIA' ? '마피아_승리' : '시민_승리'}
-                              </div>
-                              <p className="text-[10px] text-[#666]">
-                                {session.mafiaGame.winner === 'MAFIA' 
-                                  ? '마피아의 수가 시민의 수보다 많아져서 마피아가 승리했습니다.' 
-                                  : '모든 마피아가 제거되어 시민이 승리했습니다.'}
-                              </p>
+                        <div className="space-y-6">
+                          <div className="text-center space-y-2">
+                            <div className="text-[10px] font-bold text-[#666] uppercase tracking-[0.2em]">최종_판결_결과</div>
+                            <div className={`text-4xl font-black ${session.mafiaGame?.winner === 'MAFIA' ? 'text-red-600' : 'text-[#217346]'}`}>
+                              {session.mafiaGame?.winner === 'MAFIA' ? 'MAFIA VICTORY' : 'CITIZENS VICTORY'}
                             </div>
-                          )}
+                          </div>
+
+                          <div className="py-6 border-y border-[#d1d1d1] space-y-4">
+                            <div className="flex items-center justify-center gap-4">
+                              <div className={`w-16 h-16 rounded-full flex items-center justify-center border-2 ${
+                                session.mafiaGame?.winner === 'MAFIA' ? 'bg-red-50 border-red-200 text-red-600' : 'bg-green-50 border-green-200 text-green-600'
+                              }`}>
+                                {session.mafiaGame?.winner === 'MAFIA' ? <Skull size={32} /> : <Trophy size={32} />}
+                              </div>
+                              <div className="text-left">
+                                <p className="text-sm font-bold text-gray-900">
+                                  {session.mafiaGame?.winner === 'MAFIA' ? '마피아가 도시를 장악했습니다.' : '모든 마피아가 소탕되었습니다.'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {session.mafiaGame?.winner === 'MAFIA' 
+                                    ? '마피아의 수가 시민의 수와 같거나 많아져 승리 조건이 달성되었습니다.' 
+                                    : '시민들이 단결하여 모든 마피아를 찾아내 처형하는 데 성공했습니다.'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="text-[10px] font-bold text-[#999] uppercase tracking-widest text-center">조직원 명단 (마피아)</div>
+                            <div className="flex flex-wrap justify-center gap-2">
+                              {(Object.values(session?.players || {}) as Player[]).filter(p => p.role === 'MAFIA').map(p => (
+                                <div key={p.id} className="px-4 py-2 bg-red-50 border border-red-100 rounded-lg text-sm font-bold text-red-700 shadow-sm">
+                                  {p.nickname}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <h4 className="text-[9px] font-bold text-[#999] uppercase tracking-widest">전체 감사 로그</h4>
-                    <div className="excel-grid rounded overflow-hidden">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between px-1">
+                      <h4 className="text-[10px] font-bold text-[#999] uppercase tracking-widest">플레이어_역할_기록부</h4>
+                      <div className="text-[10px] text-gray-400 font-mono">TOTAL: {(Object.values(session?.players || {}) as Player[]).length}</div>
+                    </div>
+                    <div className="excel-grid rounded-lg overflow-hidden border border-[#d1d1d1] shadow-sm">
                       <table className="w-full border-collapse">
                         <thead>
                           <tr className="bg-[#f8f9fa]">
-                            <th className="excel-col-header w-8">#</th>
+                            <th className="excel-col-header w-10 py-2">#</th>
                             <th className="excel-col-header text-left pl-4">사용자</th>
-                            <th className="excel-col-header">역할</th>
+                            <th className="excel-col-header w-24">역할</th>
+                            <th className="excel-col-header w-20">상태</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {(Object.values(session.players) as Player[]).map((p, idx) => (
-                            <tr key={p.id}>
+                          {(Object.values(session?.players || {}) as Player[]).map((p, idx) => (
+                            <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                               <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
-                              <td className="excel-cell text-xs">{p.nickname}</td>
-                              <td className={`excel-cell text-xs font-bold text-center ${
-                                session.gameType === GameType.OMOK ? (
-                                  String(p.id) === String(session.omokGame?.blackPlayerId) ? 'text-black' : 
-                                  String(p.id) === String(session.omokGame?.whitePlayerId) ? 'text-gray-400' : 'text-[#999]'
-                                ) :
-                                p.role === 'MAFIA' || p.id === session.liarGame?.liarPlayerId ? 'text-red-600' : 
-                                p.role === 'DOCTOR' ? 'text-green-600' :
-                                p.role === 'POLICE' ? 'text-blue-600' : 'text-[#217346]'
+                              <td className="excel-cell text-xs py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-400">
+                                    {p.nickname.substring(0, 1)}
+                                  </div>
+                                  <span className="font-medium">{p.nickname}</span>
+                                </div>
+                              </td>
+                              <td className={`excel-cell text-xs font-black text-center ${
+                                p.role === 'MAFIA' ? 'text-red-600' : 
+                                p.role === 'DOCTOR' ? 'text-emerald-600' :
+                                p.role === 'POLICE' ? 'text-blue-600' : 'text-gray-600'
                               }`}>
                                 {session.gameType === GameType.MAFIA ? (
                                   p.role === 'MAFIA' ? '마피아' :
@@ -3074,6 +4310,13 @@ export default function App() {
                                   p.id === session.liarGame?.liarPlayerId ? '라이어' :
                                   p.id === session.liarGame?.spyPlayerId ? '스파이' : '시민'
                                 )}
+                              </td>
+                              <td className="excel-cell text-center">
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                  p.isAlive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                }`}>
+                                  {p.isAlive ? '생존' : '사망'}
+                                </span>
                               </td>
                             </tr>
                           ))}
@@ -3111,7 +4354,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(Object.values(session.players) as Player[]).map((p, idx) => (
+                    {(Object.values(session?.players || {}) as Player[]).map((p, idx) => (
                       <tr key={p.id}>
                         <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
                         <td className="excel-cell">{p.nickname}</td>
@@ -3190,7 +4433,7 @@ export default function App() {
                   </div>
                   <div className="bg-[#f8f9fa] border border-[#d1d1d1] p-4 rounded">
                     <div className="text-[9px] text-[#666] font-bold uppercase mb-1">참여 인원</div>
-                    <div className="text-2xl font-black text-[#333]">{Object.keys(session.players).length}</div>
+                    <div className="text-2xl font-black text-[#333]">{Object.keys(session?.players || {}).length}</div>
                   </div>
                   <div className="bg-[#f8f9fa] border border-[#d1d1d1] p-4 rounded">
                     <div className="text-[9px] text-[#666] font-bold uppercase mb-1">현재 시트</div>
@@ -3211,7 +4454,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(Object.values(session.players) as Player[]).map((p, idx) => {
+                      {(Object.values(session?.players || {}) as Player[]).map((p, idx) => {
                         const stats = session.stats?.[p.id] || { wins: 0, totalScore: 0 };
                         const maxWins = Math.max(...Object.values(session.stats || {}).map((s: any) => s.wins), 1);
                         return (
@@ -3352,46 +4595,53 @@ export default function App() {
       </main>
 
       {/* Sheet Tabs */}
-      <footer className="bg-[#f8f9fa] border-t border-[#d1d1d1] flex items-center h-8 shrink-0 overflow-x-auto">
+      <footer className="bg-[#f8f9fa] border-t border-[#d1d1d1] flex items-center h-10 md:h-8 shrink-0 overflow-x-auto no-scrollbar">
         <button 
           onClick={() => setActiveSheet('GAME')}
-          className={`office-tab ${activeSheet === 'GAME' ? 'active' : ''}`}
+          className={`office-tab whitespace-nowrap px-4 h-full flex items-center justify-center ${activeSheet === 'GAME' ? 'active' : ''}`}
         >
           메인_입력
         </button>
         <button 
           onClick={() => setActiveSheet('ROLES')}
-          className={`office-tab ${activeSheet === 'ROLES' ? 'active' : ''}`}
+          className={`office-tab whitespace-nowrap px-4 h-full flex items-center justify-center ${activeSheet === 'ROLES' ? 'active' : ''}`}
         >
           역할_데이터
         </button>
         <button 
           onClick={() => setActiveSheet('LOGS')}
-          className={`office-tab ${activeSheet === 'LOGS' ? 'active' : ''}`}
+          className={`office-tab whitespace-nowrap px-4 h-full flex items-center justify-center ${activeSheet === 'LOGS' ? 'active' : ''}`}
         >
           로그_시트
         </button>
         <button 
           onClick={() => setActiveSheet('STATS')}
-          className={`office-tab ${activeSheet === 'STATS' ? 'active' : ''}`}
+          className={`office-tab whitespace-nowrap px-4 h-full flex items-center justify-center ${activeSheet === 'STATS' ? 'active' : ''}`}
         >
           통계_보고서
         </button>
         <button 
           onClick={() => setActiveSheet('LEADERBOARD')}
-          className={`office-tab ${activeSheet === 'LEADERBOARD' ? 'active' : ''}`}
+          className={`office-tab whitespace-nowrap px-4 h-full flex items-center justify-center ${activeSheet === 'LEADERBOARD' ? 'active' : ''}`}
         >
           명예의_전당
         </button>
         <button 
           onClick={() => setActiveSheet('HELP')}
-          className={`office-tab ${activeSheet === 'HELP' ? 'active' : ''}`}
+          className={`office-tab whitespace-nowrap px-4 h-full flex items-center justify-center ${activeSheet === 'HELP' ? 'active' : ''}`}
         >
           설정
         </button>
-        <div className="flex-1" />
-        <div className="px-4 text-[9px] text-[#999] flex items-center gap-3 whitespace-nowrap">
-          <span>{
+        <button 
+          onClick={() => setShowSystemLogs(!showSystemLogs)}
+          className={`office-tab whitespace-nowrap px-4 h-full flex items-center justify-center gap-1 ${showSystemLogs ? 'text-blue-600 font-bold' : 'text-gray-400'}`}
+        >
+          {showSystemLogs ? <Eye size={12} /> : <EyeOff size={12} />}
+          로그_창
+        </button>
+        <div className="flex-1 min-w-[20px]" />
+        <div className="px-4 text-[9px] text-[#999] flex items-center gap-3 whitespace-nowrap shrink-0">
+          <span className="hidden sm:inline">{
             session.status === SessionStatus.LOBBY ? '대기실' :
             session.status === SessionStatus.REVEAL ? '역할_확인' :
             session.status === SessionStatus.PLAYING ? '진행_중' :
@@ -3399,7 +4649,7 @@ export default function App() {
             session.status === SessionStatus.NIGHT ? '밤 (행동_중)' :
             session.status === SessionStatus.SUMMARY ? '결과_보고' : session.status
           }</span>
-          <div className="h-3 w-px bg-[#d1d1d1]" />
+          <div className="h-3 w-px bg-[#d1d1d1] hidden sm:block" />
           <span>준비됨</span>
         </div>
       </footer>
@@ -3408,9 +4658,10 @@ export default function App() {
       <Chat 
         session={session} 
         currentUser={currentUser} 
-        nickname={session.players[currentUser?.uid]?.nickname || nickname}
+        nickname={session.players?.[currentUser?.uid]?.nickname || nickname}
         isSpectator={isSpectator}
       />
+      {session && showSystemLogs && <LogTicker logs={session.logs} />}
     </div>
   );
 }

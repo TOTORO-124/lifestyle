@@ -167,7 +167,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
             initial={{ opacity: 0, y: -50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.9 }}
-            className={`fixed top-10 left-1/2 -translate-x-1/2 z-[300] px-6 py-3 rounded-full shadow-2xl font-bold text-sm md:text-base flex items-center gap-2 border-2
+            className={`fixed top-16 md:top-10 left-1/2 -translate-x-1/2 z-[300] px-4 md:px-6 py-2 md:py-3 rounded-full shadow-2xl font-bold text-[10px] md:text-base flex items-center gap-2 border-2
               ${toast.type === 'error' ? 'bg-red-100 text-red-800 border-red-500' : 'bg-green-100 text-green-800 border-green-500'}
             `}
           >
@@ -304,13 +304,13 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
             
             <div className="bg-gray-50 rounded-xl p-4 md:p-6 border border-gray-100 mb-6 md:mb-8">
               <div className="w-16 h-16 bg-[#217346] rounded-full flex items-center justify-center text-white mx-auto mb-4 shadow-xl">
-                {getRoleIcon(game.playerStates?.[game.winner!]?.roleId)}
+                {game.winner && getRoleIcon(game.playerStates?.[game.winner]?.roleId)}
               </div>
               <p className="text-2xl font-black text-gray-800 mb-1">
-                {session.players?.[game.winner!]?.nickname}
+                {game.winner && session.players?.[game.winner]?.nickname}
               </p>
               <p className="text-sm font-bold text-[#217346]">
-                {game.playerStates?.[game.winner!]?.rank} • {game.winnerTeam ? `${game.winnerTeam === 'TEAM_A' ? 'A팀' : 'B팀'} 승리` : '개인전 승리'}
+                {game.winner && game.playerStates?.[game.winner]?.rank} • {game.winnerTeam ? `${game.winnerTeam === 'TEAM_A' ? 'A팀' : 'B팀'} 승리` : '개인전 승리'}
               </p>
             </div>
 
@@ -751,7 +751,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
             </>
           ) : (
             <div className="text-center py-4 text-gray-400 italic text-[10px]">
-              {game.turnOrder && game.currentTurnIndex !== undefined && session.players?.[game.turnOrder[game.currentTurnIndex]]?.nickname}님의 결재를 기다리는 중...
+              {game.turnOrder && game.currentTurnIndex !== undefined && session.players?.[game.turnOrder?.[game.currentTurnIndex] || '']?.nickname}님의 결재를 기다리는 중...
             </div>
           )}
         </div>

@@ -109,8 +109,8 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSp
       {/* Chat Window */}
       {isOpen && (
         <div 
-          className={`fixed bottom-6 right-6 z-50 w-80 bg-white rounded-lg shadow-2xl border border-[#d1d1d1] flex flex-col transition-all duration-300 ${
-            isMinimized ? 'h-14' : 'h-[500px]'
+          className={`fixed bottom-0 right-0 md:bottom-6 md:right-6 z-50 w-full md:w-80 bg-white md:rounded-lg shadow-2xl border border-[#d1d1d1] flex flex-col transition-all duration-300 ${
+            isMinimized ? 'h-14' : 'h-[70vh] md:h-[500px]'
           }`}
         >
           {/* Header */}

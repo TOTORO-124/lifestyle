@@ -8,6 +8,8 @@ export enum GameType {
   OFFICE_2048 = 'OFFICE_2048',
   SUDOKU = 'SUDOKU',
   OFFICE_LIFE = 'OFFICE_LIFE',
+  ESCAPE_ROOM = 'ESCAPE_ROOM',
+  CYBER_ARENA = 'CYBER_ARENA',
 }
 
 export enum SessionStatus {
@@ -37,6 +39,24 @@ export enum MafiaRole {
 export enum MafiaPhase {
   NIGHT = 'NIGHT',
   DAY = 'DAY',
+}
+
+export enum Department {
+  DEV = 'DEV',
+  SALES = 'SALES',
+  DESIGN = 'DESIGN',
+  HR = 'HR',
+  PLANNING = 'PLANNING',
+}
+
+export interface UserProfile {
+  uid: string;
+  nickname: string;
+  department: Department;
+  xp: number;
+  level: number;
+  totalWins: number;
+  joinedAt: number;
 }
 
 export interface Player {
@@ -192,6 +212,99 @@ export interface OfficeLifeGameState {
   waitingForAction?: 'SELECT_ROLE' | 'BUY_PROJECT' | 'CHANCE_CARD' | 'BUY_ITEM' | 'PROMOTION_TEST' | 'END_TURN' | 'NONE';
 }
 
+export interface EscapeRoomGameState {
+  currentRoomId: string;
+  solvedPuzzles: string[];
+  inventory: string[];
+  startTime: number;
+  timeLimit: number;
+  status: 'PLAYING' | 'WON' | 'LOST';
+  hintsUsed: number;
+  lastClue?: string;
+}
+
+export interface ArenaItem {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  hp?: number;
+  energy?: number;
+  shield?: number;
+  damage?: number;
+  effect?: (stats: any) => any;
+}
+
+export interface ArenaCharacter {
+  id: string;
+  name: string;
+  description: string;
+  baseHp: number;
+  baseEnergy: number;
+  skills: string[];
+  passiveEffect?: string;
+}
+
+export interface ArenaSkill {
+  id: string;
+  name: string;
+  description: string;
+  energyCost: number;
+  damage?: number;
+  heal?: number;
+  shield?: number;
+  energyGain?: number;
+  effect?: string;
+  cooldown: number;
+  range?: number;
+  speed?: number; // For projectiles
+  radius?: number; // For AoE
+  type: 'PROJECTILE' | 'INSTANT' | 'BUFF' | 'DASH';
+}
+
+export interface ArenaProjectile {
+  id: string;
+  ownerId: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  damage: number;
+  radius: number;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface CyberArenaGameState {
+  playerStats: Record<string, { 
+    hp: number; 
+    maxHp: number; 
+    energy: number; 
+    maxEnergy: number; 
+    shield: number; 
+    level: number; 
+    exp: number;
+    credits: number;
+    characterId?: string;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    rotation: number;
+    lastSkillTime: Record<string, number>;
+  }>;
+  projectiles: Record<string, ArenaProjectile>;
+  inventory: Record<string, string[]>;
+  status: 'PLAYING' | 'FINISHED' | 'SHOP';
+  winnerId?: string;
+  isPvE: boolean;
+  aiDifficulty: number;
+  startTime: number;
+  lastUpdate: number;
+  currentRound: number;
+  roundsWon: Record<string, number>;
+}
+
 export interface LeaderboardEntry {
   playerId: string;
   nickname: string;
@@ -216,6 +329,8 @@ export interface Session {
   office2048Game?: Office2048GameState;
   sudokuGame?: SudokuGameState;
   officeLifeGame?: OfficeLifeGameState;
+  escapeRoomGame?: EscapeRoomGameState;
+  cyberArenaGame?: CyberArenaGameState;
   leaderboards?: Record<string, LeaderboardEntry[]>;
   settings: {
     maxPlayers: number;
@@ -231,6 +346,8 @@ export interface Session {
     minesweeperDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
     sudokuDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
     officeLifeMode?: 'INDIVIDUAL' | 'TEAM';
+    escapeRoomDifficulty?: 'EASY' | 'NORMAL' | 'HARD';
+    cyberArenaPvE?: boolean;
   };
   turnOrder?: string[];
   messages?: Record<string, ChatMessage>;
