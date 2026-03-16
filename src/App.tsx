@@ -439,7 +439,7 @@ const ArenaRebuild = () => {
   if (!playerStats || !enemyStats) return <div className="p-10 text-center font-black">LOADING ARENA...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-2 sm:p-4 font-sans text-gray-900">
+    <div className="min-h-screen bg-gray-50 p-2 sm:p-4 pb-16 font-sans text-gray-900">
       <div className="w-full max-w-[500px] mx-auto space-y-4">
         
         <header className="bg-white border-4 border-gray-900 p-3 sm:p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
@@ -1554,12 +1554,12 @@ export default function App() {
 
       <main className={`flex-1 min-h-0 relative ${
         (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.CYBER_ARENA) && session.status !== SessionStatus.LOBBY 
-          ? 'p-0 overflow-hidden' 
+          ? 'p-0 overflow-y-auto' 
           : 'p-3 sm:p-6 overflow-auto'
       }`}>
         <div className={`${
           (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.CYBER_ARENA) && session.status !== SessionStatus.LOBBY 
-            ? 'absolute inset-0 flex flex-col' 
+            ? 'relative flex flex-col min-h-full' 
             : 'max-w-5xl mx-auto space-y-4 sm:space-y-6'
         }`}>
           {activeSheet === 'GAME' ? (
