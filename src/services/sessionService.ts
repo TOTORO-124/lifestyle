@@ -2771,7 +2771,7 @@ export const sessionService = {
     });
   },
 
-  // --- Cyber Arena (Real-time Action) ---
+  // --- Blending Arena (Auto-battler) ---
   async startCyberArena(sessionId: string, players: Record<string, Player>, settings: any) {
     if (!db || !players) return;
     const playerIds = Object.keys(players || {}).filter(id => !players[id]?.isSpectator);
@@ -2781,62 +2781,225 @@ export const sessionService = {
     }
 
     const playerStats: Record<string, any> = {};
-    const inventory: Record<string, string[]> = {};
-    
+    const inventory: Record<string, ArenaItem[]> = {};
+    const roundsWon: Record<string, number> = {};
+    const streakCount: Record<string, number> = {};
+
     playerIds.forEach((pid, idx) => {
       playerStats[pid] = {
         hp: 100,
         maxHp: 100,
-        energy: 50,
+        energy: 0,
         maxEnergy: 100,
         shield: 0,
-        level: 1,
-        exp: 0,
-        credits: 100,
-        characterId: pid.startsWith('ai_') ? 'AI' : null,
-        x: idx === 0 ? 100 : 700,
+        damage: 10,
+        attackSpeed: 1.0,
+        critRate: 0.05,
+        cooldownReduction: 0,
+        lifesteal: 0,
+        credits: 200,
+        inventory: [],
+        synergies: {},
+        x: idx === 0 ? 150 : 650,
         y: 300,
-        vx: 0,
-        vy: 0,
-        rotation: 0,
-        lastSkillTime: {}
+        rotation: idx === 0 ? 0 : Math.PI,
+        lastSkillTime: {},
+        deferredDamage: 0,
+        buffs: []
       };
       inventory[pid] = [];
+      roundsWon[pid] = 0;
+      streakCount[pid] = 0;
     });
-
-    const roundsWon: Record<string, number> = {};
-    playerIds.forEach(pid => roundsWon[pid] = 0);
 
     const cyberArenaGame: CyberArenaGameState = {
       playerStats,
       projectiles: {},
       inventory,
-      status: 'PLAYING',
+      shopItems: {},
+      status: 'SELECT_CHARACTER',
       isPvE: !!settings.cyberArenaPvE,
       aiDifficulty: 1,
       startTime: Date.now(),
       lastUpdate: Date.now(),
       currentRound: 1,
-      roundsWon
+      roundsWon,
+      phaseTimer: 0,
+      streakCount
     };
 
     await update(ref(db, `sessions/${sessionId}`), {
       status: SessionStatus.PLAYING,
       cyberArenaGame
     });
-    await this.addLog(sessionId, '사이버 아레나에 입장했습니다! 실시간 전투가 시작됩니다.', 'success');
+    await this.addLog(sessionId, '블렌딩 아레나에 입장했습니다! 캐릭터를 선택하세요.', 'success');
   },
 
-  async updateArenaPlayerPosition(sessionId: string, playerId: string, x: number, y: number, vx: number, vy: number, rotation: number) {
-    if (!db) return;
+  async selectArenaCharacter(sessionId: string, playerId: string, characterId: string, session: Session) {
+    if (!db || !session.cyberArenaGame) return;
+    
+    const character = ARENA_CHARACTERS.find(c => c.id === characterId);
+    if (!character) return;
+
     const updates: any = {};
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/x`] = x;
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/y`] = y;
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/vx`] = vx;
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/vy`] = vy;
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/rotation`] = rotation;
-    updates[`sessions/${sessionId}/cyberArenaGame/lastUpdate`] = Date.now();
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/characterId`] = characterId;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/hp`] = character.baseHp;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/maxHp`] = character.baseHp;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/energy`] = 0;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/maxEnergy`] = character.baseEnergy;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/damage`] = character.baseDamage;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/attackSpeed`] = character.baseAttackSpeed;
+
+    const game = session.cyberArenaGame;
+    const allSelected = Object.keys(game.playerStats).every(pid => 
+      pid === playerId ? !!characterId : !!game.playerStats[pid].characterId
+    );
+
+    if (allSelected) {
+      await this.startArenaShop(sessionId, session);
+    } else {
+      await update(ref(db), updates);
+    }
+    await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 ${character.name} 캐릭터를 선택했습니다.`, 'success');
+  },
+
+  async startArenaShop(sessionId: string, session: Session) {
+    if (!db || !session.cyberArenaGame) return;
+    const game = session.cyberArenaGame;
+    const playerIds = Object.keys(game.playerStats);
+    
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/status`] = 'SHOP';
+    updates[`sessions/${sessionId}/cyberArenaGame/phaseTimer`] = 30;
+    updates[`sessions/${sessionId}/cyberArenaGame/projectiles`] = null;
+
+    playerIds.forEach(pid => {
+      const shopItems = [];
+      for (let i = 0; i < 5; i++) {
+        const randomItem = ARENA_ITEMS[Math.floor(Math.random() * ARENA_ITEMS.length)];
+        shopItems.push({ ...randomItem, instanceId: `item_${Date.now()}_${i}_${pid}` });
+      }
+      updates[`sessions/${sessionId}/cyberArenaGame/shopItems/${pid}`] = shopItems;
+      
+      const stats = game.playerStats[pid];
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/hp`] = stats.maxHp;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/energy`] = 0;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/shield`] = 0;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/deferredDamage`] = 0;
+    });
+
     await update(ref(db), updates);
+  },
+
+  async buyArenaItem(sessionId: string, playerId: string, itemIndex: number, session: Session) {
+    if (!db || !session.cyberArenaGame) return;
+    const game = session.cyberArenaGame;
+    const stats = game.playerStats[playerId];
+    const shopItems = game.shopItems[playerId] || [];
+    const item = shopItems[itemIndex];
+
+    if (!item || stats.credits < item.cost) return;
+    
+    const inventory = stats.inventory || [];
+    if (inventory.length >= 6) return;
+
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/credits`] = stats.credits - item.cost;
+    
+    const newShopItems = [...shopItems];
+    newShopItems.splice(itemIndex, 1);
+    updates[`sessions/${sessionId}/cyberArenaGame/shopItems/${playerId}`] = newShopItems;
+
+    let newInventory = [...inventory, item];
+    
+    // Synthesis logic
+    const sameItems = newInventory.filter(i => i.id === item.id && i.stars === 1);
+    if (sameItems.length >= 3) {
+      const baseItem = ARENA_ITEMS.find(i => i.id === item.id);
+      if (baseItem) {
+        const upgradedItem: ArenaItem = {
+          ...baseItem,
+          stars: 2,
+          name: `${baseItem.name}++`,
+          stats: Object.fromEntries(
+            Object.entries(baseItem.stats).map(([k, v]) => [k, (v as number) * 2.5])
+          ) as any
+        };
+        newInventory = newInventory.filter(i => !(i.id === item.id && i.stars === 1));
+        newInventory.push(upgradedItem);
+      }
+    }
+
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/inventory`] = newInventory;
+    await update(ref(db), updates);
+    await this.refreshPlayerStats(sessionId, playerId, session);
+  },
+
+  async refreshPlayerStats(sessionId: string, playerId: string, session: Session) {
+    if (!db || !session.cyberArenaGame) return;
+    const game = session.cyberArenaGame;
+    const stats = game.playerStats[playerId];
+    const character = ARENA_CHARACTERS.find(c => c.id === stats.characterId);
+    if (!character) return;
+
+    const inventory = stats.inventory || [];
+    
+    let newMaxHp = character.baseHp;
+    let newMaxEnergy = character.baseEnergy;
+    let newDamage = character.baseDamage;
+    let newAttackSpeed = character.baseAttackSpeed;
+    let newCritRate = 0.05;
+    let newLifesteal = 0;
+    let newCooldownReduction = 0;
+
+    inventory.forEach(item => {
+      if (item.stats.hp) newMaxHp += item.stats.hp;
+      if (item.stats.maxHp) newMaxHp += item.stats.maxHp;
+      if (item.stats.maxEnergy) newMaxEnergy += item.stats.maxEnergy;
+      if (item.stats.damage) newDamage += item.stats.damage;
+      if (item.stats.attackSpeed) newAttackSpeed += item.stats.attackSpeed;
+      if (item.stats.critRate) newCritRate += item.stats.critRate;
+      if (item.stats.lifesteal) newLifesteal += item.stats.lifesteal;
+      if (item.stats.cooldownReduction) newCooldownReduction += item.stats.cooldownReduction;
+    });
+
+    const synergies: Record<string, number> = {};
+    inventory.forEach(item => {
+      (item.tags || []).forEach(tag => {
+        synergies[tag] = (synergies[tag] || 0) + 1;
+      });
+    });
+
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/maxHp`] = newMaxHp;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/maxEnergy`] = newMaxEnergy;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/damage`] = newDamage;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/attackSpeed`] = newAttackSpeed;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/critRate`] = newCritRate;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/lifesteal`] = newLifesteal;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/cooldownReduction`] = newCooldownReduction;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/synergies`] = synergies;
+
+    await update(ref(db), updates);
+  },
+
+  async startArenaBattle(sessionId: string, session: Session) {
+    if (!db || !session.cyberArenaGame) return;
+    const game = session.cyberArenaGame;
+    const playerIds = Object.keys(game.playerStats);
+    
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/status`] = 'PLAYING';
+    updates[`sessions/${sessionId}/cyberArenaGame/phaseTimer`] = 60;
+    
+    playerIds.forEach((pid, idx) => {
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/x`] = idx === 0 ? 150 : 650;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/y`] = 300;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/rotation`] = idx === 0 ? 0 : Math.PI;
+    });
+
+    await update(ref(db), updates);
+    await this.addLog(sessionId, `${game.currentRound} 라운드 전투 시작!`, 'warning');
   },
 
   async triggerArenaSkill(sessionId: string, playerId: string, skillId: string, x: number, y: number, rotation: number, session: Session) {
@@ -2857,8 +3020,10 @@ export const sessionService = {
 
     if (skill.type === 'PROJECTILE') {
       const projectileId = `proj_${now}_${playerId}`;
-      const vx = Math.cos(rotation) * (skill.speed || 5);
-      const vy = Math.sin(rotation) * (skill.speed || 5);
+      // Store velocity in pixels per second (assuming skill.speed was pixels per frame)
+      const speedPerSecond = (skill.speed || 5) * 60;
+      const vx = Math.cos(rotation) * speedPerSecond;
+      const vy = Math.sin(rotation) * speedPerSecond;
       
       const projectile: ArenaProjectile = {
         id: projectileId,
@@ -2867,62 +3032,87 @@ export const sessionService = {
         y: y + Math.sin(rotation) * 30,
         vx,
         vy,
-        damage: skill.damage || 10,
+        damage: (stats.damage || 10) * (skill.damageMultiplier || 1),
         radius: skill.radius || 10,
         createdAt: now,
-        expiresAt: now + (skill.range || 1000) / (skill.speed || 5) * 16 // Approx life in ms
+        expiresAt: now + (skill.range || 1000) / speedPerSecond * 1000
       };
       updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${projectileId}`] = projectile;
-    } else if (skill.type === 'DASH') {
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/x`] = x + Math.cos(rotation) * (skill.range || 100);
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/y`] = y + Math.sin(rotation) * (skill.range || 100);
     } else if (skill.type === 'INSTANT') {
-      // Handle instant effects (heal, shield, etc.)
       if (skill.heal) updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/hp`] = Math.min(stats.maxHp, stats.hp + skill.heal);
       if (skill.shield) updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/shield`] = stats.shield + skill.shield;
+      
+      // Check for AOE damage
+      const targetId = Object.keys(game.playerStats).find(id => id !== playerId);
+      if (targetId && skill.damage) {
+        const targetStats = game.playerStats[targetId];
+        const dx = targetStats.x - x;
+        const dy = targetStats.y - y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= (skill.radius || 100)) {
+          this.handleArenaProjectileHit(sessionId, 'instant', targetId, session, skill.damage);
+        }
+      }
+    } else if (skill.type === 'DASH') {
+      const dashDist = skill.range || 200;
+      const newX = Math.max(50, Math.min(750, x + Math.cos(rotation) * dashDist));
+      const newY = Math.max(50, Math.min(550, y + Math.sin(rotation) * dashDist));
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/x`] = newX;
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/y`] = newY;
+      
+      // Dash damage
+      const targetId = Object.keys(game.playerStats).find(id => id !== playerId);
+      if (targetId && skill.damage) {
+        const targetStats = game.playerStats[targetId];
+        const dx = targetStats.x - newX;
+        const dy = targetStats.y - newY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= (skill.radius || 50)) {
+          this.handleArenaProjectileHit(sessionId, 'instant', targetId, session, skill.damage);
+        }
+      }
     }
 
     await update(ref(db), updates);
   },
 
-  async handleArenaProjectileHit(sessionId: string, projectileId: string, targetId: string, session: Session) {
+  async handleArenaProjectileHit(sessionId: string, projectileId: string, targetId: string, session: Session, damageOverride?: number) {
     if (!db || !session.cyberArenaGame) return;
     const game = session.cyberArenaGame;
     const projectile = game.projectiles[projectileId];
     const targetStats = game.playerStats[targetId];
-    const shooterId = projectile?.ownerId;
+    const shooterId = projectile?.ownerId || (projectileId === 'instant' ? Object.keys(game.playerStats).find(id => id !== targetId) : null);
     const shooterStats = shooterId ? game.playerStats[shooterId] : null;
 
-    if (!projectile || !targetStats) return;
+    if (!targetStats) return;
+    if (projectileId !== 'instant' && !projectile) return;
 
-    const damage = Math.max(0, projectile.damage - (targetStats.shield || 0));
-    const newShield = Math.max(0, (targetStats.shield || 0) - projectile.damage);
-    const newHp = Math.max(0, targetStats.hp - damage);
+    let damage = damageOverride || projectile?.damage || 10;
+    if (shooterStats && Math.random() < shooterStats.critRate) {
+      damage *= 2;
+    }
+
+    const finalDamage = Math.max(0, damage - (targetStats.shield || 0));
+    const newShield = Math.max(0, (targetStats.shield || 0) - damage);
+    
+    let newHp = targetStats.hp;
+    if (targetStats.characterId === 'milk_jin') {
+      const immediateDamage = finalDamage * 0.7;
+      const deferred = finalDamage * 0.3;
+      newHp = Math.max(0, targetStats.hp - immediateDamage);
+      const updates: any = {};
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${targetId}/deferredDamage`] = (targetStats.deferredDamage || 0) + deferred;
+      await update(ref(db), updates);
+    } else {
+      newHp = Math.max(0, targetStats.hp - finalDamage);
+    }
 
     const updates: any = {};
     updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${targetId}/hp`] = newHp;
     updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${targetId}/shield`] = newShield;
 
-    // Award XP to shooter
-    if (shooterStats && !shooterId.startsWith('ai_')) {
-      const xpGain = Math.floor(projectile.damage);
-      const newExp = (shooterStats.exp || 0) + xpGain;
-      const currentLevel = shooterStats.level || 1;
-      const nextLevelExp = currentLevel * 100;
-
-      if (newExp >= nextLevelExp) {
-        // Level Up!
-        const nextLevel = currentLevel + 1;
-        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/level`] = nextLevel;
-        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/exp`] = newExp - nextLevelExp;
-        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/maxHp`] = (shooterStats.maxHp || 100) + 20;
-        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/hp`] = (shooterStats.maxHp || 100) + 20; // Full heal on level up
-        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/maxEnergy`] = (shooterStats.maxEnergy || 100) + 10;
-        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/credits`] = (shooterStats.credits || 0) + 50;
-        await this.addLog(sessionId, `${session.players?.[shooterId]?.nickname}님이 레벨 업! (Lv.${nextLevel})`, 'success');
-      } else {
-        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/exp`] = newExp;
-      }
+    if (shooterStats && shooterStats.lifesteal > 0) {
+      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/hp`] = Math.min(shooterStats.maxHp, shooterStats.hp + (finalDamage * shooterStats.lifesteal));
     }
 
     if (newHp <= 0) {
@@ -2932,181 +3122,208 @@ export const sessionService = {
       if (currentRounds >= 3) {
         updates[`sessions/${sessionId}/cyberArenaGame/status`] = 'FINISHED';
         updates[`sessions/${sessionId}/cyberArenaGame/winnerId`] = shooterId;
-        updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${projectileId}`] = null; // Remove specific projectile
+        updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${projectileId}`] = null;
         await this.addLog(sessionId, `최종 승리! ${session.players?.[shooterId]?.nickname || '플레이어'}님이 챔피언이 되었습니다!`, 'success');
       } else {
-        updates[`sessions/${sessionId}/cyberArenaGame/status`] = 'SHOP';
-        updates[`sessions/${sessionId}/cyberArenaGame/projectiles`] = null; // Remove ALL projectiles (Ancestor path)
-        // Give bonus credits for winning round
-        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/credits`] = (shooterStats.credits || 0) + 200;
-        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${targetId}/credits`] = (targetStats.credits || 0) + 100;
-        await this.addLog(sessionId, `라운드 종료! ${session.players?.[shooterId]?.nickname || '플레이어'}님이 승리했습니다. 상점으로 이동합니다.`, 'info');
+        const loserId = targetId;
+        const winnerStreak = (game.streakCount?.[shooterId] || 0) + 1;
+        const loserStreak = 0;
+        const winnerBonus = 250;
+        const loserBonus = 150 + (game.streakCount?.[loserId] || 0) * 50;
+
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${shooterId}/credits`] = (shooterStats?.credits || 0) + winnerBonus;
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${loserId}/credits`] = (targetStats.credits || 0) + loserBonus;
+        updates[`sessions/${sessionId}/cyberArenaGame/streakCount/${shooterId}`] = winnerStreak;
+        updates[`sessions/${sessionId}/cyberArenaGame/streakCount/${loserId}`] = loserStreak;
+        updates[`sessions/${sessionId}/cyberArenaGame/currentRound`] = (game.currentRound || 1) + 1;
+
+        await this.startArenaShop(sessionId, session);
+        await this.addLog(sessionId, `라운드 종료! ${session.players?.[shooterId]?.nickname || '플레이어'}님이 승리했습니다.`, 'info');
       }
     } else {
-      updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${projectileId}`] = null; // Remove specific projectile
+      updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${projectileId}`] = null;
     }
 
     await update(ref(db), updates);
   },
 
-  async cleanupArenaProjectiles(sessionId: string, projectileIds: string[]) {
-    if (!db || projectileIds.length === 0) return;
+  async refreshArenaShop(sessionId: string, uid: string) {
+    const sessionRef = ref(db, `sessions/${sessionId}`);
+    const snapshot = await get(sessionRef);
+    if (!snapshot.exists()) return;
+
+    const session = snapshot.val() as Session;
+    const game = session.cyberArenaGame;
+    if (!game || game.status !== 'SHOP') return;
+
+    const stats = game.playerStats[uid];
+    if (!stats || stats.credits < 20) return;
+
+    const newShopItems = [];
+    for (let i = 0; i < 5; i++) {
+      const randomItem = ARENA_ITEMS[Math.floor(Math.random() * ARENA_ITEMS.length)];
+      newShopItems.push({ ...randomItem, id: `${randomItem.id}_${Math.random().toString(36).substr(2, 9)}` });
+    }
+
     const updates: any = {};
-    projectileIds.forEach(id => {
-      updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${id}`] = null;
-    });
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${uid}/credits`] = stats.credits - 20;
+    updates[`sessions/${sessionId}/cyberArenaGame/shopItems/${uid}`] = newShopItems;
+
     await update(ref(db), updates);
   },
 
-  async buyArenaItem(sessionId: string, playerId: string, itemId: string, session: Session) {
+  async sellArenaItem(sessionId: string, uid: string, itemIndex: number) {
+    const sessionRef = ref(db, `sessions/${sessionId}`);
+    const snapshot = await get(sessionRef);
+    if (!snapshot.exists()) return;
+
+    const session = snapshot.val() as Session;
+    const game = session.cyberArenaGame;
+    if (!game || game.status !== 'SHOP') return;
+
+    const stats = game.playerStats[uid];
+    if (!stats) return;
+
+    const inventory = stats.inventory || [];
+    if (itemIndex < 0 || itemIndex >= inventory.length) return;
+
+    const item = inventory[itemIndex];
+    const sellPrice = Math.floor(item.cost * 0.5);
+
+    const newInventory = [...inventory];
+    newInventory.splice(itemIndex, 1);
+
+    const updates: any = {};
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${uid}/credits`] = game.playerStats[uid].credits + sellPrice;
+    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${uid}/inventory`] = newInventory;
+
+    await update(ref(db), updates);
+    await this.refreshPlayerStats(sessionId, uid);
+  },
+
+  async updateArenaLoop(sessionId: string, session: Session) {
     if (!db || !session.cyberArenaGame) return;
     const game = session.cyberArenaGame;
-    const stats = game.playerStats[playerId];
-    const item = ARENA_ITEMS.find(i => i.id === itemId);
-
-    if (!item || stats.credits < item.cost) return;
-
-    const updates: any = {};
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/credits`] = stats.credits - item.cost;
-    
-    // Apply item effect
-    const newStats = item.effect(stats);
-    Object.keys(newStats).forEach(key => {
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/${key}`] = (newStats as any)[key];
-    });
-
-    await update(ref(db), updates);
-    await this.addLog(sessionId, `${session.players?.[playerId]?.nickname}님이 ${item.name}을(를) 구매했습니다.`, 'info');
-  },
-
-  async startNextRound(sessionId: string, session: Session) {
-    if (!db || !session.cyberArenaGame) return;
-    const game = session.cyberArenaGame;
-    const playerIds = Object.keys(game.playerStats);
-    
-    const updates: any = {};
-    updates[`sessions/${sessionId}/cyberArenaGame/status`] = 'PLAYING';
-    updates[`sessions/${sessionId}/cyberArenaGame/currentRound`] = (game.currentRound || 1) + 1;
-    updates[`sessions/${sessionId}/cyberArenaGame/projectiles`] = null;
-
-    playerIds.forEach((pid, idx) => {
-      const stats = game.playerStats[pid];
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/hp`] = stats.maxHp;
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/energy`] = Math.floor(stats.maxEnergy / 2);
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/shield`] = 0;
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/x`] = idx === 0 ? 100 : 700;
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/y`] = 300;
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/vx`] = 0;
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/vy`] = 0;
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/rotation`] = idx === 0 ? 0 : Math.PI;
-    });
-
-    await update(ref(db), updates);
-    await this.addLog(sessionId, `${game.currentRound + 1} 라운드가 시작됩니다!`, 'warning');
-  },
-
-  async selectArenaCharacter(sessionId: string, playerId: string, characterId: string, session: Session) {
-    if (!db || !session.cyberArenaGame) return;
-    
-    const character = ARENA_CHARACTERS.find(c => c.id === characterId);
-    if (!character) return;
-
-    const updates: any = {};
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/characterId`] = characterId;
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/hp`] = character.baseHp;
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/maxHp`] = character.baseHp;
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/energy`] = Math.floor(character.baseEnergy / 2);
-    updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${playerId}/maxEnergy`] = character.baseEnergy;
-
-    await update(ref(db), updates);
-    await this.addLog(sessionId, `${session.players?.[playerId]?.nickname || '플레이어'}님이 ${character.name} 캐릭터를 선택했습니다.`, 'success');
-  },
-
-  async updateArenaAI(sessionId: string, session: Session) {
-    if (!db || !session.cyberArenaGame || session.cyberArenaGame.status !== 'PLAYING') return;
-    const game = session.cyberArenaGame;
-    const aiIds = Object.keys(game.playerStats).filter(id => id.startsWith('ai_'));
-    if (aiIds.length === 0) return;
-
-    const updates: any = {};
     const now = Date.now();
+    const dt = Math.min(0.5, (now - (game.lastUpdate || now)) / 1000); // Cap dt to avoid huge jumps
+    
+    const updates: any = {};
+    let shouldUpdateTimer = false;
 
-    aiIds.forEach(aiId => {
-      const stats = game.playerStats[aiId];
-      // Find nearest player
-      const targetId = Object.keys(game.playerStats).find(id => !id.startsWith('ai_'));
-      if (!targetId) return;
-      const targetStats = game.playerStats[targetId];
-
-      const dx = targetStats.x - stats.x;
-      const dy = targetStats.y - stats.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const rotation = Math.atan2(dy, dx);
-
-      // Move towards target if far, or away if too close
-      let vx = 0;
-      let vy = 0;
-      const speed = 1.8;
-
-      if (dist > 250) {
-        vx = Math.cos(rotation) * speed;
-        vy = Math.sin(rotation) * speed;
-      } else if (dist < 150) {
-        vx = -Math.cos(rotation) * speed;
-        vy = -Math.sin(rotation) * speed;
+    if (game.status === 'SHOP' || game.status === 'PLAYING') {
+      const newTimer = Math.max(0, game.phaseTimer - dt);
+      if (newTimer <= 0) {
+        // Force transition if timer hits 0
+        if (game.status === 'SHOP') await this.startArenaBattle(sessionId, session);
+        else if (game.status === 'PLAYING') await this.startArenaShop(sessionId, session);
+        return; // Stop processing further in this tick
+      } else {
+        updates[`sessions/${sessionId}/cyberArenaGame/phaseTimer`] = newTimer;
+        shouldUpdateTimer = true;
       }
+    }
 
-      // Dodging logic
-      Object.values(game.projectiles || {}).forEach((proj: any) => {
-        if (proj && proj.ownerId !== aiId) {
-          const pdx = proj.x - stats.x;
-          const pdy = proj.y - stats.y;
-          const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
-          if (pdist < 120) {
-            // Move perpendicular to projectile to dodge
-            vx += -proj.vy * 0.8;
-            vy += proj.vx * 0.8;
+    if (game.status === 'PLAYING') {
+      const playerIds = Object.keys(game.playerStats);
+
+      playerIds.forEach(pid => {
+        const stats = game.playerStats[pid];
+        const targetId = playerIds.find(id => id !== pid);
+        if (!targetId) return;
+        const targetStats = game.playerStats[targetId];
+
+        const dx = targetStats.x - stats.x;
+        const dy = targetStats.y - stats.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const rotation = Math.atan2(dy, dx);
+
+        let vx = 0;
+        let vy = 0;
+        const moveSpeed = 150 * dt;
+
+        if (dist > 300) {
+          vx = Math.cos(rotation) * moveSpeed;
+          vy = Math.sin(rotation) * moveSpeed;
+        } else if (dist < 200) {
+          vx = -Math.cos(rotation) * moveSpeed;
+          vy = -Math.sin(rotation) * moveSpeed;
+        }
+
+        const newX = Math.max(50, Math.min(750, stats.x + vx));
+        const newY = Math.max(50, Math.min(400, stats.y + vy)); // Adjusted max Y for 16:9 canvas
+
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/x`] = newX;
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/y`] = newY;
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/rotation`] = rotation;
+
+        const energyRegen = 10 * dt;
+        const newEnergy = Math.min(stats.maxEnergy, stats.energy + energyRegen);
+        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/energy`] = newEnergy;
+
+        if (stats.characterId === 'coffee_bean') {
+          updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/hp`] = Math.max(1, stats.hp - 2 * dt);
+        }
+
+        if (stats.deferredDamage > 0) {
+          const tick = Math.min(stats.deferredDamage, (stats.deferredDamage / 5) * dt);
+          updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/hp`] = Math.max(0, stats.hp - tick);
+          updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/deferredDamage`] = stats.deferredDamage - tick;
+        }
+
+        const character = ARENA_CHARACTERS.find(c => c.id === stats.characterId);
+        if (character) {
+          const basicSkill = ARENA_SKILLS.find(s => s.id === 'basic_attack');
+          const specialSkill = ARENA_SKILLS.find(s => s.id === character.skills[1]);
+
+          if (specialSkill && newEnergy >= specialSkill.energyCost) {
+            this.triggerArenaSkill(sessionId, pid, specialSkill.id, newX, newY, rotation, session);
+            if (stats.characterId === 'sports_drink') {
+              updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${pid}/hp`] = Math.min(stats.maxHp, stats.hp + stats.maxHp * 0.02);
+            }
+          }
+
+          const lastAttack = stats.lastSkillTime?.['basic_attack'] || 0;
+          const attackInterval = 1000 / stats.attackSpeed;
+          if (now - lastAttack > attackInterval) {
+            this.triggerArenaSkill(sessionId, pid, 'basic_attack', newX, newY, rotation, session);
           }
         }
       });
 
-      // Normalize velocity if it exceeds speed
-      const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-      if (currentSpeed > speed) {
-        vx = (vx / currentSpeed) * speed;
-        vy = (vy / currentSpeed) * speed;
-      }
+      // Projectile movement and collision
+      Object.values(game.projectiles || {}).forEach(proj => {
+        if (!proj) return;
+        const newX = proj.x + proj.vx * dt;
+        const newY = proj.y + proj.vy * dt;
 
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/x`] = stats.x + vx;
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/y`] = stats.y + vy;
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/vx`] = vx;
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/vy`] = vy;
-      updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/rotation`] = rotation;
+        // Check collision with players
+        let hit = false;
+        playerIds.forEach(pid => {
+          if (hit || pid === proj.ownerId) return;
+          const stats = game.playerStats[pid];
+          const dx = stats.x - newX;
+          const dy = stats.y - newY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 30) { // Collision radius
+            this.handleArenaProjectileHit(sessionId, proj.id, pid, session);
+            hit = true;
+          }
+        });
 
-      // Try to attack
-      if (dist < 450 && now - (stats.lastSkillTime?.['basic_attack'] || 0) > 1200) {
-        const projectileId = `proj_${now}_${aiId}`;
-        const pvx = Math.cos(rotation) * 5;
-        const pvy = Math.sin(rotation) * 5;
-        
-        const projectile: ArenaProjectile = {
-          id: projectileId,
-          ownerId: aiId,
-          x: stats.x + Math.cos(rotation) * 30,
-          y: stats.y + Math.sin(rotation) * 30,
-          vx: pvx,
-          vy: pvy,
-          damage: 10,
-          radius: 10,
-          createdAt: now,
-          expiresAt: now + 3000
-        };
-        updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${projectileId}`] = projectile;
-        updates[`sessions/${sessionId}/cyberArenaGame/playerStats/${aiId}/lastSkillTime/basic_attack`] = now;
-      }
-    });
+        if (hit) return;
 
-    updates[`sessions/${sessionId}/cyberArenaGame/lastUpdate`] = now;
-    await update(ref(db), updates);
-  }
+        if (newX < 0 || newX > 800 || newY < 0 || newY > 450 || now > proj.expiresAt) {
+          updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${proj.id}`] = null;
+        } else {
+          updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${proj.id}/x`] = newX;
+          updates[`sessions/${sessionId}/cyberArenaGame/projectiles/${proj.id}/y`] = newY;
+        }
+      });
+    }
+
+    if (shouldUpdateTimer || game.status === 'PLAYING') {
+      updates[`sessions/${sessionId}/cyberArenaGame/lastUpdate`] = now;
+      await update(ref(db), updates);
+    }
+  },
 };

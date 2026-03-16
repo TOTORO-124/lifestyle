@@ -11,8 +11,8 @@ import { Canvas } from './components/Canvas';
 import { OfficeLifeBoard } from './components/OfficeLifeBoard';
 import { UserProfileCard } from './components/UserProfileCard';
 import { ESCAPE_ROOM_DATA } from './data/escapeRoomData';
-import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS } from './data/cyberArenaData';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, EyeOff, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2, Coffee, StickyNote, Zap, Skull, ShieldCheck, Activity, Key, DoorOpen, Sword, ZapOff, Heart, ShieldAlert, Cpu, Coins, Package, Target, ShoppingBag, ChevronRight } from 'lucide-react';
+import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS, SYNERGIES } from './data/cyberArenaData';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, EyeOff, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2, Coffee, StickyNote, Zap, Skull, ShieldCheck, Activity, Key, DoorOpen, Sword, ZapOff, Heart, ShieldAlert, Cpu, Coins, Package, Target, ShoppingBag, ChevronRight, Star, Info, Trash2 } from 'lucide-react';
 
 const LogTicker = ({ logs }: { logs: GameLog[] }) => {
   const latestLogs = [...Object.values(logs || {})].sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
@@ -290,713 +290,291 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
   );
 };
 
-const CyberArenaShop = ({ session, currentUser }: { session: Session, currentUser: any }) => {
-  const game = session.cyberArenaGame;
-  const myStats = game?.playerStats?.[currentUser?.uid];
+const ArenaRebuild = () => {
+  // [데이터 구조화] 캐릭터 데이터
+  const characters = [
+    { id: 'milkjin', name: '밀크진(우유)', maxHp: 150, currentHp: 150, attackPower: 10, attackSpeed: 1.0, defense: 20, passiveName: '단단한 유막' },
+    { id: 'sodachan', name: '소다찬(탄산)', maxHp: 100, currentHp: 100, attackPower: 25, attackSpeed: 1.8, defense: 5, passiveName: '톡 쏘는 기포' },
+    { id: 'coffee', name: '커피', maxHp: 110, currentHp: 110, attackPower: 15, attackSpeed: 1.5, defense: 10, passiveName: '카페인 각성' },
+    { id: 'ion', name: '이온음료', maxHp: 120, currentHp: 120, attackPower: 12, attackSpeed: 1.2, defense: 15, passiveName: '수분 흡수' },
+    { id: 'vitamin', name: '비타민', maxHp: 105, currentHp: 105, attackPower: 18, attackSpeed: 1.6, defense: 8, passiveName: '피로 회복' },
+  ];
+
+  // [데이터 구조화] 아이템 데이터
+  const items = [
+    { id: 'ice_cube', name: '꽁꽁 얼음', price: 10, statBoost: { attackPower: 5 }, tags: ['얼음'] },
+    { id: 'sugar_pack', name: '달콤 설탕', price: 15, statBoost: { attackSpeed: 0.2 }, tags: ['설탕'] },
+    { id: 'caffeine_pill', name: '고농축 카페인', price: 20, statBoost: { attackPower: 10 }, tags: ['카페인'] },
+    { id: 'protein_powder', name: '근육 단백질', price: 25, statBoost: { maxHp: 30 }, tags: ['단백질'] },
+    { id: 'lemon_slice', name: '상큼 레몬', price: 12, statBoost: { defense: 5 }, tags: ['비타민'] },
+  ];
+
+  // [게임 상태 변수]
+  const [currentRound, setCurrentRound] = useState(1);
+  const [playerGold, setPlayerGold] = useState(20);
+  const [playerInventory, setPlayerInventory] = useState<any[]>([]);
+  const [playerStats, setPlayerStats] = useState<any>(null);
+  const [enemyStats, setEnemyStats] = useState<any>(null);
   
-  if (!game || !myStats) return null;
+  // [전투 관련 상태]
+  const [isBattleActive, setIsBattleActive] = useState(false);
+  const [battleWinner, setBattleWinner] = useState<string | null>(null);
+  const battleInterval = useRef<any>(null);
+
+  // [초기 렌더링 함수] initGame
+  useEffect(() => {
+    const initGame = () => {
+      const p = characters.find(c => c.id === 'milkjin');
+      const e = characters.find(c => c.id === 'sodachan');
+      if (p && e) {
+        setPlayerStats({ ...p });
+        setEnemyStats({ ...e });
+      }
+    };
+    initGame();
+  }, []);
+
+  // [전투 로직] startBattle
+  const startBattle = () => {
+    if (isBattleActive || battleWinner) return;
+    
+    setIsBattleActive(true);
+    let pCooldown = 0;
+    let eCooldown = 0;
+
+    battleInterval.current = setInterval(() => {
+      setPlayerStats((prevP: any) => {
+        if (!prevP) return prevP;
+        let nextP = { ...prevP };
+        
+        setEnemyStats((prevE: any) => {
+          if (!prevE) return prevE;
+          let nextE = { ...prevE };
+
+          // 승패 판정
+          if (nextP.currentHp <= 0 || nextE.currentHp <= 0) {
+            clearInterval(battleInterval.current);
+            setIsBattleActive(false);
+            setBattleWinner(nextP.currentHp <= 0 ? nextE.name : nextP.name);
+            return nextE;
+          }
+
+          // 공격 속도 구현
+          pCooldown += nextP.attackSpeed * 0.1;
+          eCooldown += nextE.attackSpeed * 0.1;
+
+          // 플레이어 공격
+          if (pCooldown >= 1.0) {
+            const dmg = Math.max(1, nextP.attackPower - nextE.defense);
+            nextE.currentHp = Math.max(0, nextE.currentHp - dmg);
+            pCooldown -= 1.0;
+          }
+
+          // 적 공격
+          if (eCooldown >= 1.0) {
+            const dmg = Math.max(1, nextE.attackPower - nextP.defense);
+            nextP.currentHp = Math.max(0, nextP.currentHp - dmg);
+            eCooldown -= 1.0;
+          }
+
+          return nextE;
+        });
+
+        return nextP;
+      });
+    }, 100);
+  };
+
+  // [다음 라운드 진행]
+  const nextRound = () => {
+    setCurrentRound(prev => prev + 1);
+    setBattleWinner(null);
+    setPlayerGold(prev => prev + 10);
+    
+    const p = characters.find(c => c.id === 'milkjin');
+    const e = characters.find(c => c.id === 'sodachan');
+    if (p && e) {
+      setPlayerStats({ ...p });
+      setEnemyStats({ ...e });
+    }
+  };
+
+  if (!playerStats || !enemyStats) return <div className="p-10 text-center font-black">LOADING ARENA...</div>;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-in zoom-in duration-500">
-      <div className="flex items-center justify-between bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-yellow-100 rounded-2xl flex items-center justify-center text-yellow-600">
-            <ShoppingBag size={24} />
+    <div className="min-h-screen bg-gray-50 p-4 font-sans text-gray-900">
+      <div className="max-w-6xl mx-auto space-y-6">
+        
+        <header className="bg-white border-4 border-gray-900 p-6 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-2 bg-yellow-400 border-2 border-gray-900 px-4 py-1 font-black text-lg italic">
+              <Coins size={20} /> {playerGold} GOLD
+            </div>
+            <span className="bg-gray-900 text-white px-6 py-1 font-black text-xl uppercase italic rounded-lg">
+              ROUND {currentRound}
+            </span>
+            <div className="w-32"></div>
           </div>
-          <div>
-            <h2 className="text-xl font-black text-gray-800 tracking-tight">사이버 상점</h2>
-            <p className="text-xs text-gray-500 font-medium">라운드 종료! 장비를 정비하세요.</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-2xl border border-yellow-100">
-          <Coins size={18} className="text-yellow-600" />
-          <span className="text-lg font-black text-yellow-700">{myStats.credits}</span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {ARENA_ITEMS.map(item => (
-          <button
-            key={item.id}
-            disabled={myStats.credits < item.cost}
-            onClick={() => sessionService.buyArenaItem(session.id, currentUser.uid, item.id, session)}
-            className={`group relative bg-white border-2 rounded-3xl p-6 text-left transition-all overflow-hidden ${
-              myStats.credits < item.cost 
-                ? 'border-gray-100 opacity-60 grayscale' 
-                : 'border-gray-200 hover:border-blue-500 hover:shadow-xl'
-            }`}
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                item.id.includes('hp') ? 'bg-red-100 text-red-600' :
-                item.id.includes('energy') ? 'bg-yellow-100 text-yellow-600' :
-                item.id.includes('shield') ? 'bg-blue-100 text-blue-600' :
-                'bg-purple-100 text-purple-600'
-              }`}>
-                {item.id.includes('hp') ? <Heart size={20} /> :
-                 item.id.includes('energy') ? <Zap size={20} /> :
-                 item.id.includes('shield') ? <Shield size={20} /> :
-                 <Cpu size={20} />}
+          
+          <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+            <div className="w-full md:w-1/3 space-y-2">
+              <div className="flex justify-between items-end">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{playerStats.passiveName}</span>
+                  <span className="font-black text-2xl italic uppercase">{playerStats.name}</span>
+                </div>
+                <span className="font-bold text-red-600">{Math.ceil(playerStats.currentHp)} / {playerStats.maxHp}</span>
               </div>
-              <div className="flex items-center gap-1 text-xs font-bold text-yellow-600">
-                <Coins size={12} /> {item.cost}
+              <div className="w-full h-8 bg-gray-200 border-2 border-gray-900 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full border-r-2 border-gray-900 transition-all duration-100 ${playerStats.currentHp < playerStats.maxHp * 0.3 ? 'bg-red-500' : 'bg-green-500'}`}
+                  style={{ width: `${(playerStats.currentHp / playerStats.maxHp) * 100}%` }}
+                ></div>
               </div>
             </div>
-            <h3 className="font-bold text-gray-800 mb-1">{item.name}</h3>
-            <p className="text-[10px] text-gray-500 leading-tight mb-4">{item.description}</p>
-            
-            <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600 group-hover:gap-2 transition-all">
-              구매하기 <ChevronRight size={10} />
+
+            <div className="hidden md:block font-black text-4xl italic text-gray-300 px-4">VS</div>
+
+            <div className="w-full md:w-1/3 space-y-2 text-right">
+              <div className="flex justify-between items-end md:flex-row-reverse">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">{enemyStats.passiveName}</span>
+                  <span className="font-black text-2xl italic uppercase">{enemyStats.name}</span>
+                </div>
+                <span className="font-bold text-red-600">{Math.ceil(enemyStats.currentHp)} / {enemyStats.maxHp}</span>
+              </div>
+              <div className="w-full h-8 bg-gray-200 border-2 border-gray-900 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full border-l-2 border-gray-900 float-right transition-all duration-100 ${enemyStats.currentHp < enemyStats.maxHp * 0.3 ? 'bg-red-500' : 'bg-green-500'}`}
+                  style={{ width: `${(enemyStats.currentHp / enemyStats.maxHp) * 100}%` }}
+                ></div>
+              </div>
             </div>
-          </button>
-        ))}
+          </div>
+        </header>
+
+        <main className="relative bg-gray-900 border-4 border-gray-900 rounded-3xl h-[400px] overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row items-center justify-around p-8">
+          <div className="absolute inset-0 opacity-20 pointer-events-none" 
+               style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+          
+          {!isBattleActive && !battleWinner && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+              <button 
+                onClick={startBattle}
+                className="bg-red-600 hover:bg-red-500 text-white border-4 border-gray-900 px-10 py-4 font-black text-3xl italic uppercase shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+              >
+                전투 시작
+              </button>
+            </div>
+          )}
+
+          {battleWinner && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in zoom-in duration-300">
+              <h2 className="text-yellow-400 text-6xl font-black italic uppercase mb-8 drop-shadow-[0_4px_0_rgba(0,0,0,1)]">
+                {battleWinner} 승리!
+              </h2>
+              <button 
+                onClick={nextRound}
+                className="bg-white hover:bg-yellow-400 text-gray-900 border-4 border-gray-900 px-8 py-3 font-black text-xl uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+              >
+                다음 라운드로 (상점 가기)
+              </button>
+            </div>
+          )}
+
+          <div className={`z-10 flex flex-col items-center gap-4 transition-transform ${isBattleActive ? 'animate-bounce' : ''}`}>
+            <div className="w-24 h-24 bg-blue-500 border-4 border-gray-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center text-white font-black">
+              <span className="text-[10px] opacity-70">ATK: {playerStats.attackPower}</span>
+              <span className="text-xl">DUMMY</span>
+              <span className="text-[10px] opacity-70">DEF: {playerStats.defense}</span>
+            </div>
+            <span className="bg-white border-2 border-gray-900 px-3 py-1 font-black text-sm">{playerStats.name}</span>
+          </div>
+
+          <div className="md:hidden w-full h-1 bg-gray-800 my-4"></div>
+
+          <div className={`z-10 flex flex-col items-center gap-4 transition-transform ${isBattleActive ? 'animate-pulse' : ''}`}>
+            <div className="w-24 h-24 bg-red-500 border-4 border-gray-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center text-white font-black">
+              <span className="text-[10px] opacity-70">ATK: {enemyStats.attackPower}</span>
+              <span className="text-xl">DUMMY</span>
+              <span className="text-[10px] opacity-70">DEF: {enemyStats.defense}</span>
+            </div>
+            <span className="bg-white border-2 border-gray-900 px-3 py-1 font-black text-sm">{enemyStats.name}</span>
+          </div>
+        </main>
+
+        <footer className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-12">
+          <div className="bg-white border-4 border-gray-900 p-6 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+            <h3 className="font-black text-lg uppercase mb-4 italic border-b-2 border-gray-100 pb-2 flex justify-between items-center">
+              EQUIPMENT SLOTS
+              <span className="text-xs font-bold text-gray-400">{playerInventory.length} / 6</span>
+            </h3>
+            <div className="grid grid-cols-3 gap-4">
+              {[0, 1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="aspect-square bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center text-gray-300 font-bold text-xs overflow-hidden">
+                  {playerInventory[i] ? (
+                    <div className="w-full h-full bg-blue-50 flex flex-col items-center justify-center p-2 text-blue-600 border-2 border-blue-500 rounded-xl">
+                       <span className="text-[10px] text-center leading-tight">{playerInventory[i].name}</span>
+                    </div>
+                  ) : (
+                    `SLOT ${i + 1}`
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white border-4 border-gray-900 p-6 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+            <h3 className="font-black text-lg uppercase mb-4 italic border-b-2 border-gray-100 pb-2">ARENA SHOP</h3>
+            <div className="h-[180px] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+              {items.map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 border-2 border-gray-900 rounded-xl hover:bg-yellow-50 transition-colors cursor-pointer group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gray-200 border-2 border-gray-900 rounded-lg flex items-center justify-center">
+                      <Package size={20} className="text-gray-600" />
+                    </div>
+                    <div>
+                      <p className="font-black text-sm uppercase">{item.name}</p>
+                      <div className="flex gap-1 mt-0.5">
+                        {item.tags.map(tag => (
+                          <span key={tag} className="text-[8px] bg-white border border-gray-300 px-1 rounded font-bold text-gray-500">#{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-yellow-400 border-2 border-gray-900 px-3 py-1 font-black text-xs group-hover:scale-110 transition-transform flex items-center gap-1">
+                    <Coins size={12} /> {item.price}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </footer>
       </div>
 
-      <div className="flex justify-center pt-4">
-        <button
-          onClick={() => sessionService.startNextRound(session.id, session)}
-          className="px-12 py-4 bg-gray-900 text-white rounded-2xl font-black tracking-tight hover:bg-blue-600 transition-all shadow-xl active:scale-95 flex items-center gap-2"
-        >
-          다음 라운드 시작 <Play size={18} fill="currentColor" />
-        </button>
-      </div>
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #111;
+          border-radius: 10px;
+        }
+      `}</style>
     </div>
   );
 };
 
-const CyberArenaUI = ({ session, currentUser, isSpectator }: { session: Session, currentUser: any, isSpectator: boolean }) => {
-  const game = session.cyberArenaGame;
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [keys, setKeys] = useState<Record<string, boolean>>({});
-  const [joystick, setJoystick] = useState({ x: 0, y: 0, active: false });
-  const [screenShake, setScreenShake] = useState({ x: 0, y: 0 });
-  const particlesRef = useRef<any[]>([]);
-  const lastUpdateRef = useRef<number>(0);
-  const lastAIUpdateRef = useRef<number>(0);
-  const requestRef = useRef<number>(0);
-  
-  const obstacles = [
-    { x: 150, y: 100, w: 30, h: 120 },
-    { x: 620, y: 100, w: 30, h: 120 },
-    { x: 150, y: 330, w: 30, h: 120 },
-    { x: 620, y: 330, w: 30, h: 120 },
-    { x: 350, y: 200, w: 100, h: 50 },
-  ];
+const CyberArenaShop = ({ session, currentUser, isHost }: { session: Session, currentUser: any, isHost: boolean }) => {
+  return <ArenaRebuild />;
+};
 
-  const addParticles = (x: number, y: number, color: string, count: number = 10, speed: number = 2) => {
-    for (let i = 0; i < count; i++) {
-      particlesRef.current.push({
-        x,
-        y,
-        vx: (Math.random() - 0.5) * speed * 2,
-        vy: (Math.random() - 0.5) * speed * 2,
-        life: 1.0,
-        decay: 0.02 + Math.random() * 0.03,
-        color,
-        size: 2 + Math.random() * 3
-      });
-    }
-  };
-
-  const triggerScreenShake = (intensity: number = 5) => {
-    let count = 0;
-    const interval = setInterval(() => {
-      setScreenShake({
-        x: (Math.random() - 0.5) * intensity,
-        y: (Math.random() - 0.5) * intensity
-      });
-      count++;
-      if (count > 10) {
-        clearInterval(interval);
-        setScreenShake({ x: 0, y: 0 });
-      }
-    }, 20);
-  };
-
-  if (!game) return null;
-  const myStats = game.playerStats?.[currentUser?.uid];
-  const opponents = Object.keys(session?.players || {}).filter(pid => pid !== currentUser?.uid && game.playerStats?.[pid]);
-  const targetId = opponents[0];
-  const targetStats = game.playerStats?.[targetId];
-
-  const prevLevelRef = useRef<number>(myStats?.level || 1);
-  useEffect(() => {
-    if (myStats?.level && myStats.level > prevLevelRef.current) {
-      addParticles(myStats.x, myStats.y, '#fbbf24', 50, 8);
-      triggerScreenShake(15);
-      prevLevelRef.current = myStats.level;
-    }
-  }, [myStats?.level, myStats?.x, myStats?.y]);
-
-  // Input Handling
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => setKeys(prev => ({ ...prev, [e.key.toLowerCase()]: true }));
-    const handleKeyUp = (e: KeyboardEvent) => setKeys(prev => ({ ...prev, [e.key.toLowerCase()]: false }));
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
-
-  // Game Loop
-  useEffect(() => {
-    if (!myStats?.characterId || game.status !== 'PLAYING') return;
-
-    const animate = (time: number) => {
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext('2d');
-      if (!canvas || !ctx) return;
-
-      const now = Date.now();
-
-      // Update particles
-      particlesRef.current = particlesRef.current.filter(p => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life -= p.decay;
-        return p.life > 0;
-      });
-
-      // Clear & Start Shake
-      ctx.save();
-      ctx.translate(screenShake.x, screenShake.y);
-      
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Draw Grid
-      ctx.strokeStyle = 'rgba(59, 130, 246, 0.1)';
-      ctx.lineWidth = 1;
-      for (let i = 0; i < canvas.width; i += 40) {
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
-      }
-      for (let i = 0; i < canvas.height; i += 40) {
-        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
-      }
-
-      // Draw Obstacles
-      ctx.fillStyle = '#1e293b';
-      ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 2;
-      obstacles.forEach(obs => {
-        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
-        
-        // Glow effect for obstacles
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#3b82f6';
-        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
-        ctx.shadowBlur = 0;
-      });
-
-      // Draw Particles
-      particlesRef.current.forEach(p => {
-        ctx.globalAlpha = p.life;
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-      });
-      ctx.globalAlpha = 1.0;
-
-      // Update My Position (Client-side prediction placeholder)
-      if (!isSpectator) {
-        let vx = 0;
-        let vy = 0;
-        const speed = 3;
-        if (keys['w']) vy -= speed;
-        if (keys['s']) vy += speed;
-        if (keys['a']) vx -= speed;
-        if (keys['d']) vx += speed;
-
-        // Joystick Input
-        if (joystick.active) {
-          vx = joystick.x * speed;
-          vy = joystick.y * speed;
-        }
-
-        if (vx !== 0 || vy !== 0) {
-          if (now - lastUpdateRef.current > 50) { // Throttle updates
-            let newX = myStats.x + vx;
-            let newY = myStats.y + vy;
-            
-            // Obstacle Collision for Player
-            obstacles.forEach(obs => {
-              if (newX > obs.x - 15 && newX < obs.x + obs.w + 15 && newY > obs.y - 15 && newY < obs.y + obs.h + 15) {
-                newX = myStats.x;
-                newY = myStats.y;
-              }
-            });
-
-            const rotation = Math.atan2(vy, vx);
-            sessionService.updateArenaPlayerPosition(session.id, currentUser.uid, newX, newY, vx, vy, rotation);
-            lastUpdateRef.current = now;
-          }
-        }
-
-        // Host handles AI updates & AI hit detection
-        if (currentUser.uid === session.hostId && game.isPvE) {
-          if (now - lastAIUpdateRef.current > 100) {
-            sessionService.updateArenaAI(session.id, session);
-            lastAIUpdateRef.current = now;
-          }
-
-          // Check if AI is hit by player projectiles
-          const aiIds = Object.keys(game.playerStats).filter(id => id.startsWith('ai_'));
-          Object.values(game.projectiles || {}).forEach((proj: any) => {
-            if (!proj || proj.ownerId.startsWith('ai_')) return;
-            
-            const elapsed = now - proj.createdAt;
-            const currentX = proj.x + proj.vx * (elapsed / 16);
-            const currentY = proj.y + proj.vy * (elapsed / 16);
-
-            // Obstacle collision for projectiles
-            obstacles.forEach(obs => {
-              if (currentX > obs.x && currentX < obs.x + obs.w && currentY > obs.y && currentY < obs.y + obs.h) {
-                addParticles(currentX, currentY, '#3b82f6', 5);
-                sessionService.cleanupArenaProjectiles(session.id, [proj.id]);
-              }
-            });
-
-            aiIds.forEach(aiId => {
-              const aiStats = game.playerStats[aiId];
-              const dx = currentX - aiStats.x;
-              const dy = currentY - aiStats.y;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              if (dist < 20 + proj.radius) {
-                addParticles(currentX, currentY, '#3b82f6', 15, 3);
-                sessionService.handleArenaProjectileHit(session.id, proj.id, aiId, session);
-              }
-            });
-          });
-        }
-      }
-
-      // Draw Projectiles & Handle Collisions
-      Object.values(game.projectiles || {}).forEach((proj: any) => {
-        if (!proj) return;
-        
-        // Calculate current position based on velocity and time
-        const elapsed = now - proj.createdAt;
-        const currentX = proj.x + proj.vx * (elapsed / 16); // 16ms per frame approx
-        const currentY = proj.y + proj.vy * (elapsed / 16);
-
-        // Remove expired projectiles (client-side cleanup)
-        if (now > proj.expiresAt) {
-          if (proj.ownerId === currentUser.uid) {
-            sessionService.cleanupArenaProjectiles(session.id, [proj.id]);
-          }
-          return;
-        }
-
-        // Collision Detection (I check if I am hit by someone else's projectile)
-        if (!isSpectator && proj.ownerId !== currentUser.uid && game.status === 'PLAYING') {
-          const dx = currentX - myStats.x;
-          const dy = currentY - myStats.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          
-          if (dist < 20 + proj.radius) { // 20 is player radius
-            addParticles(currentX, currentY, '#ef4444', 20, 4);
-            triggerScreenShake(10);
-            sessionService.handleArenaProjectileHit(session.id, proj.id, currentUser.uid, session);
-          }
-        }
-
-        // Draw Projectile
-        ctx.save();
-        ctx.translate(currentX, currentY);
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = proj.ownerId === currentUser.uid ? '#3b82f6' : '#ef4444';
-        ctx.fillStyle = proj.ownerId === currentUser.uid ? '#60a5fa' : '#f87171';
-        ctx.beginPath();
-        ctx.arc(0, 0, proj.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      });
-
-      // Draw Players
-      Object.entries(game.playerStats).forEach(([pid, stats]) => {
-        const isMe = pid === currentUser?.uid;
-        ctx.save();
-        ctx.translate(stats.x, stats.y);
-        
-        // HP Bar above head
-        ctx.save();
-        ctx.translate(0, -35);
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(-25, 0, 50, 6);
-        ctx.fillStyle = isMe ? '#10b981' : '#f43f5e';
-        ctx.fillRect(-25, 0, 50 * (stats.hp / stats.maxHp), 6);
-        
-        // Level Indicator
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 9px Inter';
-        ctx.textAlign = 'center';
-        ctx.fillText(`Lv.${stats.level || 1}`, 0, -5);
-        ctx.restore();
-
-        ctx.rotate(stats.rotation);
-
-        // Body
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = isMe ? '#3b82f6' : '#ef4444';
-        ctx.fillStyle = isMe ? '#3b82f6' : '#ef4444';
-        
-        // Triangle shape for better directionality
-        ctx.beginPath();
-        ctx.moveTo(18, 0);
-        ctx.lineTo(-12, 12);
-        ctx.lineTo(-12, -12);
-        ctx.closePath();
-        ctx.fill();
-
-        // Engine glow
-        if (Math.random() > 0.3) {
-          ctx.fillStyle = isMe ? '#60a5fa' : '#f87171';
-          ctx.beginPath();
-          ctx.arc(-15, 0, 5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        ctx.restore();
-        
-        // Name
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.font = 'bold 10px Inter';
-        ctx.textAlign = 'center';
-        ctx.fillText(session.players?.[pid]?.nickname || 'Player', stats.x, stats.y + 35);
-      });
-
-      ctx.restore(); // End Screen Shake translate
-      requestRef.current = requestAnimationFrame(animate);
-    };
-
-    requestRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(requestRef.current);
-  }, [game, keys, myStats, session.players, currentUser?.uid, isSpectator]);
-
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (isSpectator || game.status !== 'PLAYING') return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    let clientX, clientY;
-    
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
-    const mouseX = clientX - rect.left;
-    const mouseY = clientY - rect.top;
-    const rotation = Math.atan2(mouseY - myStats.y, mouseX - myStats.x);
-
-    // Default to first skill (Basic Attack) for click
-    const basicSkill = ARENA_SKILLS.find(s => s.id === 'basic_attack');
-    if (basicSkill) {
-      sessionService.triggerArenaSkill(session.id, currentUser.uid, basicSkill.id, myStats.x, myStats.y, rotation, session);
-    }
-  };
-
-  const handleJoystickMove = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    const rect = e.currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const dx = touch.clientX - centerX;
-    const dy = touch.clientY - centerY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const maxDist = rect.width / 2;
-    
-    if (dist === 0) return;
-    
-    const normalizedX = dx / dist;
-    const normalizedY = dy / dist;
-    const power = Math.min(dist / maxDist, 1);
-    
-    setJoystick({ x: normalizedX * power, y: normalizedY * power, active: true });
-  };
-
-  const handleJoystickEnd = () => {
-    setJoystick({ x: 0, y: 0, active: false });
-  };
-
-  // Character Selection View
-  if (myStats && !myStats.characterId && !isSpectator) {
-    return (
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-black text-blue-600 uppercase tracking-tighter">캐릭터 선택</h2>
-          <p className="text-gray-500 text-sm">전투에 사용할 캐릭터를 선택하세요.</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {ARENA_CHARACTERS.map(char => (
-            <button
-              key={char.id}
-              onClick={() => sessionService.selectArenaCharacter(session.id, currentUser.uid, char.id, session)}
-              className="bg-white border-2 border-gray-200 rounded-xl p-6 text-left hover:border-blue-500 hover:shadow-xl transition-all group"
-            >
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                <User size={24} />
-              </div>
-              <h3 className="font-bold text-lg mb-1">{char.name}</h3>
-              <p className="text-[10px] text-gray-500 mb-4 leading-tight h-8">{char.description}</p>
-              <div className="space-y-2">
-                <div className="flex justify-between text-[10px]">
-                  <span className="text-gray-400">체력</span>
-                  <span className="font-bold text-red-500">{char.baseHp}</span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                  <span className="text-gray-400">에너지</span>
-                  <span className="font-bold text-yellow-600">{char.baseEnergy}</span>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const myCharacter = ARENA_CHARACTERS.find(c => c.id === myStats?.characterId);
-  const mySkills = ARENA_SKILLS.filter(s => myCharacter?.skills.includes(s.id));
-
-  if (game.status === 'SHOP') {
-    return <CyberArenaShop session={session} currentUser={currentUser} />;
-  }
-
-  return (
-    <div className="max-w-5xl mx-auto space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Game Header - Compact Dashboard Style */}
-      <div className="flex flex-col gap-2 bg-white/80 backdrop-blur-md p-3 rounded-2xl border border-gray-200 shadow-sm sticky top-0 z-20">
-        <div className="grid grid-cols-3 items-center">
-          {/* Left: My Stats */}
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 border-2 border-blue-200">
-                <User size={20} />
-              </div>
-              <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white">
-                {myStats?.level || 1}
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">MY STATUS</span>
-                <div className="flex items-center gap-1 text-yellow-600 text-[10px] font-black">
-                  <Coins size={10} /> {myStats?.credits || 0}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 text-red-500 font-black text-sm">
-                  <Heart size={12} fill="currentColor" /> {myStats?.hp}
-                </div>
-                <div className="flex items-center gap-1 text-yellow-600 font-black text-sm">
-                  <Zap size={12} fill="currentColor" /> {myStats?.energy}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Center: Title & Round Score */}
-          <div className="text-center">
-            <div className="text-[8px] font-black text-blue-500/50 uppercase tracking-[0.2em] mb-0.5">ROUND {game.currentRound || 1} / 5</div>
-            <div className="flex items-center justify-center gap-4">
-              <span className={`text-xl font-black ${game.roundsWon?.[currentUser.uid] >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>{game.roundsWon?.[currentUser.uid] || 0}</span>
-              <div className="text-lg font-black text-gray-800 italic tracking-tighter leading-none">VS</div>
-              <span className={`text-xl font-black ${game.roundsWon?.[targetId] >= 2 ? 'text-red-600' : 'text-gray-400'}`}>{game.roundsWon?.[targetId] || 0}</span>
-            </div>
-          </div>
-
-          {/* Right: Target Stats */}
-          <div className="flex items-center gap-3 justify-end">
-            <div className="flex flex-col text-right">
-              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">OPPONENT</span>
-              <div className="flex items-center gap-3 justify-end">
-                <div className="flex items-center gap-1 text-red-500 font-black text-sm">
-                  {targetStats?.hp || 0} <Heart size={12} fill="currentColor" />
-                </div>
-                <div className="flex items-center gap-1 text-yellow-600 font-black text-sm">
-                  {targetStats?.energy || 0} <Zap size={12} fill="currentColor" />
-                </div>
-              </div>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 border-2 border-red-200">
-              <Target size={20} />
-            </div>
-          </div>
-        </div>
-
-        {/* XP Bar */}
-        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden flex items-center px-0.5">
-          <div 
-            className="h-0.5 bg-blue-500 rounded-full transition-all duration-500"
-            style={{ width: `${((myStats?.exp || 0) / (myStats?.level * 100 || 100)) * 100}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Main Arena Canvas Container */}
-      <div className="relative bg-[#0f172a] rounded-3xl border-4 sm:border-8 border-gray-900 overflow-hidden shadow-2xl aspect-[16/9] group shrink-0">
-          {/* Background Grid Effect */}
-          <div className="absolute inset-0 opacity-10 pointer-events-none" 
-               style={{ backgroundImage: 'radial-gradient(#3b82f6 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
-          
-          <canvas
-            ref={canvasRef}
-            width={800}
-            height={450}
-            onClick={handleCanvasClick}
-            onTouchStart={handleCanvasClick}
-            className="w-full h-full cursor-crosshair touch-none relative z-10"
-          />
-
-          {/* Game Over Overlay - High Polish Glassmorphism */}
-          {game.status === 'FINISHED' && (
-            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xl flex flex-col items-center justify-center text-white z-50 animate-in fade-in duration-700">
-              <div className="bg-white/5 border border-white/10 p-8 sm:p-12 rounded-[2rem] sm:rounded-[3rem] shadow-2xl flex flex-col items-center max-w-sm w-full text-center">
-                <div className={`w-16 h-16 sm:w-24 sm:h-24 rounded-full flex items-center justify-center mb-6 sm:mb-8 ${
-                  game.winnerId === currentUser.uid ? 'bg-yellow-500/20 text-yellow-500 shadow-[0_0_50px_rgba(234,179,8,0.3)]' : 'bg-red-500/20 text-red-500 shadow-[0_0_50px_rgba(239,68,68,0.3)]'
-                }`}>
-                  {game.winnerId === currentUser.uid ? <Trophy size={32} className="sm:w-12 sm:h-12" /> : <AlertTriangle size={32} className="sm:w-12 sm:h-12" />}
-                </div>
-                
-                <h2 className="text-3xl sm:text-5xl font-black italic tracking-tighter mb-2">
-                  {game.winnerId === currentUser.uid ? 'VICTORY' : 'DEFEAT'}
-                </h2>
-                
-                <p className="text-xs sm:text-sm text-white/50 font-medium mb-8 sm:mb-10 leading-relaxed px-4">
-                  {game.winnerId === currentUser.uid 
-                    ? '당신은 아레나의 진정한 지배자임을 증명했습니다. 다음 도전을 준비하세요.' 
-                    : '패배는 성장의 밑거름입니다. 전술을 보완하여 다시 도전하십시오.'}
-                </p>
-                
-                <button 
-                  onClick={() => sessionService.advanceStatus(session.id, SessionStatus.LOBBY)}
-                  className="w-full py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl sm:rounded-2xl font-black tracking-tight transition-all shadow-[0_0_30px_rgba(37,99,235,0.4)] hover:shadow-[0_0_50px_rgba(37,99,235,0.6)] active:scale-95"
-                >
-                  로비로 돌아가기
-                </button>
-              </div>
-            </div>
-          )}
-      </div>
-
-      {/* Dedicated Controller Area - Separate from Game Screen */}
-      <div className="flex flex-col gap-4 md:hidden">
-        <div className="flex items-center justify-between bg-gray-100/50 p-6 rounded-[2.5rem] border border-gray-200 shadow-inner">
-          {/* Left: Movement Joystick */}
-          <div 
-            className="w-36 h-36 rounded-full bg-white shadow-xl border-4 border-gray-200 flex items-center justify-center relative touch-none"
-            onTouchMove={handleJoystickMove}
-            onTouchEnd={handleJoystickEnd}
-          >
-            <div className="absolute inset-4 rounded-full border-2 border-dashed border-gray-200 opacity-50" />
-            <div 
-              className="w-14 h-14 rounded-full bg-blue-600 shadow-2xl absolute transition-transform duration-75 flex items-center justify-center border-4 border-blue-500"
-              style={{
-                transform: `translate(${joystick.x * 45}px, ${joystick.y * 45}px)`
-              }}
-            >
-              <div className="w-5 h-5 rounded-full bg-white/20" />
-            </div>
-          </div>
-
-          {/* Right: Attack & Skills */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="grid grid-cols-2 gap-3">
-              {mySkills.filter(s => s.id !== 'basic_attack').map(skill => (
-                <button
-                  key={skill.id}
-                  disabled={myStats.energy < skill.energyCost || isSpectator}
-                  onClick={() => {
-                    sessionService.triggerArenaSkill(session.id, currentUser.uid, skill.id, myStats.x, myStats.y, myStats.rotation, session);
-                  }}
-                  className={`w-16 h-16 rounded-3xl border-2 flex flex-col items-center justify-center transition-all shadow-lg active:scale-90 relative overflow-hidden ${
-                    myStats.energy < skill.energyCost 
-                      ? 'bg-gray-100 border-gray-200 text-gray-400' 
-                      : 'bg-white border-blue-100 text-blue-600 hover:border-blue-400'
-                  }`}
-                >
-                  <div className="relative z-10 flex flex-col items-center">
-                    {skill.type === 'PROJECTILE' ? <Target size={20} /> :
-                     skill.type === 'DASH' ? <Zap size={20} /> :
-                     <Shield size={20} />}
-                    <span className="text-[8px] font-black mt-1 uppercase tracking-tighter">{skill.name}</span>
-                  </div>
-                  {/* Energy Cost Indicator */}
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-yellow-400/20">
-                    <div 
-                      className="h-full bg-yellow-400 transition-all" 
-                      style={{ width: `${Math.min(100, (myStats.energy / skill.energyCost) * 100)}%` }} 
-                    />
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <button
-              className="w-28 h-28 rounded-full bg-red-600 text-white font-black text-sm flex flex-col items-center justify-center shadow-2xl active:scale-90 transition-all border-8 border-red-500/50 relative overflow-hidden group"
-              onTouchStart={() => {
-                const basicSkill = ARENA_SKILLS.find(s => s.id === 'basic_attack');
-                if (basicSkill) {
-                  sessionService.triggerArenaSkill(session.id, currentUser.uid, basicSkill.id, myStats.x, myStats.y, myStats.rotation, session);
-                }
-              }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-tr from-red-700 to-red-500 group-active:opacity-50" />
-              <div className="relative z-10 flex flex-col items-center">
-                <Sword size={28} className="mb-1" />
-                <span className="text-[10px] tracking-widest">ATTACK</span>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Desktop Controls Info */}
-      <div className="hidden md:flex justify-center">
-        <div className="bg-white border border-gray-200 px-6 py-3 rounded-2xl shadow-sm flex items-center gap-8 text-gray-500 text-xs font-bold">
-          <div className="flex items-center gap-2">
-            <kbd className="bg-gray-100 px-2 py-1 rounded border border-gray-300 text-gray-700">WASD</kbd> 이동
-          </div>
-          <div className="flex items-center gap-2">
-            <kbd className="bg-gray-100 px-2 py-1 rounded border border-gray-300 text-gray-700">CLICK</kbd> 공격
-          </div>
-          <div className="flex items-center gap-2">
-            <kbd className="bg-gray-100 px-2 py-1 rounded border border-gray-300 text-gray-700">1-4</kbd> 스킬 사용
-          </div>
-        </div>
-      </div>
-
-      {/* Action Log - Real-time Combat Events */}
-      <div className="bg-gray-900/5 rounded-2xl p-4 border border-gray-200">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Live Combat Log</span>
-        </div>
-        <div className="space-y-1.5 max-h-32 overflow-y-auto no-scrollbar">
-          {(() => {
-            const logs = Object.values(session.logs || {}).sort((a, b) => (b as GameLog).timestamp - (a as GameLog).timestamp);
-            return logs.length > 0 ? logs.slice(0, 5).map((log: any, i: number) => (
-              <div key={i} className="flex items-center gap-3 text-[11px] animate-in slide-in-from-left-2 duration-300">
-                <span className="text-gray-400 font-mono">[{new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                <span className="text-gray-700 font-medium">{log.content}</span>
-              </div>
-            )) : (
-              <div className="text-[11px] text-gray-400 italic">시스템 대기 중...</div>
-            );
-          })()}
-        </div>
-      </div>
-    </div>
-  );
+const CyberArenaUI = ({ session, currentUser, isSpectator, isHost }: { session: Session, currentUser: any, isSpectator: boolean, isHost: boolean }) => {
+  return <ArenaRebuild />;
 };
 
 const DisclaimerModal = ({ onAccept }: { onAccept: () => void }) => {
@@ -1050,6 +628,16 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  const isHost = session?.hostId === currentUser?.uid;
+  const me = session?.players?.[currentUser?.uid];
+  const isSpectator = !me || me.isSpectator || (!me.isAlive && session.status !== SessionStatus.LOBBY && session.status !== SessionStatus.SUMMARY);
+
   const [copied, setCopied] = useState(false);
   const [selectedVoteTarget, setSelectedVoteTarget] = useState<string | null>(null);
   const [selectedNightTarget, setSelectedNightTarget] = useState<string | null>(null);
@@ -1070,10 +658,6 @@ export default function App() {
   const [globalLeaderboards, setGlobalLeaderboards] = useState<Record<string, any[]>>({});
   const [bingoLinesInput, setBingoLinesInput] = useState<string>('3');
   const [showSystemLogs, setShowSystemLogs] = useState(true);
-
-  const isHost = session?.hostId === currentUser?.uid;
-  const me = session?.players?.[currentUser?.uid];
-  const isSpectator = !me || me.isSpectator || (!me.isAlive && session.status !== SessionStatus.LOBBY && session.status !== SessionStatus.SUMMARY);
 
   useEffect(() => {
     if (session?.settings?.bingoLines) {
@@ -1285,6 +869,23 @@ export default function App() {
     
     return () => clearInterval(interval);
   }, [session?.id, session?.status, session?.gameType, isHost, isAdminMode, session?.omokGame?.currentPlayerId, session?.bingoGame?.currentTurnIndex, session?.mafiaGame?.mafiaTarget, session?.mafiaGame?.doctorTarget, session?.mafiaGame?.policeTarget]);
+
+  // Cyber Arena Game Loop
+  useEffect(() => {
+    if (!session || session.gameType !== GameType.CYBER_ARENA || session.status !== SessionStatus.PLAYING) return;
+    if (!session.cyberArenaGame || session.cyberArenaGame.status === 'FINISHED') return;
+
+    // Only host manages the game loop
+    if (isHost) {
+      const interval = setInterval(() => {
+        if (sessionRef.current) {
+          sessionService.updateArenaLoop(sessionRef.current.id, sessionRef.current);
+        }
+      }, 100); // 10 FPS for smoother movement
+
+      return () => clearInterval(interval);
+    }
+  }, [session?.id, session?.gameType, session?.status, session?.cyberArenaGame?.status, isHost]); // Removed lastUpdate to keep interval stable
 
   // Keyboard support for 2048 and Sudoku
   useEffect(() => {
@@ -3181,7 +2782,7 @@ export default function App() {
             ) : session.gameType === GameType.ESCAPE_ROOM ? (
               <EscapeRoomUI session={session} currentUser={currentUser} isSpectator={isSpectator} />
             ) : session.gameType === GameType.CYBER_ARENA ? (
-              <CyberArenaUI session={session} currentUser={currentUser} isSpectator={isSpectator} />
+              <CyberArenaUI session={session} currentUser={currentUser} isSpectator={isSpectator} isHost={isHost} />
             ) : session.gameType === GameType.OFFICE_LIFE ? (
               <OfficeLifeBoard session={session} currentUser={currentUser} />
             ) : session.gameType === GameType.OFFICE_2048 ? (

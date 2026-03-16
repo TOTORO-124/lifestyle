@@ -228,11 +228,22 @@ export interface ArenaItem {
   name: string;
   description: string;
   cost: number;
-  hp?: number;
-  energy?: number;
-  shield?: number;
-  damage?: number;
-  effect?: (stats: any) => any;
+  tags: string[];
+  stars: number;
+  rarity: number;
+  stats: {
+    hp?: number;
+    maxHp?: number;
+    energy?: number;
+    maxEnergy?: number;
+    shield?: number;
+    damage?: number;
+    attackSpeed?: number;
+    critRate?: number;
+    cooldownReduction?: number;
+    lifesteal?: number;
+  };
+  effect?: string;
 }
 
 export interface ArenaCharacter {
@@ -241,8 +252,13 @@ export interface ArenaCharacter {
   description: string;
   baseHp: number;
   baseEnergy: number;
+  baseDamage: number;
+  baseAttackSpeed: number;
   skills: string[];
-  passiveEffect?: string;
+  passive: {
+    name: string;
+    description: string;
+  };
 }
 
 export interface ArenaSkill {
@@ -251,6 +267,7 @@ export interface ArenaSkill {
   description: string;
   energyCost: number;
   damage?: number;
+  damageMultiplier?: number;
   heal?: number;
   shield?: number;
   energyGain?: number;
@@ -282,20 +299,26 @@ export interface CyberArenaGameState {
     energy: number; 
     maxEnergy: number; 
     shield: number; 
-    level: number; 
-    exp: number;
+    damage: number;
+    attackSpeed: number;
+    critRate: number;
+    cooldownReduction: number;
+    lifesteal: number;
     credits: number;
     characterId?: string;
+    inventory: ArenaItem[];
+    synergies: Record<string, number>;
     x: number;
     y: number;
-    vx: number;
-    vy: number;
     rotation: number;
     lastSkillTime: Record<string, number>;
+    deferredDamage: number; // For Milk character
+    buffs: { type: string; value: number; expiresAt: number }[];
   }>;
   projectiles: Record<string, ArenaProjectile>;
-  inventory: Record<string, string[]>;
-  status: 'PLAYING' | 'FINISHED' | 'SHOP';
+  inventory: Record<string, ArenaItem[]>;
+  shopItems: Record<string, ArenaItem[]>;
+  status: 'PLAYING' | 'FINISHED' | 'SHOP' | 'SELECT_CHARACTER';
   winnerId?: string;
   isPvE: boolean;
   aiDifficulty: number;
@@ -303,6 +326,8 @@ export interface CyberArenaGameState {
   lastUpdate: number;
   currentRound: number;
   roundsWon: Record<string, number>;
+  phaseTimer: number;
+  streakCount: Record<string, number>; // For loser bonus
 }
 
 export interface LeaderboardEntry {
