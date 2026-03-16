@@ -223,6 +223,8 @@ export interface EscapeRoomGameState {
   hintsUsed: number;
   superHintsUsed: number;
   lastClue?: string;
+  lastSolvedPuzzleId?: string;
+  isRoomCleared?: boolean;
 }
 
 export interface ArenaItem {

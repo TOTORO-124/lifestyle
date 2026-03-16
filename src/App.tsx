@@ -207,8 +207,25 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
     setAnswer('');
   };
 
+  // Find the last solved puzzle to show its explanation
+  const lastSolvedPuzzle = room.puzzles.find(p => p.id === game.lastSolvedPuzzleId);
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {lastSolvedPuzzle && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-green-600 text-white p-4 rounded-lg shadow-lg flex items-start gap-3"
+        >
+          <Sparkles className="shrink-0 mt-1" size={20} />
+          <div className="space-y-1">
+            <p className="text-sm font-bold">퍼즐 해결!</p>
+            <p className="text-xs opacity-90 leading-relaxed">{lastSolvedPuzzle.explanation}</p>
+          </div>
+        </motion.div>
+      )}
+
       <div className="bg-white border-2 border-[#217346] rounded shadow-xl overflow-hidden">
         <div className="bg-[#217346] text-white px-4 py-2 flex justify-between items-center">
           <div className="flex items-center gap-2">
@@ -240,8 +257,13 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
                 </div>
 
                 {game.solvedPuzzles?.includes(puzzle.id) ? (
-                  <div className="bg-green-50 border border-green-200 p-3 rounded flex items-center gap-2 text-green-700 text-xs font-bold">
-                    <CheckCircle2 size={14} /> 해결됨! {puzzle.rewardItem && `(획득: ${puzzle.rewardItem})`}
+                  <div className="space-y-2">
+                    <div className="bg-green-50 border border-green-200 p-3 rounded flex items-center gap-2 text-green-700 text-xs font-bold">
+                      <CheckCircle2 size={14} /> 해결됨! {puzzle.rewardItem && `(획득: ${puzzle.rewardItem})`}
+                    </div>
+                    <div className="px-3 py-2 bg-gray-50 rounded border border-dashed border-gray-300">
+                      <p className="text-[11px] text-gray-500 font-medium">정답: <span className="text-gray-900 font-bold">{puzzle.answer}</span></p>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -355,6 +377,32 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
               </div>
             ))}
           </div>
+
+          {game.isRoomCleared && (
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-[#217346]/10 border-2 border-[#217346] p-6 rounded-lg text-center space-y-4"
+            >
+              <div className="flex justify-center">
+                <div className="w-12 h-12 bg-[#217346] text-white rounded-full flex items-center justify-center">
+                  <DoorOpen size={24} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-[#217346]">방의 모든 퍼즐을 해결했습니다!</h3>
+                <p className="text-sm text-gray-600">이제 다음 단계로 나아갈 준비가 되었습니다.</p>
+              </div>
+              <button 
+                onClick={() => !isSpectator && sessionService.nextEscapeRoomStage(session.id, session)}
+                disabled={isSpectator}
+                className="office-btn-primary w-full py-3 flex items-center justify-center gap-2 text-base"
+              >
+                {room.nextRoomId ? '다음 방으로 이동' : '탈출 성공! 결과 확인'}
+                <ArrowRight size={20} />
+              </button>
+            </motion.div>
+          )}
 
           {game.lastClue && (
             <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg flex items-start gap-3 shadow-sm">

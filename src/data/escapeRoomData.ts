@@ -7,6 +7,7 @@ export interface Puzzle {
   answer: string;
   hint: string;
   superHint?: string;
+  explanation?: string;
   options?: string[];
   rewardItem?: string;
   requiredItem?: string;
@@ -50,7 +51,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '벽에 적힌 낙서: "12월 25일은 크리스마스, 1월 1일은 신정. 그렇다면 10월 31일은?"',
             answer: '할로윈',
             hint: '서양의 유령 축제입니다.',
-            superHint: 'ㅎㄹㅇ'
+            superHint: 'ㅎㄹㅇ',
+            explanation: '정답은 할로윈입니다. 병원 벽에 피로 적힌 듯한 낙서는 과거 환자들이 이 날을 얼마나 두려워했는지 보여줍니다.'
           },
           {
             id: 'h_p1_2',
@@ -59,6 +61,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             answer: '20',
             hint: '4의 배수입니다.',
             superHint: '16 + 4 = ?',
+            explanation: '규칙은 4씩 증가하는 수열입니다. 20번 환자의 기록지 뒤에서 진료실 열쇠를 발견했습니다.',
             rewardItem: '진료실 열쇠'
           }
         ],
@@ -75,7 +78,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '금고 다이얼 방향: "해는 동쪽에서 뜨고 서쪽으로 진다. 북쪽을 향해 서서 오른쪽으로 90도 돌면?"',
             answer: '동',
             hint: '방위 문제입니다.',
-            superHint: '동서남북 중 하나입니다.'
+            superHint: '동서남북 중 하나입니다.',
+            explanation: '북쪽을 기준으로 오른쪽 90도는 동쪽입니다. 다이얼이 "딸깍" 소리를 내며 돌아갑니다.'
           },
           {
             id: 'h_p2_2',
@@ -84,6 +88,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             answer: '29',
             hint: '1+9+8+5+0+3+1+2',
             superHint: '이십구',
+            explanation: '1+9+8+5+0+3+1+2 = 29입니다. 금고가 열리며 지하실로 통하는 카드키가 나옵니다.',
             requiredItem: '진료실 열쇠',
             rewardItem: '지하실 카드키'
           }
@@ -102,7 +107,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             answer: '206',
             options: ['106', '206', '306', '406'],
             hint: '성인 기준입니다.',
-            superHint: '200개가 조금 넘습니다.'
+            superHint: '200개가 조금 넘습니다.',
+            explanation: '인간의 뼈는 206개입니다. 모니터에 기괴한 엑스레이 사진이 지나가며 문이 열립니다.'
           },
           {
             id: 'h_p3_2',
@@ -111,6 +117,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             answer: 'S',
             hint: '요일의 영어 첫 글자입니다.',
             superHint: 'Sunday의 첫 글자.',
+            explanation: 'Sunday의 S입니다. 마침내 병원의 무거운 철문이 열리고 차가운 새벽 공기가 느껴집니다.',
             requiredItem: '지하실 카드키'
           }
         ]
@@ -136,7 +143,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '시스템 복구 코드: "태양계의 4번째 행성은?"',
             answer: '화성',
             hint: '우리가 지금 있는 곳입니다.',
-            superHint: 'Mars'
+            superHint: 'Mars',
+            explanation: '정답은 화성입니다. 메인 컴퓨터가 부팅되며 기지의 산소 농도가 표시됩니다. 아직은 위험한 수준입니다.'
           },
           {
             id: 's_p1_2',
@@ -144,7 +152,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '비상 전원 연결: "정지 신호는 빨강, 진행 신호는 초록. 그렇다면 주의 신호는?"',
             answer: '노랑',
             hint: '신호등 색깔입니다.',
-            superHint: 'Yellow'
+            superHint: 'Yellow',
+            explanation: '노란색 전선을 연결하자 기지에 희미한 비상등이 켜집니다. 이제 생명 유지 장치실로 갈 수 있습니다.'
           }
         ],
         nextRoomId: 's_room_2'
@@ -161,7 +170,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             answer: '질소',
             options: ['산소', '이산화탄소', '질소', '아르곤'],
             hint: '과자 봉지에도 들어있습니다.',
-            superHint: '78%를 차지합니다.'
+            superHint: '78%를 차지합니다.',
+            explanation: '질소는 대기의 약 78%를 차지합니다. 밸브가 열리며 신선한 공기가 기지 내부로 유입되기 시작합니다.'
           },
           {
             id: 's_p2_2',
@@ -169,7 +179,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '압력 조절 암호: "1, 2, 4, 8, 16, ? (다음 숫자는?)"',
             answer: '32',
             hint: '2의 거듭제곱입니다.',
-            superHint: '16 * 2 = ?'
+            superHint: '16 * 2 = ?',
+            explanation: '2의 거듭제곱 수열입니다. 압력이 정상 수치로 돌아오며 격납고의 잠금 장치가 해제되었습니다.'
           }
         ],
         nextRoomId: 's_room_3'
@@ -185,7 +196,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '연료 배합비: "수소 원자 2개와 산소 원자 1개가 결합하면 무엇이 되는가?"',
             answer: '물',
             hint: 'H2O',
-            superHint: '생명의 근원'
+            superHint: '생명의 근원',
+            explanation: 'H2O, 즉 물입니다. 특수 처리된 물이 연료 전지에 주입되며 탈출용 포드의 엔진이 가동됩니다.'
           },
           {
             id: 's_p3_2',
@@ -193,7 +205,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '발사 궤도 설정: "위, 위, 아래, 아래, 왼쪽, 오른쪽, 왼쪽, ? (다음 방향은?)"',
             answer: '오른쪽',
             hint: '유명한 커맨드 패턴입니다.',
-            superHint: '코나미 커맨드'
+            superHint: '코나미 커맨드',
+            explanation: '마지막 방향은 오른쪽입니다. 궤도가 정확히 설정되었습니다. 3, 2, 1... 발사! 화성을 뒤로하고 지구로 향합니다.'
           }
         ]
       }
@@ -218,7 +231,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '마법 시약 조합: "파란색과 노란색을 섞으면 나오는 색은?"',
             answer: '초록',
             hint: '숲의 색깔입니다.',
-            superHint: 'Green'
+            superHint: 'Green',
+            explanation: '초록색 시약이 완성되었습니다! 솥에서 맑은 빛이 뿜어져 나오며 도서관으로 향하는 계단이 나타납니다.'
           },
           {
             id: 'f_p1_2',
@@ -226,7 +240,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '수정구슬의 예언: "머리는 하나인데 발은 네 개, 낮에는 일하고 밤에는 쉬는 것은?"',
             answer: '침대',
             hint: '가구입니다.',
-            superHint: '잠잘 때 쓰는 것'
+            superHint: '잠잘 때 쓰는 것',
+            explanation: '정답은 침대입니다. 수정구슬이 환하게 빛나며 당신의 지혜를 인정합니다.'
           }
         ],
         nextRoomId: 'f_room_2'
@@ -242,7 +257,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '지혜의 문구: "가장 가벼우면서도 가장 무거운 것은? (두 글자)"',
             answer: '마음',
             hint: '우리 몸 안에 있습니다.',
-            superHint: 'Heart'
+            superHint: 'Heart',
+            explanation: '마음은 깃털처럼 가벼울 수도, 바위처럼 무거울 수도 있죠. 도서관의 책들이 길을 비켜줍니다.'
           },
           {
             id: 'f_p2_2',
@@ -250,7 +266,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '마법 서적의 암호: "3, 6, 9, 12, ? (다음 숫자는?)"',
             answer: '15',
             hint: '3의 배수입니다.',
-            superHint: '12 + 3 = ?'
+            superHint: '12 + 3 = ?',
+            explanation: '3의 배수 규칙입니다. 15페이지를 펼치자 탑의 정상으로 통하는 마법진이 활성화됩니다.'
           }
         ],
         nextRoomId: 'f_room_3'
@@ -266,7 +283,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '용의 수수께끼: "나는 날개가 없어도 날고, 눈이 없어도 울며, 입이 없어도 속삭인다. 나는 누구인가?"',
             answer: '바람',
             hint: '공기의 흐름입니다.',
-            superHint: 'Wind'
+            superHint: 'Wind',
+            explanation: '바람입니다. 거대한 용이 고개를 끄덕이며 당신을 탑 밖으로 안전하게 데려다줍니다.'
           },
           {
             id: 'f_p3_2',
@@ -275,7 +293,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             answer: '7',
             options: ['5', '6', '7', '8'],
             hint: '빨주노초파남보',
-            superHint: '행운의 숫자'
+            superHint: '행운의 숫자',
+            explanation: '7가지 색깔의 마법이 합쳐지며 눈부신 포탈이 열립니다. 당신은 무사히 탑을 탈출했습니다!'
           }
         ]
       }
@@ -300,7 +319,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '게시판의 쪽지: "범인은 항상 ?장소에 다시 나타난다. (두 글자)"',
             answer: '사건',
             hint: '일이 일어난 곳.',
-            superHint: 'Case'
+            superHint: 'Case',
+            explanation: '사건 현장입니다. 탐정의 날카로운 통찰력이 담긴 메모군요. 이제 금고를 조사해봅시다.'
           },
           {
             id: 'm_p1_2',
@@ -308,7 +328,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '금고 비밀번호: "A=1, B=2, C=3... 그렇다면 D는?"',
             answer: '4',
             hint: '알파벳 순서입니다.',
-            superHint: 'D = ?'
+            superHint: 'D = ?',
+            explanation: 'D는 4번째 알파벳입니다. 금고가 열리며 암실로 들어가는 열쇠를 얻었습니다.'
           }
         ],
         nextRoomId: 'm_room_2'
@@ -324,7 +345,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '사진 속 단서: "거꾸로 해도 똑같은 단어, 3글자, 먹는 것"',
             answer: '토마토',
             hint: '빨간 채소입니다.',
-            superHint: 'Tomato'
+            superHint: 'Tomato',
+            explanation: '토마토입니다. 사진 뒤에 숨겨진 비밀 버튼을 찾았습니다.'
           },
           {
             id: 'm_p2_2',
@@ -332,7 +354,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '인화액 배합: "1, 1, 2, 3, 5, 8, ? (다음 숫자는?)"',
             answer: '13',
             hint: '피보나치 수열입니다.',
-            superHint: '5 + 8 = ?'
+            superHint: '5 + 8 = ?',
+            explanation: '피보나치 수열에 따라 다음 숫자는 13입니다. 인화된 사진 속에서 비밀 서재의 위치가 드러납니다.'
           }
         ],
         nextRoomId: 'm_room_3'
@@ -349,7 +372,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             answer: '왓슨',
             options: ['모리아티', '왓슨', '레스트레이드', '허드슨'],
             hint: '존 왓슨',
-            superHint: 'Watson'
+            superHint: 'Watson',
+            explanation: '왓슨 박사입니다. 탐정의 충실한 조력자죠. 이제 마지막 보물 상자만 남았습니다.'
           },
           {
             id: 'm_p3_2',
@@ -357,7 +381,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '보물 상자 코드: "우리나라의 국보 1호는?"',
             answer: '숭례문',
             hint: '남대문이라고도 불립니다.',
-            superHint: 'ㅅㄹㅁ'
+            superHint: 'ㅅㄹㅁ',
+            explanation: '숭례문입니다. 상자가 열리며 탐정이 숨겨둔 황금 돋보기를 발견했습니다. 사건 해결!'
           }
         ]
       }
@@ -382,7 +407,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '벽에 새겨진 글귀: "세종대왕이 창제한 우리 글의 이름은?"',
             answer: '훈민정음',
             hint: '한글의 옛 이름입니다.',
-            superHint: 'ㅎㅁㅈㅇ'
+            superHint: 'ㅎㅁㅈㅇ',
+            explanation: '백성을 가르치는 바른 소리, 훈민정음입니다. 벽의 글귀가 빛나며 옥사 문이 살짝 열립니다.'
           },
           {
             id: 'h_p1_2',
@@ -391,7 +417,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             answer: '쥐',
             options: ['쥐', '소', '호랑이', '토끼'],
             hint: '자(子)',
-            superHint: '찍찍'
+            superHint: '찍찍',
+            explanation: '자(子)는 쥐를 상징합니다. 간수의 허리춤에서 열쇠를 몰래 빼내어 탈출에 성공합니다.'
           }
         ],
         nextRoomId: 'h_room_2'
@@ -407,7 +434,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '장부의 퀴즈: "조선시대 왕의 이름 뒤에 붙는 글자 두 가지는?"',
             answer: '조종',
             hint: '조와 종',
-            superHint: 'ㅈㅈ'
+            superHint: 'ㅈㅈ',
+            explanation: '조(祖)와 종(宗)입니다. 장부 속에서 당신의 무죄를 증명할 결정적인 서신을 발견했습니다.'
           },
           {
             id: 'h_p2_2',
@@ -415,7 +443,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '비밀 통로 암호: "임진왜란 때 거북선을 만든 장군은?"',
             answer: '이순신',
             hint: '성웅 이순신',
-            superHint: 'ㅇㅅㅅ'
+            superHint: 'ㅇㅅㅅ',
+            explanation: '충무공 이순신 장군입니다. 책장 뒤의 비밀 통로가 열리며 밖으로 나가는 길이 보입니다.'
           }
         ],
         nextRoomId: 'h_room_3'
@@ -431,7 +460,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '마지막 수수께끼: "낮에는 올라가고 밤에는 내려가는 것은?"',
             answer: '해',
             hint: '태양입니다.',
-            superHint: 'ㅎ'
+            superHint: 'ㅎ',
+            explanation: '해입니다. 동이 트기 시작합니다. 서둘러야 합니다!'
           },
           {
             id: 'h_p3_2',
@@ -439,7 +469,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '탈출 암호: "우리나라의 5대 궁궐 중 가장 큰 곳은?"',
             answer: '경복궁',
             hint: '광화문이 있는 곳입니다.',
-            superHint: 'ㄱㅂㄱ'
+            superHint: 'ㄱㅂㄱ',
+            explanation: '경복궁입니다. 담장을 넘자마자 암행어사의 마패가 빛납니다. 당신은 무사히 억울함을 풀었습니다!'
           }
         ]
       }

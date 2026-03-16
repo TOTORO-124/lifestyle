@@ -2739,30 +2739,47 @@ export const sessionService = {
       if (puzzle.rewardItem) inventory.push(puzzle.rewardItem);
 
       const allSolved = room.puzzles.every(p => solvedPuzzles.includes(p.id));
-      let nextRoomId = session.escapeRoomGame.currentRoomId;
-      let status = session.escapeRoomGame.status;
-
+      
       if (allSolved) {
-        if (room.nextRoomId) {
-          nextRoomId = room.nextRoomId;
-          await this.addLog(sessionId, `방을 탈출했습니다! 다음 방: ${theme.rooms[nextRoomId].name}`, 'success');
-        } else {
-          status = 'WON';
-          await this.addLog(sessionId, '축하합니다! 모든 방을 탈출했습니다!', 'success');
-          await this.advanceStatus(sessionId, SessionStatus.SUMMARY);
-        }
+        await this.addLog(sessionId, `정답입니다! ${puzzle.explanation || ''} 모든 퍼즐을 해결했습니다.`, 'success');
       } else {
-        await this.addLog(sessionId, '정답입니다! 퍼즐을 해결했습니다.', 'success');
+        await this.addLog(sessionId, `정답입니다! ${puzzle.explanation || ''}`, 'success');
       }
 
       await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
         solvedPuzzles,
         inventory,
-        currentRoomId: nextRoomId,
-        status
+        lastSolvedPuzzleId: puzzleId,
+        isRoomCleared: allSolved
       });
     } else {
       await this.addLog(sessionId, '틀렸습니다. 다시 생각해보세요.', 'warning');
+    }
+  },
+
+  async nextEscapeRoomStage(sessionId: string, session: Session) {
+    if (!db || !session.escapeRoomGame) return;
+    const theme = ESCAPE_ROOM_THEMES[session.escapeRoomGame.themeId];
+    if (!theme) return;
+    const room = theme.rooms[session.escapeRoomGame.currentRoomId];
+    if (!room) return;
+
+    if (room.nextRoomId) {
+      const nextRoom = theme.rooms[room.nextRoomId];
+      await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+        currentRoomId: room.nextRoomId,
+        solvedPuzzles: [],
+        isRoomCleared: false,
+        lastSolvedPuzzleId: null
+      });
+      await this.addLog(sessionId, `다음 방으로 이동했습니다: ${nextRoom.name}`, 'info');
+    } else {
+      await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+        status: 'WON',
+        isRoomCleared: false
+      });
+      await this.addLog(sessionId, '축하합니다! 모든 방을 탈출했습니다!', 'success');
+      await this.advanceStatus(sessionId, SessionStatus.SUMMARY);
     }
   },
   
