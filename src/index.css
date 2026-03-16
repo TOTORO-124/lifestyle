@@ -6,8 +6,12 @@
 }
 
 @layer base {
+  * {
+    box-sizing: border-box;
+  }
   body {
     @apply bg-[#f8f9fa] text-[#3c4043] font-sans antialiased;
+    overflow-x: hidden;
   }
 }
 

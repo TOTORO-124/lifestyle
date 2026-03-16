@@ -319,7 +319,8 @@ const ArenaRebuild = () => {
   // [전투 관련 상태]
   const [isBattleActive, setIsBattleActive] = useState(false);
   const [battleWinner, setBattleWinner] = useState<string | null>(null);
-  const battleInterval = useRef<any>(null);
+  const playerAttackTimer = useRef<any>(null);
+  const enemyAttackTimer = useRef<any>(null);
 
   // [초기 렌더링 함수] initGame
   useEffect(() => {
@@ -332,100 +333,136 @@ const ArenaRebuild = () => {
       }
     };
     initGame();
+    return () => stopAllTimers();
   }, []);
+
+  const stopAllTimers = () => {
+    if (playerAttackTimer.current) clearInterval(playerAttackTimer.current);
+    if (enemyAttackTimer.current) clearInterval(enemyAttackTimer.current);
+    playerAttackTimer.current = null;
+    enemyAttackTimer.current = null;
+    setIsBattleActive(false);
+  };
 
   // [전투 로직] startBattle
   const startBattle = () => {
     if (isBattleActive || battleWinner) return;
-    
     setIsBattleActive(true);
-    let pCooldown = 0;
-    let eCooldown = 0;
 
-    battleInterval.current = setInterval(() => {
-      setPlayerStats((prevP: any) => {
-        if (!prevP) return prevP;
-        let nextP = { ...prevP };
+    // 1. 밀크진(플레이어)이 소다찬(적)을 때리는 독립적인 타이머
+    playerAttackTimer.current = setInterval(() => {
+      setEnemyStats((prevE: any) => {
+        if (!prevE || prevE.currentHp <= 0) return prevE;
+        const damage = Math.max(1, playerStats.attackPower - prevE.defense);
+        const nextHp = Math.max(0, prevE.currentHp - damage);
         
-        setEnemyStats((prevE: any) => {
-          if (!prevE) return prevE;
-          let nextE = { ...prevE };
-
-          // 승패 판정
-          if (nextP.currentHp <= 0 || nextE.currentHp <= 0) {
-            clearInterval(battleInterval.current);
-            setIsBattleActive(false);
-            setBattleWinner(nextP.currentHp <= 0 ? nextE.name : nextP.name);
-            return nextE;
-          }
-
-          // 공격 속도 구현
-          pCooldown += nextP.attackSpeed * 0.1;
-          eCooldown += nextE.attackSpeed * 0.1;
-
-          // 플레이어 공격
-          if (pCooldown >= 1.0) {
-            const dmg = Math.max(1, nextP.attackPower - nextE.defense);
-            nextE.currentHp = Math.max(0, nextE.currentHp - dmg);
-            pCooldown -= 1.0;
-          }
-
-          // 적 공격
-          if (eCooldown >= 1.0) {
-            const dmg = Math.max(1, nextE.attackPower - nextP.defense);
-            nextP.currentHp = Math.max(0, nextP.currentHp - dmg);
-            eCooldown -= 1.0;
-          }
-
-          return nextE;
-        });
-
-        return nextP;
+        if (nextHp <= 0) {
+          stopAllTimers();
+          setBattleWinner(playerStats.name);
+        }
+        return { ...prevE, currentHp: nextHp };
       });
-    }, 100);
+    }, (1 / playerStats.attackSpeed) * 1000); 
+
+    // 2. 소다찬(적)이 밀크진(플레이어)을 때리는 독립적인 타이머
+    enemyAttackTimer.current = setInterval(() => {
+      setPlayerStats((prevP: any) => {
+        if (!prevP || prevP.currentHp <= 0) return prevP;
+        const damage = Math.max(1, enemyStats.attackPower - prevP.defense);
+        const nextHp = Math.max(0, prevP.currentHp - damage);
+        
+        if (nextHp <= 0) {
+          stopAllTimers();
+          setBattleWinner(enemyStats.name);
+        }
+        return { ...prevP, currentHp: nextHp };
+      });
+    }, (1 / enemyStats.attackSpeed) * 1000);
+  };
+
+  // [아이템 구매 함수]
+  const buyItem = (item: any) => {
+    if (playerInventory.length >= 6) {
+      console.log("인벤토리가 가득 찼습니다!");
+      return;
+    }
+    if (playerGold < item.price) {
+      console.log("골드가 부족합니다!");
+      return;
+    }
+
+    // 골드 차감 및 인벤토리 추가
+    setPlayerGold(prev => prev - item.price);
+    setPlayerInventory(prev => [...prev, item]);
+
+    // 스탯 즉시 적용
+    setPlayerStats((prev: any) => {
+      const next = { ...prev };
+      if (item.statBoost.attackPower) next.attackPower += item.statBoost.attackPower;
+      if (item.statBoost.attackSpeed) next.attackSpeed += item.statBoost.attackSpeed;
+      if (item.statBoost.defense) next.defense += item.statBoost.defense;
+      if (item.statBoost.maxHp) {
+        next.maxHp += item.statBoost.maxHp;
+        next.currentHp += item.statBoost.maxHp; // 최대 체력 증가 시 현재 체력도 보정
+      }
+      return next;
+    });
   };
 
   // [다음 라운드 진행]
   const nextRound = () => {
+    stopAllTimers();
+    
+    // 골드 시스템: 승리 10G, 패배 15G
+    const isPlayerWinner = battleWinner === playerStats.name;
+    const reward = isPlayerWinner ? 10 : 15;
+    setPlayerGold(prev => prev + reward);
+
     setCurrentRound(prev => prev + 1);
     setBattleWinner(null);
-    setPlayerGold(prev => prev + 10);
     
-    const p = characters.find(c => c.id === 'milkjin');
-    const e = characters.find(c => c.id === 'sodachan');
-    if (p && e) {
-      setPlayerStats({ ...p });
-      setEnemyStats({ ...e });
+    // 체력 회복 및 스탯 유지 (인벤토리 기반 재계산)
+    const baseP = characters.find(c => c.id === 'milkjin');
+    const baseE = characters.find(c => c.id === 'sodachan');
+    
+    if (baseP && baseE) {
+      // 플레이어는 현재 인벤토리의 스탯 보너스를 유지한 채 체력만 풀회복
+      setPlayerStats((prev: any) => ({
+        ...prev,
+        currentHp: prev.maxHp
+      }));
+      // 적은 라운드마다 강해지도록 설정 (선택 사항이나 밸런스를 위해 기본값 유지)
+      setEnemyStats({ ...baseE });
     }
   };
 
   if (!playerStats || !enemyStats) return <div className="p-10 text-center font-black">LOADING ARENA...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 font-sans text-gray-900">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50 p-2 sm:p-4 font-sans text-gray-900">
+      <div className="w-full max-w-[500px] mx-auto space-y-4">
         
-        <header className="bg-white border-4 border-gray-900 p-6 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-2 bg-yellow-400 border-2 border-gray-900 px-4 py-1 font-black text-lg italic">
-              <Coins size={20} /> {playerGold} GOLD
+        <header className="bg-white border-4 border-gray-900 p-3 sm:p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-1.5 bg-yellow-400 border-2 border-gray-900 px-3 py-1 font-black text-sm italic">
+              <Coins size={16} /> {playerGold} GOLD
             </div>
-            <span className="bg-gray-900 text-white px-6 py-1 font-black text-xl uppercase italic rounded-lg">
+            <span className="bg-gray-900 text-white px-4 py-1 font-black text-base uppercase italic rounded-lg">
               ROUND {currentRound}
             </span>
-            <div className="w-32"></div>
           </div>
           
-          <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-            <div className="w-full md:w-1/3 space-y-2">
+          <div className="flex flex-col gap-4">
+            {/* 플레이어 정보 */}
+            <div className="w-full space-y-1">
               <div className="flex justify-between items-end">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{playerStats.passiveName}</span>
-                  <span className="font-black text-2xl italic uppercase">{playerStats.name}</span>
+                  <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest leading-none">{playerStats.passiveName}</span>
+                  <span className="font-black text-lg italic uppercase leading-tight">{playerStats.name}</span>
                 </div>
-                <span className="font-bold text-red-600">{Math.ceil(playerStats.currentHp)} / {playerStats.maxHp}</span>
+                <span className="font-bold text-xs text-red-600">{Math.ceil(playerStats.currentHp)} / {playerStats.maxHp}</span>
               </div>
-              <div className="w-full h-8 bg-gray-200 border-2 border-gray-900 rounded-full overflow-hidden">
+              <div className="w-full h-6 bg-gray-200 border-2 border-gray-900 rounded-full overflow-hidden">
                 <div 
                   className={`h-full border-r-2 border-gray-900 transition-all duration-100 ${playerStats.currentHp < playerStats.maxHp * 0.3 ? 'bg-red-500' : 'bg-green-500'}`}
                   style={{ width: `${(playerStats.currentHp / playerStats.maxHp) * 100}%` }}
@@ -433,17 +470,16 @@ const ArenaRebuild = () => {
               </div>
             </div>
 
-            <div className="hidden md:block font-black text-4xl italic text-gray-300 px-4">VS</div>
-
-            <div className="w-full md:w-1/3 space-y-2 text-right">
-              <div className="flex justify-between items-end md:flex-row-reverse">
+            {/* 적 정보 */}
+            <div className="w-full space-y-1 text-right">
+              <div className="flex justify-between items-end flex-row-reverse">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">{enemyStats.passiveName}</span>
-                  <span className="font-black text-2xl italic uppercase">{enemyStats.name}</span>
+                  <span className="text-[8px] font-black text-red-600 uppercase tracking-widest leading-none">{enemyStats.passiveName}</span>
+                  <span className="font-black text-lg italic uppercase leading-tight">{enemyStats.name}</span>
                 </div>
-                <span className="font-bold text-red-600">{Math.ceil(enemyStats.currentHp)} / {enemyStats.maxHp}</span>
+                <span className="font-bold text-xs text-red-600">{Math.ceil(enemyStats.currentHp)} / {enemyStats.maxHp}</span>
               </div>
-              <div className="w-full h-8 bg-gray-200 border-2 border-gray-900 rounded-full overflow-hidden">
+              <div className="w-full h-6 bg-gray-200 border-2 border-gray-900 rounded-full overflow-hidden">
                 <div 
                   className={`h-full border-l-2 border-gray-900 float-right transition-all duration-100 ${enemyStats.currentHp < enemyStats.maxHp * 0.3 ? 'bg-red-500' : 'bg-green-500'}`}
                   style={{ width: `${(enemyStats.currentHp / enemyStats.maxHp) * 100}%` }}
@@ -453,15 +489,15 @@ const ArenaRebuild = () => {
           </div>
         </header>
 
-        <main className="relative bg-gray-900 border-4 border-gray-900 rounded-3xl h-[400px] overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row items-center justify-around p-8">
+        <main className="relative bg-gray-900 border-4 border-gray-900 rounded-3xl h-[300px] overflow-hidden shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex items-center justify-around p-4">
           <div className="absolute inset-0 opacity-20 pointer-events-none" 
-               style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+               style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
           
           {!isBattleActive && !battleWinner && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-sm">
               <button 
                 onClick={startBattle}
-                className="bg-red-600 hover:bg-red-500 text-white border-4 border-gray-900 px-10 py-4 font-black text-3xl italic uppercase shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+                className="bg-red-600 hover:bg-red-500 text-white border-4 border-gray-900 px-8 py-3 font-black text-xl italic uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
               >
                 전투 시작
               </button>
@@ -469,52 +505,61 @@ const ArenaRebuild = () => {
           )}
 
           {battleWinner && (
-            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in zoom-in duration-300">
-              <h2 className="text-yellow-400 text-6xl font-black italic uppercase mb-8 drop-shadow-[0_4px_0_rgba(0,0,0,1)]">
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md p-4 text-center">
+              <h2 className="text-yellow-400 font-black italic uppercase mb-6 drop-shadow-[0_2px_0_rgba(0,0,0,1)]"
+                  style={{ fontSize: 'clamp(1.5rem, 8vw, 3rem)', maxWidth: '90%' }}>
                 {battleWinner} 승리!
               </h2>
               <button 
                 onClick={nextRound}
-                className="bg-white hover:bg-yellow-400 text-gray-900 border-4 border-gray-900 px-8 py-3 font-black text-xl uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+                className="bg-white hover:bg-yellow-400 text-gray-900 border-4 border-gray-900 px-6 py-2 font-black text-base uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
               >
-                다음 라운드로 (상점 가기)
+                다음 라운드로
               </button>
             </div>
           )}
 
-          <div className={`z-10 flex flex-col items-center gap-4 transition-transform ${isBattleActive ? 'animate-bounce' : ''}`}>
-            <div className="w-24 h-24 bg-blue-500 border-4 border-gray-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center text-white font-black">
-              <span className="text-[10px] opacity-70">ATK: {playerStats.attackPower}</span>
-              <span className="text-xl">DUMMY</span>
-              <span className="text-[10px] opacity-70">DEF: {playerStats.defense}</span>
+          {/* 플레이어 더미 */}
+          <div className={`z-10 flex flex-col items-center gap-2 transition-transform ${isBattleActive ? 'animate-bounce' : ''}`}>
+            <div className="w-16 h-16 bg-blue-500 border-2 border-gray-900 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center text-white font-black">
+              <span className="text-[8px] opacity-70">ATK: {playerStats.attackPower}</span>
+              <span className="text-xs">DUMMY</span>
+              <span className="text-[8px] opacity-70">DEF: {playerStats.defense}</span>
             </div>
-            <span className="bg-white border-2 border-gray-900 px-3 py-1 font-black text-sm">{playerStats.name}</span>
+            <span className="bg-white border-2 border-gray-900 px-2 py-0.5 font-black text-[10px]">{playerStats.name}</span>
           </div>
 
-          <div className="md:hidden w-full h-1 bg-gray-800 my-4"></div>
+          <div className="font-black text-2xl italic text-gray-700 px-2">VS</div>
 
-          <div className={`z-10 flex flex-col items-center gap-4 transition-transform ${isBattleActive ? 'animate-pulse' : ''}`}>
-            <div className="w-24 h-24 bg-red-500 border-4 border-gray-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center text-white font-black">
-              <span className="text-[10px] opacity-70">ATK: {enemyStats.attackPower}</span>
-              <span className="text-xl">DUMMY</span>
-              <span className="text-[10px] opacity-70">DEF: {enemyStats.defense}</span>
+          {/* 적 더미 */}
+          <div className={`z-10 flex flex-col items-center gap-2 transition-transform ${isBattleActive ? 'animate-pulse' : ''}`}>
+            <div className="w-16 h-16 bg-red-500 border-2 border-gray-900 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center text-white font-black">
+              <span className="text-[8px] opacity-70">ATK: {enemyStats.attackPower}</span>
+              <span className="text-xs">DUMMY</span>
+              <span className="text-[8px] opacity-70">DEF: {enemyStats.defense}</span>
             </div>
-            <span className="bg-white border-2 border-gray-900 px-3 py-1 font-black text-sm">{enemyStats.name}</span>
+            <span className="bg-white border-2 border-gray-900 px-2 py-0.5 font-black text-[10px]">{enemyStats.name}</span>
           </div>
         </main>
 
-        <footer className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-12">
-          <div className="bg-white border-4 border-gray-900 p-6 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-            <h3 className="font-black text-lg uppercase mb-4 italic border-b-2 border-gray-100 pb-2 flex justify-between items-center">
-              EQUIPMENT SLOTS
-              <span className="text-xs font-bold text-gray-400">{playerInventory.length} / 6</span>
+        <footer className="grid grid-cols-1 gap-4 pb-8">
+          <div className="bg-white border-4 border-gray-900 p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+            <h3 className="font-black text-sm uppercase mb-3 italic border-b-2 border-gray-100 pb-1 flex justify-between items-center">
+              EQUIPMENT
+              <span className="text-[10px] font-bold text-gray-400">{playerInventory.length} / 6</span>
             </h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2">
               {[0, 1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="aspect-square bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center text-gray-300 font-bold text-xs overflow-hidden">
+                <div key={i} className="aspect-square bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-300 font-bold text-[10px] overflow-hidden">
                   {playerInventory[i] ? (
-                    <div className="w-full h-full bg-blue-50 flex flex-col items-center justify-center p-2 text-blue-600 border-2 border-blue-500 rounded-xl">
-                       <span className="text-[10px] text-center leading-tight">{playerInventory[i].name}</span>
+                    <div className="w-full h-full bg-blue-50 flex flex-col items-center justify-center p-1 text-blue-600 border-2 border-blue-500 rounded-lg">
+                       <span className="text-[8px] text-center leading-tight font-black">{playerInventory[i].name}</span>
+                       <span className="text-[7px] opacity-70">
+                         {playerInventory[i].statBoost.attackPower ? `ATK+${playerInventory[i].statBoost.attackPower}` : 
+                          playerInventory[i].statBoost.attackSpeed ? `SPD+${playerInventory[i].statBoost.attackSpeed}` :
+                          playerInventory[i].statBoost.defense ? `DEF+${playerInventory[i].statBoost.defense}` :
+                          playerInventory[i].statBoost.maxHp ? `HP+${playerInventory[i].statBoost.maxHp}` : ''}
+                       </span>
                     </div>
                   ) : (
                     `SLOT ${i + 1}`
@@ -524,26 +569,30 @@ const ArenaRebuild = () => {
             </div>
           </div>
 
-          <div className="bg-white border-4 border-gray-900 p-6 rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-            <h3 className="font-black text-lg uppercase mb-4 italic border-b-2 border-gray-100 pb-2">ARENA SHOP</h3>
-            <div className="h-[180px] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+          <div className="bg-white border-4 border-gray-900 p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+            <h3 className="font-black text-sm uppercase mb-3 italic border-b-2 border-gray-100 pb-1">ARENA SHOP</h3>
+            <div className="h-[150px] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
               {items.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 border-2 border-gray-900 rounded-xl hover:bg-yellow-50 transition-colors cursor-pointer group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-200 border-2 border-gray-900 rounded-lg flex items-center justify-center">
-                      <Package size={20} className="text-gray-600" />
+                <div 
+                  key={item.id} 
+                  onClick={() => buyItem(item)}
+                  className={`flex items-center justify-between p-2 border-2 border-gray-900 rounded-xl transition-all cursor-pointer group ${playerGold >= item.price ? 'bg-gray-50 hover:bg-yellow-50' : 'bg-gray-200 opacity-50 cursor-not-allowed'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-gray-200 border-2 border-gray-900 rounded-lg flex items-center justify-center">
+                      <Package size={16} className="text-gray-600" />
                     </div>
                     <div>
-                      <p className="font-black text-sm uppercase">{item.name}</p>
+                      <p className="font-black text-xs uppercase leading-none">{item.name}</p>
                       <div className="flex gap-1 mt-0.5">
                         {item.tags.map(tag => (
-                          <span key={tag} className="text-[8px] bg-white border border-gray-300 px-1 rounded font-bold text-gray-500">#{tag}</span>
+                          <span key={tag} className="text-[7px] bg-white border border-gray-300 px-1 rounded font-bold text-gray-500">#{tag}</span>
                         ))}
                       </div>
                     </div>
                   </div>
-                  <div className="bg-yellow-400 border-2 border-gray-900 px-3 py-1 font-black text-xs group-hover:scale-110 transition-transform flex items-center gap-1">
-                    <Coins size={12} /> {item.price}
+                  <div className={`border-2 border-gray-900 px-2 py-0.5 font-black text-[10px] transition-transform flex items-center gap-1 ${playerGold >= item.price ? 'bg-yellow-400 group-hover:scale-105' : 'bg-gray-300'}`}>
+                    <Coins size={10} /> {item.price}
                   </div>
                 </div>
               ))}
