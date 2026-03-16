@@ -10,6 +10,7 @@ export interface Puzzle {
   explanation?: string;
   options?: string[];
   rewardItem?: string;
+  rewardItemExamine?: string; // 아이템 조사 시 나타나는 텍스트
   requiredItem?: string;
 }
 
@@ -29,6 +30,13 @@ export interface EscapeRoomTheme {
   difficulty: 'EASY' | 'NORMAL' | 'HARD';
   rooms: Record<string, Room>;
   startRoomId: string;
+  styles: {
+    primaryColor: string;
+    secondaryColor: string;
+    bgColor: string;
+    accentColor: string;
+    fontFamily?: string;
+  };
 }
 
 export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
@@ -39,6 +47,13 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
     description: '안개가 자욱한 밤, 당신은 소문만 무성하던 버려진 정신병원에 갇혔습니다. 복도 끝에서 들려오는 기괴한 소리를 피해 탈출해야 합니다.',
     difficulty: 'HARD',
     startRoomId: 'h_room_1',
+    styles: {
+      primaryColor: '#7f1d1d', // dark red
+      secondaryColor: '#450a0a',
+      bgColor: '#0a0a0a',
+      accentColor: '#ef4444',
+      fontFamily: 'serif'
+    },
     rooms: {
       'h_room_1': {
         id: 'h_room_1',
@@ -62,7 +77,8 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             hint: '4의 배수입니다.',
             superHint: '16 + 4 = ?',
             explanation: '규칙은 4씩 증가하는 수열입니다. 20번 환자의 기록지 뒤에서 진료실 열쇠를 발견했습니다.',
-            rewardItem: '진료실 열쇠'
+            rewardItem: '진료실 열쇠',
+            rewardItemExamine: '녹슨 열쇠입니다. "진료실"이라는 태그가 붙어 있습니다.'
           }
         ],
         nextRoomId: 'h_room_2'
@@ -131,6 +147,13 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
     description: '화성 탐사 기지에 산소 공급 장치가 고장 났습니다. 구조선이 도착하기 전까지 시스템을 복구하고 탈출해야 합니다.',
     difficulty: 'NORMAL',
     startRoomId: 's_room_1',
+    styles: {
+      primaryColor: '#1e3a8a', // dark blue
+      secondaryColor: '#1e40af',
+      bgColor: '#020617',
+      accentColor: '#38bdf8',
+      fontFamily: 'monospace'
+    },
     rooms: {
       's_room_1': {
         id: 's_room_1',
@@ -219,6 +242,13 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
     description: '전설적인 대마법사의 탑에 초대받았습니다. 하지만 마법사가 외출한 사이 탑의 방어 시스템이 작동해버렸습니다.',
     difficulty: 'NORMAL',
     startRoomId: 'f_room_1',
+    styles: {
+      primaryColor: '#4c1d95', // dark purple
+      secondaryColor: '#5b21b6',
+      bgColor: '#1e1b4b',
+      accentColor: '#fbbf24',
+      fontFamily: 'serif'
+    },
     rooms: {
       'f_room_1': {
         id: 'f_room_1',
@@ -307,6 +337,13 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
     description: '당신은 유명한 탐정의 조수입니다. 탐정이 남긴 암호를 풀어 사라진 보물을 찾아야 합니다.',
     difficulty: 'NORMAL',
     startRoomId: 'm_room_1',
+    styles: {
+      primaryColor: '#422006', // dark brown
+      secondaryColor: '#713f12',
+      bgColor: '#1c1917',
+      accentColor: '#f59e0b',
+      fontFamily: 'serif'
+    },
     rooms: {
       'm_room_1': {
         id: 'm_room_1',
@@ -395,6 +432,13 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
     description: '억울하게 옥살이를 하게 된 당신. 암행어사가 오기 전까지 증거를 찾아 탈출해야 합니다.',
     difficulty: 'EASY',
     startRoomId: 'h_room_1',
+    styles: {
+      primaryColor: '#3f2b1d', // wood brown
+      secondaryColor: '#5d4037',
+      bgColor: '#1a120b',
+      accentColor: '#d4af37',
+      fontFamily: 'serif'
+    },
     rooms: {
       'h_room_1': {
         id: 'h_room_1',

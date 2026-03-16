@@ -212,6 +212,14 @@ export interface OfficeLifeGameState {
   waitingForAction?: 'SELECT_ROLE' | 'BUY_PROJECT' | 'CHANCE_CARD' | 'BUY_ITEM' | 'PROMOTION_TEST' | 'END_TURN' | 'NONE';
 }
 
+export interface EscapeRoomActivity {
+  id: string;
+  timestamp: number;
+  userName: string;
+  message: string;
+  type: 'SOLVE' | 'HINT' | 'MOVE' | 'SYSTEM' | 'FAIL';
+}
+
 export interface EscapeRoomGameState {
   themeId: string;
   currentRoomId: string;
@@ -225,6 +233,7 @@ export interface EscapeRoomGameState {
   lastClue?: string;
   lastSolvedPuzzleId?: string;
   isRoomCleared?: boolean;
+  activityLog?: EscapeRoomActivity[];
 }
 
 export interface ArenaItem {

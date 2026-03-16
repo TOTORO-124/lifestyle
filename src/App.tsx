@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Session, Player, SessionStatus, GameType, LiarMode, MafiaRole, MafiaPhase, GameLog, UserProfile, Department } from './types';
 import { sessionService } from './services/sessionService';
 import { isConfigured } from './firebase';
+import { soundManager } from './utils/sound';
 import { Chat } from './components/Chat';
 import { LIAR_TOPICS } from './data/topics';
 import { BINGO_TOPICS } from './data/bingoTopics';
@@ -199,239 +200,691 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
   const theme = ESCAPE_ROOM_THEMES[game.themeId] || ESCAPE_ROOM_THEMES['horror'];
   const room = theme.rooms[game.currentRoomId];
   const [answer, setAnswer] = useState('');
+  const [examiningItem, setExaminingItem] = useState<string | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
+  const [lastTick, setLastTick] = useState(0);
+  const [viewingExplanation, setViewingExplanation] = useState<string | null>(null);
+
+  // Sync viewingExplanation with lastSolvedPuzzleId
+  useEffect(() => {
+    if (game.lastSolvedPuzzleId) {
+      setViewingExplanation(game.lastSolvedPuzzleId);
+    }
+  }, [game.lastSolvedPuzzleId]);
 
   if (!room) return <div className="p-8 text-center text-gray-500">방 정보를 불러올 수 없습니다.</div>;
 
   const handleSolve = (puzzleId: string, val: string) => {
+    const isCorrect = val.trim().toLowerCase() === room.puzzles.find(p => p.id === puzzleId)?.answer.toLowerCase();
+    if (isCorrect) {
+      soundManager.play('solve');
+    } else {
+      soundManager.play('fail');
+    }
     sessionService.submitEscapeRoomAnswer(session.id, puzzleId, val, session);
     setAnswer('');
   };
 
+  const handleNextStage = () => {
+    soundManager.play('door');
+    sessionService.nextEscapeRoomStage(session.id, session);
+  };
+
+  const handleHint = (puzzleId: string) => {
+    soundManager.play('hint');
+    sessionService.useEscapeRoomHint(session.id, puzzleId, session);
+  };
+
   // Find the last solved puzzle to show its explanation
   const lastSolvedPuzzle = room.puzzles.find(p => p.id === game.lastSolvedPuzzleId);
+  const styles = theme.styles;
+  const timeLeft = Math.max(0, Math.floor((game.startTime + game.timeLimit * 1000 - Date.now()) / 1000));
+  const isTimeLow = timeLeft < 60;
 
-  return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {lastSolvedPuzzle && (
+  // Sound for low time
+  useEffect(() => {
+    if (isTimeLow && timeLeft > 0 && timeLeft !== lastTick) {
+      soundManager.play('tick');
+      setLastTick(timeLeft);
+    }
+  }, [timeLeft, isTimeLow, lastTick]);
+
+  // Summary Screen
+  if (session.status === SessionStatus.SUMMARY) {
+    const timeTaken = Math.floor((Date.now() - game.startTime) / 1000);
+    const minutes = Math.floor(timeTaken / 60);
+    const seconds = timeTaken % 60;
+
+    return (
+      <div className="min-h-[600px] flex items-center justify-center p-6 bg-slate-900" style={{ fontFamily: styles.fontFamily }}>
         <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-green-600 text-white p-4 rounded-lg shadow-lg flex items-start gap-3"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-2xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden border-8"
+          style={{ borderColor: styles.primaryColor }}
         >
-          <Sparkles className="shrink-0 mt-1" size={20} />
-          <div className="space-y-1">
-            <p className="text-sm font-bold">퍼즐 해결!</p>
-            <p className="text-xs opacity-90 leading-relaxed">{lastSolvedPuzzle.explanation}</p>
+          <div className="p-12 text-center space-y-8">
+            <div className="flex justify-center">
+              <motion.div 
+                animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }}
+                transition={{ repeat: Infinity, duration: 4 }}
+                className="w-24 h-24 rounded-full flex items-center justify-center shadow-2xl"
+                style={{ backgroundColor: styles.primaryColor, color: styles.accentColor }}
+              >
+                <Trophy size={48} />
+              </motion.div>
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-4xl font-black tracking-tighter" style={{ color: styles.primaryColor }}>ESCAPE SUCCESS!</h2>
+              <p className="text-gray-500 font-medium">축하합니다! 무사히 탈출에 성공하셨습니다.</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <Timer size={20} className="mx-auto mb-2 text-blue-500" />
+                <p className="text-[10px] text-gray-400 font-bold uppercase">소요 시간</p>
+                <p className="text-lg font-black text-gray-800">{minutes}m {seconds}s</p>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <HelpCircle size={20} className="mx-auto mb-2 text-yellow-500" />
+                <p className="text-[10px] text-gray-400 font-bold uppercase">힌트 사용</p>
+                <p className="text-lg font-black text-gray-800">{game.hintsUsed || 0}</p>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <Users size={20} className="mx-auto mb-2 text-green-500" />
+                <p className="text-[10px] text-gray-400 font-bold uppercase">팀원 수</p>
+                <p className="text-lg font-black text-gray-800">{Object.keys(session.players).length}명</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600 italic leading-relaxed px-8">
+                "{theme.description.split('.')[0]}... 이제 당신은 자유입니다."
+              </p>
+              <button 
+                onClick={() => sessionService.resetSession(session.id, session.players)}
+                className="w-full py-4 rounded-2xl font-black text-white shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{ backgroundColor: styles.primaryColor }}
+              >
+                로비로 돌아가기
+              </button>
+            </div>
           </div>
         </motion.div>
-      )}
+      </div>
+    );
+  }
 
-      <div className="bg-white border-2 border-[#217346] rounded shadow-xl overflow-hidden">
-        <div className="bg-[#217346] text-white px-4 py-2 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <DoorOpen size={16} />
-            <span className="text-xs font-bold uppercase tracking-widest">{theme.name} - {room.name}</span>
+  // Intro Screen
+  if (showIntro) {
+    return (
+      <div className="min-h-[600px] flex items-center justify-center p-6 bg-black" style={{ fontFamily: styles.fontFamily }}>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-xl w-full text-center space-y-8"
+        >
+          <div className="space-y-4">
+            <motion.div
+              animate={{ opacity: [0.4, 1, 0.4] }}
+              transition={{ repeat: Infinity, duration: 2 }}
+              className="text-[10px] font-black tracking-[0.3em] uppercase"
+              style={{ color: styles.accentColor }}
+            >
+              MISSION START
+            </motion.div>
+            <h2 className="text-5xl font-black text-white tracking-tighter">{theme.name}</h2>
+            <div className="h-1 w-24 mx-auto" style={{ backgroundColor: styles.accentColor }} />
           </div>
-          <div className="flex items-center gap-3 text-[10px] font-mono">
-            <Timer size={12} />
-            <span>남은 시간: {Math.max(0, Math.floor((game.startTime + game.timeLimit * 1000 - Date.now()) / 1000))}초</span>
+
+          <p className="text-gray-400 leading-relaxed text-lg">
+            {theme.description}
+          </p>
+
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex items-center gap-6 text-xs font-bold text-gray-500 uppercase tracking-widest">
+              <span className="flex items-center gap-2"><Timer size={14} /> {game.timeLimit / 60} MINUTES</span>
+              <span className="flex items-center gap-2"><Users size={14} /> {Object.keys(session.players).length} PLAYERS</span>
+            </div>
+            <button 
+              onClick={() => {
+                soundManager.play('door');
+                setShowIntro(false);
+              }}
+              className="px-12 py-4 rounded-full font-black text-white shadow-2xl transition-all hover:scale-110 active:scale-95 group"
+              style={{ backgroundColor: styles.primaryColor }}
+            >
+              <span className="flex items-center gap-3">
+                입장하기 <ArrowRight className="group-hover:translate-x-1 transition-transform" />
+              </span>
+            </button>
           </div>
-        </div>
+        </motion.div>
+      </div>
+    );
+  }
 
-        <div className="p-8 space-y-8">
-          <div className="bg-gray-50 p-6 rounded border border-gray-200">
-            <p className="text-sm text-gray-700 leading-relaxed italic">"{room.description}"</p>
-          </div>
-
-          <div className="space-y-8">
-            {room.puzzles.map((puzzle) => (
-              <div key={puzzle.id} className="space-y-4 p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors">
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 bg-[#217346] text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">?</div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded uppercase tracking-tighter">{puzzle.type}</span>
-                      <p className="text-sm font-medium text-gray-800">{puzzle.question}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {game.solvedPuzzles?.includes(puzzle.id) ? (
-                  <div className="space-y-2">
-                    <div className="bg-green-50 border border-green-200 p-3 rounded flex items-center gap-2 text-green-700 text-xs font-bold">
-                      <CheckCircle2 size={14} /> 해결됨! {puzzle.rewardItem && `(획득: ${puzzle.rewardItem})`}
-                    </div>
-                    <div className="px-3 py-2 bg-gray-50 rounded border border-dashed border-gray-300">
-                      <p className="text-[11px] text-gray-500 font-medium">정답: <span className="text-gray-900 font-bold">{puzzle.answer}</span></p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex flex-col gap-3">
-                      {puzzle.type === 'CHOICE' ? (
-                        <div className="grid grid-cols-2 gap-2">
-                          {puzzle.options?.map((opt) => (
-                            <button
-                              key={opt}
-                              onClick={() => !isSpectator && handleSolve(puzzle.id, opt)}
-                              disabled={isSpectator}
-                              className="py-2 px-4 text-xs font-bold rounded border-2 border-gray-200 bg-white text-gray-700 hover:border-[#217346] hover:bg-gray-50 transition-all"
-                            >
-                              {opt}
-                            </button>
-                          ))}
-                        </div>
-                      ) : puzzle.type === 'DIRECTION' ? (
-                        <div className="flex gap-3 justify-center">
-                          {[
-                            { id: '상', icon: <ArrowUp size={18} /> },
-                            { id: '하', icon: <ArrowDown size={18} /> },
-                            { id: '좌', icon: <ArrowLeft size={18} /> },
-                            { id: '우', icon: <ArrowRight size={18} /> },
-                          ].map(dir => (
-                            <button
-                              key={dir.id}
-                              onClick={() => !isSpectator && handleSolve(puzzle.id, dir.id)}
-                              disabled={isSpectator}
-                              className="w-12 h-12 flex items-center justify-center bg-white border-2 border-gray-200 rounded-full hover:border-[#217346] hover:bg-gray-50 transition-all shadow-sm"
-                              title={dir.id}
-                            >
-                              {dir.icon}
-                            </button>
-                          ))}
-                        </div>
-                      ) : puzzle.type === 'COLOR' ? (
-                        <div className="flex gap-3 justify-center">
-                          {[
-                            { id: '빨강', color: '#ef4444' },
-                            { id: '초록', color: '#22c55e' },
-                            { id: '파랑', color: '#3b82f6' },
-                            { id: '노랑', color: '#eab308' },
-                            { id: '보라', color: '#a855f7' },
-                            { id: '주황', color: '#f97316' },
-                          ].map(c => (
-                            <button
-                              key={c.id}
-                              onClick={() => !isSpectator && handleSolve(puzzle.id, c.id)}
-                              disabled={isSpectator}
-                              style={{ backgroundColor: c.color }}
-                              className="w-10 h-10 rounded-full border-2 border-white shadow-md hover:scale-110 transition-all"
-                              title={c.id}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <input 
-                            type="text" 
-                            value={answer}
-                            onChange={(e) => setAnswer(e.target.value)}
-                            placeholder={isSpectator ? "관전자 모드입니다..." : "정답을 입력하세요..."}
-                            disabled={isSpectator}
-                            className="flex-1 office-input py-2"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && answer.trim() && !isSpectator) {
-                                handleSolve(puzzle.id, answer);
-                              }
-                            }}
-                          />
-                          <button 
-                            onClick={() => {
-                              if (answer.trim() && !isSpectator) {
-                                handleSolve(puzzle.id, answer);
-                              }
-                            }}
-                            disabled={!answer.trim() || isSpectator}
-                            className="office-btn-primary px-6"
-                          >
-                            확인
-                          </button>
-                        </div>
-                      )}
-
-                      <div className="flex gap-2 justify-end">
-                        <button 
-                          onClick={() => !isSpectator && sessionService.useEscapeRoomHint(session.id, puzzle.id, session)}
-                          disabled={isSpectator}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold hover:bg-blue-100 transition-colors"
-                          title="일반 힌트"
-                        >
-                          <HelpCircle size={14} />
-                          힌트 ({game.hintsUsed || 0})
-                        </button>
-                        {puzzle.superHint && (
-                          <button 
-                            onClick={() => !isSpectator && sessionService.useEscapeRoomSuperHint(session.id, puzzle.id, session)}
-                            disabled={isSpectator}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded text-[10px] font-bold hover:bg-purple-100 transition-colors"
-                            title="슈퍼 힌트 (정답에 가까운 힌트)"
-                          >
-                            <Sparkles size={14} />
-                            슈퍼 힌트 ({game.superHintsUsed || 0})
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+  return (
+    <div 
+      className="min-h-[600px] p-4 transition-colors duration-1000 relative overflow-hidden"
+      style={{ backgroundColor: styles.bgColor, fontFamily: styles.fontFamily }}
+    >
+      {/* Atmospheric Background Effects */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
+        {game.themeId === 'horror' && (
+          <motion.div 
+            animate={{ opacity: [0.1, 0.3, 0.1, 0.4, 0.1] }}
+            transition={{ repeat: Infinity, duration: 5 }}
+            className="absolute inset-0 bg-red-900/20"
+          />
+        )}
+        {game.themeId === 'scifi' && (
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
+        )}
+        {game.themeId === 'fantasy' && (
+          <div className="absolute inset-0">
+            {[...Array(20)].map((_, i) => (
+              <motion.div
+                key={i}
+                animate={{ 
+                  y: [-20, 600], 
+                  x: [Math.random() * 1000, Math.random() * 1000],
+                  opacity: [0, 1, 0]
+                }}
+                transition={{ repeat: Infinity, duration: Math.random() * 10 + 5, delay: Math.random() * 5 }}
+                className="absolute w-1 h-1 bg-yellow-400 rounded-full blur-[1px]"
+              />
             ))}
           </div>
+        )}
+        {game.themeId === 'mystery' && (
+          <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_20%,black_150%)]" />
+        )}
+        {game.themeId === 'historical' && (
+          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/paper-fibers.png")' }} />
+        )}
+      </div>
 
-          {game.isRoomCleared && (
+      <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
+        <div className="lg:col-span-2 space-y-6">
+          {lastSolvedPuzzle && (
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-[#217346]/10 border-2 border-[#217346] p-6 rounded-lg text-center space-y-4"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-lg shadow-lg flex items-start gap-3 border-l-4"
+              style={{ backgroundColor: styles.primaryColor, borderColor: styles.accentColor, color: '#fff' }}
             >
-              <div className="flex justify-center">
-                <div className="w-12 h-12 bg-[#217346] text-white rounded-full flex items-center justify-center">
-                  <DoorOpen size={24} />
-                </div>
-              </div>
+              <Sparkles className="shrink-0 mt-1" size={20} style={{ color: styles.accentColor }} />
               <div className="space-y-1">
-                <h3 className="text-lg font-bold text-[#217346]">방의 모든 퍼즐을 해결했습니다!</h3>
-                <p className="text-sm text-gray-600">이제 다음 단계로 나아갈 준비가 되었습니다.</p>
+                <p className="text-sm font-bold">퍼즐 해결!</p>
+                <p className="text-xs opacity-90 leading-relaxed">{lastSolvedPuzzle.explanation}</p>
               </div>
-              <button 
-                onClick={() => !isSpectator && sessionService.nextEscapeRoomStage(session.id, session)}
-                disabled={isSpectator}
-                className="office-btn-primary w-full py-3 flex items-center justify-center gap-2 text-base"
-              >
-                {room.nextRoomId ? '다음 방으로 이동' : '탈출 성공! 결과 확인'}
-                <ArrowRight size={20} />
-              </button>
             </motion.div>
           )}
 
-          {game.lastClue && (
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg flex items-start gap-3 shadow-sm">
-              <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
-                <HelpCircle className="text-amber-600" size={18} />
+          <div 
+            className="bg-white rounded-lg shadow-2xl overflow-hidden border-2"
+            style={{ borderColor: styles.primaryColor }}
+          >
+            <div 
+              className="px-4 py-3 flex justify-between items-center border-b"
+              style={{ backgroundColor: styles.primaryColor, color: '#fff', borderColor: styles.secondaryColor }}
+            >
+              <div className="flex items-center gap-2">
+                <DoorOpen size={18} style={{ color: styles.accentColor }} />
+                <span className="text-sm font-bold uppercase tracking-widest">{theme.name} - {room.name}</span>
               </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest">최근 획득한 단서</p>
-                <p className="text-sm text-amber-900 font-medium leading-relaxed">{game.lastClue}</p>
+              <motion.div 
+                animate={isTimeLow ? { scale: [1, 1.1, 1], color: ['#fff', '#ef4444', '#fff'] } : {}}
+                transition={{ repeat: Infinity, duration: 1 }}
+                className="flex items-center gap-3 text-xs font-mono font-bold"
+              >
+                <Timer size={14} />
+                <span style={{ color: isTimeLow ? '#ef4444' : styles.accentColor }}>{timeLeft}s</span>
+              </motion.div>
+            </div>
+
+            <div className="p-8 space-y-8 bg-opacity-50" style={{ backgroundColor: styles.bgColor + '11' }}>
+              <div 
+                className="p-6 rounded border-l-4 italic"
+                style={{ backgroundColor: styles.secondaryColor + '22', borderColor: styles.accentColor, color: styles.bgColor === '#0a0a0a' ? '#ccc' : '#444' }}
+              >
+                <p className="text-sm leading-relaxed">"{room.description}"</p>
+              </div>
+
+              <div className="space-y-8">
+                {room.puzzles.map((puzzle) => (
+                  <div 
+                    key={puzzle.id} 
+                    className="space-y-4 p-5 border rounded-xl transition-all duration-300 hover:shadow-lg"
+                    style={{ 
+                      backgroundColor: game.solvedPuzzles?.includes(puzzle.id) ? styles.primaryColor + '11' : '#fff',
+                      borderColor: game.solvedPuzzles?.includes(puzzle.id) ? styles.primaryColor + '44' : '#eee'
+                    }}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div 
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 shadow-inner"
+                        style={{ backgroundColor: styles.primaryColor, color: '#fff' }}
+                      >
+                        ?
+                      </div>
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span 
+                            className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider"
+                            style={{ backgroundColor: styles.accentColor, color: styles.primaryColor }}
+                          >
+                            {puzzle.type}
+                          </span>
+                          <p className="text-sm font-bold text-gray-800">{puzzle.question}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {game.solvedPuzzles?.includes(puzzle.id) ? (
+                      <div className="space-y-3 pl-12">
+                        <div 
+                          className="p-3 rounded-lg flex items-center gap-2 text-xs font-bold border"
+                          style={{ backgroundColor: styles.accentColor + '22', borderColor: styles.accentColor, color: styles.primaryColor }}
+                        >
+                          <CheckCircle2 size={16} /> 해결됨! {puzzle.rewardItem && `(획득: ${puzzle.rewardItem})`}
+                        </div>
+                        <div className="px-4 py-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                          <p className="text-xs text-gray-500 font-medium">정답: <span className="text-gray-900 font-bold text-sm tracking-wider">{puzzle.answer}</span></p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4 pl-12">
+                        <div className="flex flex-col gap-4">
+                          {puzzle.type === 'CHOICE' ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              {puzzle.options?.map((opt) => (
+                                <button
+                                  key={opt}
+                                  onClick={() => !isSpectator && handleSolve(puzzle.id, opt)}
+                                  disabled={isSpectator}
+                                  className="py-3 px-4 text-xs font-bold rounded-lg border-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                  style={{ 
+                                    borderColor: '#eee', 
+                                    backgroundColor: '#fff',
+                                    color: '#444'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = styles.primaryColor;
+                                    e.currentTarget.style.backgroundColor = styles.primaryColor + '11';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = '#eee';
+                                    e.currentTarget.style.backgroundColor = '#fff';
+                                  }}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          ) : puzzle.type === 'DIRECTION' ? (
+                            <div className="flex gap-4 justify-center">
+                              {[
+                                { id: '상', icon: <ArrowUp size={20} /> },
+                                { id: '하', icon: <ArrowDown size={20} /> },
+                                { id: '좌', icon: <ArrowLeft size={20} /> },
+                                { id: '우', icon: <ArrowRight size={20} /> },
+                              ].map(dir => (
+                                <button
+                                  key={dir.id}
+                                  onClick={() => !isSpectator && handleSolve(puzzle.id, dir.id)}
+                                  disabled={isSpectator}
+                                  className="w-14 h-14 flex items-center justify-center bg-white border-2 rounded-full transition-all hover:scale-110 shadow-md"
+                                  style={{ borderColor: '#eee' }}
+                                  onMouseEnter={(e) => e.currentTarget.style.borderColor = styles.primaryColor}
+                                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#eee'}
+                                >
+                                  {dir.icon}
+                                </button>
+                              ))}
+                            </div>
+                          ) : puzzle.type === 'COLOR' ? (
+                            <div className="flex gap-4 justify-center flex-wrap">
+                              {[
+                                { id: '빨강', color: '#ef4444' },
+                                { id: '초록', color: '#22c55e' },
+                                { id: '파랑', color: '#3b82f6' },
+                                { id: '노랑', color: '#eab308' },
+                                { id: '보라', color: '#a855f7' },
+                                { id: '주황', color: '#f97316' },
+                              ].map(c => (
+                                <button
+                                  key={c.id}
+                                  onClick={() => !isSpectator && handleSolve(puzzle.id, c.id)}
+                                  disabled={isSpectator}
+                                  style={{ backgroundColor: c.color }}
+                                  className="w-12 h-12 rounded-full border-4 border-white shadow-lg hover:scale-125 transition-all"
+                                  title={c.id}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex gap-3">
+                              <input 
+                                type="text" 
+                                value={answer}
+                                onChange={(e) => setAnswer(e.target.value)}
+                                placeholder={isSpectator ? "관전자 모드..." : "정답 입력..."}
+                                disabled={isSpectator}
+                                className="flex-1 px-4 py-3 rounded-lg border-2 focus:outline-none transition-all"
+                                style={{ borderColor: '#eee' }}
+                                onFocus={(e) => e.currentTarget.style.borderColor = styles.primaryColor}
+                                onBlur={(e) => e.currentTarget.style.borderColor = '#eee'}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && answer.trim() && !isSpectator) {
+                                    handleSolve(puzzle.id, answer);
+                                  }
+                                }}
+                              />
+                              <button 
+                                onClick={() => {
+                                  if (answer.trim() && !isSpectator) {
+                                    handleSolve(puzzle.id, answer);
+                                  }
+                                }}
+                                disabled={!answer.trim() || isSpectator}
+                                className="px-8 py-3 rounded-lg font-bold text-white transition-all hover:brightness-110 active:scale-95 shadow-lg"
+                                style={{ backgroundColor: styles.primaryColor }}
+                              >
+                                확인
+                              </button>
+                            </div>
+                          )}
+
+                            <div className="flex gap-3 justify-end">
+                              <button 
+                                onClick={() => !isSpectator && handleHint(puzzle.id)}
+                                disabled={isSpectator}
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all hover:bg-opacity-80"
+                                style={{ backgroundColor: styles.secondaryColor + '22', color: styles.primaryColor }}
+                              >
+                                <HelpCircle size={14} />
+                                힌트 ({game.hintsUsed || 0})
+                              </button>
+                              {puzzle.superHint && (
+                                <button 
+                                  onClick={() => !isSpectator && sessionService.useEscapeRoomSuperHint(session.id, puzzle.id, session)}
+                                  disabled={isSpectator}
+                                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all hover:bg-opacity-80"
+                                  style={{ backgroundColor: styles.accentColor + '44', color: styles.primaryColor }}
+                                >
+                                  <Sparkles size={14} />
+                                  슈퍼 힌트 ({game.superHintsUsed || 0})
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {game.isRoomCleared && (
+                  <motion.div 
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="p-8 rounded-2xl text-center space-y-6 border-4 shadow-2xl"
+                    style={{ backgroundColor: styles.accentColor + '22', borderColor: styles.accentColor }}
+                  >
+                    <div className="flex justify-center">
+                      <motion.div 
+                        animate={{ y: [0, -10, 0] }}
+                        transition={{ repeat: Infinity, duration: 2 }}
+                        className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl"
+                        style={{ backgroundColor: styles.primaryColor, color: styles.accentColor }}
+                      >
+                        <DoorOpen size={32} />
+                      </motion.div>
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-black" style={{ color: styles.primaryColor }}>ROOM CLEAR!</h3>
+                      <p className="text-sm font-medium opacity-70">모든 수수께끼를 풀었습니다. 다음 장소로 이동하시겠습니까?</p>
+                    </div>
+                    <button 
+                      onClick={() => !isSpectator && handleNextStage()}
+                      disabled={isSpectator}
+                      className="w-full py-4 rounded-xl flex items-center justify-center gap-3 text-lg font-black text-white shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+                      style={{ backgroundColor: styles.primaryColor }}
+                    >
+                      {room.nextRoomId ? '다음 방으로 이동' : '탈출 성공! 결과 확인'}
+                      <ArrowRight size={24} />
+                    </button>
+                  </motion.div>
+                )}
+
+              {game.lastClue && (
+                <div 
+                  className="p-5 rounded-xl flex items-start gap-4 shadow-md border"
+                  style={{ backgroundColor: '#fffbeb', borderColor: '#fef3c7' }}
+                >
+                  <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center shrink-0 shadow-inner">
+                    <HelpCircle className="text-amber-600" size={20} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">최근 획득한 단서</p>
+                    <p className="text-sm text-amber-900 font-bold leading-relaxed">{game.lastClue}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div 
+              className="px-6 py-4 border-t flex justify-between items-center"
+              style={{ backgroundColor: '#f8fafc' }}
+            >
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Key size={16} style={{ color: styles.accentColor }} />
+                  <span className="text-[11px] font-black text-gray-400 uppercase tracking-tighter">인벤토리</span>
+                </div>
+                <div className="flex gap-2">
+                  {game.inventory?.map((item, i) => {
+                    return (
+                      <button 
+                        key={i} 
+                        onClick={() => setExaminingItem(item === examiningItem ? null : item)}
+                        className="px-3 py-1 rounded-full text-[10px] font-bold shadow-sm border transition-all hover:scale-105 active:scale-95"
+                        style={{ 
+                          backgroundColor: examiningItem === item ? styles.primaryColor : '#fff',
+                          color: examiningItem === item ? '#fff' : '#666',
+                          borderColor: examiningItem === item ? styles.primaryColor : '#ddd'
+                        }}
+                      >
+                        {item}
+                      </button>
+                    );
+                  })}
+                  {(!game.inventory || game.inventory.length === 0) && <span className="text-[10px] text-gray-400 italic">비어 있음</span>}
+                </div>
+              </div>
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                HINTS: {game.hintsUsed || 0} | SUPER: {game.superHintsUsed || 0}
               </div>
             </div>
-          )}
+          </div>
         </div>
 
-        <div className="bg-gray-100 px-4 py-3 border-t border-gray-200 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Key size={14} className="text-yellow-600" />
-            <span className="text-[10px] font-bold text-gray-500 uppercase">인벤토리:</span>
-            <div className="flex gap-1">
-              {game.inventory?.map((item, i) => (
-                <span key={i} className="bg-white border border-gray-300 px-2 py-0.5 rounded text-[9px] font-bold text-gray-600 shadow-sm">{item}</span>
+        {/* Team Activity Column */}
+        <div className="space-y-6">
+          <div 
+            className="bg-white rounded-lg shadow-xl overflow-hidden border-2 flex flex-col h-full max-h-[600px]"
+            style={{ borderColor: styles.primaryColor }}
+          >
+            <div 
+              className="px-4 py-3 flex items-center gap-2 border-b"
+              style={{ backgroundColor: styles.primaryColor, color: '#fff' }}
+            >
+              <Users size={16} style={{ color: styles.accentColor }} />
+              <span className="text-xs font-black uppercase tracking-widest">팀 활동 로그</span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+              {game.activityLog?.slice().reverse().map((activity) => (
+                <motion.div 
+                  key={activity.id}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="p-3 rounded-lg border bg-white shadow-sm space-y-1"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-gray-800">{activity.userName}</span>
+                    <span className="text-[8px] text-gray-400">{new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ 
+                        backgroundColor: 
+                          activity.type === 'SOLVE' ? '#22c55e' : 
+                          activity.type === 'FAIL' ? '#ef4444' : 
+                          activity.type === 'HINT' ? '#eab308' : '#3b82f6'
+                      }}
+                    />
+                    <p className="text-[11px] text-gray-600 font-medium">{activity.message}</p>
+                  </div>
+                </motion.div>
               ))}
-              {(!game.inventory || game.inventory.length === 0) && <span className="text-[9px] text-gray-400 italic">비어 있음</span>}
+              {(!game.activityLog || game.activityLog.length === 0) && (
+                <div className="text-center py-8 text-gray-400 italic text-xs">활동 기록이 없습니다.</div>
+              )}
             </div>
           </div>
-          <div className="text-[9px] font-bold text-gray-400 uppercase">
-            힌트 사용량: {game.hintsUsed || 0} | 슈퍼 힌트: {game.superHintsUsed || 0}
+
+          <div 
+            className="bg-white rounded-lg shadow-xl p-4 border-2 space-y-3"
+            style={{ borderColor: styles.primaryColor }}
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} style={{ color: styles.accentColor }} />
+              <span className="text-xs font-black text-gray-800 uppercase tracking-widest">현재 팀원</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {Object.values(session.players).map((u) => (
+                <div 
+                  key={u.id}
+                  className="flex items-center gap-2 px-2 py-1 rounded-full border bg-gray-50"
+                >
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-[10px] font-bold text-gray-700">{u.nickname}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
+        <AnimatePresence>
+          {viewingExplanation && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+              onClick={() => setViewingExplanation(null)}
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                className="max-w-lg w-full bg-white rounded-3xl shadow-2xl overflow-hidden border-4"
+                style={{ borderColor: styles.accentColor }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="p-8 text-center space-y-6">
+                  <div className="flex justify-center">
+                    <div 
+                      className="w-20 h-20 rounded-full flex items-center justify-center shadow-xl"
+                      style={{ backgroundColor: styles.accentColor + '22' }}
+                    >
+                      <CheckCircle2 size={40} style={{ color: styles.accentColor }} />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: styles.accentColor }}>Puzzle Solved</p>
+                      <h4 className="text-2xl font-black text-gray-900">
+                        {Object.values(theme.rooms).flatMap(r => r.puzzles).find(p => p.id === viewingExplanation)?.question.slice(0, 30)}...
+                      </h4>
+                    </div>
+                    
+                    <div className="p-4 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                      <p className="text-xs text-gray-400 font-bold uppercase mb-1">정답</p>
+                      <p className="text-xl font-black tracking-widest text-gray-800">
+                        {Object.values(theme.rooms).flatMap(r => r.puzzles).find(p => p.id === viewingExplanation)?.answer}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 text-left">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <Info size={12} /> 해설
+                      </p>
+                      <p className="text-sm text-gray-600 leading-relaxed font-medium">
+                        {Object.values(theme.rooms).flatMap(r => r.puzzles).find(p => p.id === viewingExplanation)?.explanation || '설명이 없습니다.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => setViewingExplanation(null)}
+                    className="w-full py-4 rounded-2xl font-black text-white shadow-lg transition-all hover:brightness-110 active:scale-95"
+                    style={{ backgroundColor: styles.primaryColor }}
+                  >
+                    계속하기
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {examiningItem && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              onClick={() => setExaminingItem(null)}
+            >
+              <div 
+                className="max-w-sm w-full bg-white rounded-2xl shadow-2xl overflow-hidden border-4"
+                style={{ borderColor: styles.primaryColor }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="p-6 text-center space-y-4">
+                  <div className="flex justify-center">
+                    <div 
+                      className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl"
+                      style={{ backgroundColor: styles.primaryColor + '22' }}
+                    >
+                      <Search size={32} style={{ color: styles.primaryColor }} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-xl font-black" style={{ color: styles.primaryColor }}>{examiningItem} 조사하기</h4>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      {Object.values(theme.rooms)
+                        .flatMap(r => r.puzzles)
+                        .find(p => p.rewardItem === examiningItem)?.rewardItemExamine || '특별한 단서는 보이지 않습니다.'}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setExaminingItem(null)}
+                    className="w-full py-3 rounded-xl font-bold text-white shadow-lg"
+                    style={{ backgroundColor: styles.primaryColor }}
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

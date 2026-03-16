@@ -1,7 +1,7 @@
 import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
-import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, EscapeRoomGameState, CyberArenaGameState, ArenaProjectile, ArenaCharacter, ArenaItem } from '../types';
+import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, EscapeRoomGameState, EscapeRoomActivity, CyberArenaGameState, ArenaProjectile, ArenaCharacter, ArenaItem } from '../types';
 import { LIAR_TOPICS } from '../data/topics';
 import { DRAW_TOPICS } from '../data/drawTopics';
 import { BINGO_TOPICS } from '../data/bingoTopics';
@@ -2724,6 +2724,19 @@ export const sessionService = {
     await this.addLog(sessionId, `방탈출이 시작되었습니다. 테마: ${theme.name}`, 'success');
   },
 
+  async logEscapeRoomActivity(sessionId: string, userName: string, message: string, type: 'SOLVE' | 'HINT' | 'MOVE' | 'SYSTEM' | 'FAIL', session: Session) {
+    if (!db || !session.escapeRoomGame) return;
+    const activity: EscapeRoomActivity = {
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp: Date.now(),
+      userName,
+      message,
+      type
+    };
+    const activityLog = [...(session.escapeRoomGame.activityLog || []), activity].slice(-20);
+    await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), { activityLog });
+  },
+
   async submitEscapeRoomAnswer(sessionId: string, puzzleId: string, answer: string, session: Session) {
     if (!db || !session.escapeRoomGame) return;
     const theme = ESCAPE_ROOM_THEMES[session.escapeRoomGame.themeId];
@@ -2733,6 +2746,8 @@ export const sessionService = {
     const puzzle = room.puzzles.find(p => p.id === puzzleId);
     if (!puzzle) return;
 
+    const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
+
     if (puzzle.answer === answer.trim()) {
       const solvedPuzzles = [...(session.escapeRoomGame.solvedPuzzles || []), puzzleId];
       const inventory = [...(session.escapeRoomGame.inventory || [])];
@@ -2740,6 +2755,8 @@ export const sessionService = {
 
       const allSolved = room.puzzles.every(p => solvedPuzzles.includes(p.id));
       
+      await this.logEscapeRoomActivity(sessionId, userName, `퍼즐을 풀었습니다: ${puzzle.question.substring(0, 15)}...`, 'SOLVE', session);
+
       if (allSolved) {
         await this.addLog(sessionId, `정답입니다! ${puzzle.explanation || ''} 모든 퍼즐을 해결했습니다.`, 'success');
       } else {
@@ -2753,6 +2770,7 @@ export const sessionService = {
         isRoomCleared: allSolved
       });
     } else {
+      await this.logEscapeRoomActivity(sessionId, userName, `오답을 입력했습니다: ${answer}`, 'FAIL', session);
       await this.addLog(sessionId, '틀렸습니다. 다시 생각해보세요.', 'warning');
     }
   },
@@ -2764,7 +2782,10 @@ export const sessionService = {
     const room = theme.rooms[session.escapeRoomGame.currentRoomId];
     if (!room) return;
 
+    const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
+
     if (room.nextRoomId) {
+      await this.logEscapeRoomActivity(sessionId, userName, `다음 방으로 이동했습니다.`, 'MOVE', session);
       const nextRoom = theme.rooms[room.nextRoomId];
       await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
         currentRoomId: room.nextRoomId,
@@ -2774,6 +2795,7 @@ export const sessionService = {
       });
       await this.addLog(sessionId, `다음 방으로 이동했습니다: ${nextRoom.name}`, 'info');
     } else {
+      await this.logEscapeRoomActivity(sessionId, userName, `탈출에 성공했습니다!`, 'SYSTEM', session);
       await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
         status: 'WON',
         isRoomCleared: false
@@ -2791,6 +2813,9 @@ export const sessionService = {
     const puzzle = room.puzzles.find(p => p.id === puzzleId);
     if (!puzzle) return;
 
+    const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
+    await this.logEscapeRoomActivity(sessionId, userName, `힌트를 사용했습니다.`, 'HINT', session);
+
     await this.addLog(sessionId, `힌트 사용: ${puzzle.hint}`, 'info');
     await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
       hintsUsed: (session.escapeRoomGame.hintsUsed || 0) + 1,
@@ -2805,6 +2830,9 @@ export const sessionService = {
     const room = theme.rooms[session.escapeRoomGame.currentRoomId];
     const puzzle = room.puzzles.find(p => p.id === puzzleId);
     if (!puzzle || !puzzle.superHint) return;
+
+    const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
+    await this.logEscapeRoomActivity(sessionId, userName, `슈퍼 힌트를 사용했습니다!`, 'HINT', session);
 
     await this.addLog(sessionId, `슈퍼 힌트 사용: ${puzzle.superHint}`, 'info');
     await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
