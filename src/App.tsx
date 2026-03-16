@@ -542,10 +542,11 @@ const ArenaRebuild = () => {
           </div>
         </main>
 
-        <footer className="grid grid-cols-1 gap-4 pb-8">
+        <div id="bottom-ui" className="space-y-4 pb-8">
+          {/* 인벤토리 영역 */}
           <div className="bg-white border-4 border-gray-900 p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
             <h3 className="font-black text-sm uppercase mb-3 italic border-b-2 border-gray-100 pb-1 flex justify-between items-center">
-              EQUIPMENT
+              MY INVENTORY
               <span className="text-[10px] font-bold text-gray-400">{playerInventory.length} / 6</span>
             </h3>
             <div className="grid grid-cols-3 gap-2">
@@ -569,36 +570,43 @@ const ArenaRebuild = () => {
             </div>
           </div>
 
+          {/* 상점 영역 */}
           <div className="bg-white border-4 border-gray-900 p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
             <h3 className="font-black text-sm uppercase mb-3 italic border-b-2 border-gray-100 pb-1">ARENA SHOP</h3>
-            <div className="h-[150px] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+            <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar snap-x">
               {items.map((item) => (
                 <div 
                   key={item.id} 
-                  onClick={() => buyItem(item)}
-                  className={`flex items-center justify-between p-2 border-2 border-gray-900 rounded-xl transition-all cursor-pointer group ${playerGold >= item.price ? 'bg-gray-50 hover:bg-yellow-50' : 'bg-gray-200 opacity-50 cursor-not-allowed'}`}
+                  className={`min-w-[140px] flex-shrink-0 flex flex-col p-3 border-2 border-gray-900 rounded-xl transition-all snap-start ${playerGold >= item.price ? 'bg-gray-50' : 'bg-gray-200 opacity-70'}`}
                 >
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-gray-200 border-2 border-gray-900 rounded-lg flex items-center justify-center">
-                      <Package size={16} className="text-gray-600" />
-                    </div>
-                    <div>
-                      <p className="font-black text-xs uppercase leading-none">{item.name}</p>
-                      <div className="flex gap-1 mt-0.5">
-                        {item.tags.map(tag => (
-                          <span key={tag} className="text-[7px] bg-white border border-gray-300 px-1 rounded font-bold text-gray-500">#{tag}</span>
-                        ))}
-                      </div>
+                  <div className="w-10 h-10 bg-gray-200 border-2 border-gray-900 rounded-lg flex items-center justify-center mb-2 mx-auto">
+                    <Package size={20} className="text-gray-600" />
+                  </div>
+                  <div className="text-center mb-2">
+                    <p className="font-black text-xs uppercase leading-tight h-8 flex items-center justify-center">{item.name}</p>
+                    <div className="flex justify-center gap-1 mt-1">
+                      {item.tags.map(tag => (
+                        <span key={tag} className="text-[7px] bg-white border border-gray-300 px-1 rounded font-bold text-gray-500">#{tag}</span>
+                      ))}
                     </div>
                   </div>
-                  <div className={`border-2 border-gray-900 px-2 py-0.5 font-black text-[10px] transition-transform flex items-center gap-1 ${playerGold >= item.price ? 'bg-yellow-400 group-hover:scale-105' : 'bg-gray-300'}`}>
-                    <Coins size={10} /> {item.price}
+                  <div className="mt-auto space-y-2">
+                    <div className="flex items-center justify-center gap-1 font-black text-xs">
+                      <Coins size={12} className="text-yellow-600" /> {item.price}G
+                    </div>
+                    <button 
+                      onClick={() => buyItem(item)}
+                      disabled={playerGold < item.price || playerInventory.length >= 6}
+                      className={`w-full py-1.5 border-2 border-gray-900 font-black text-[10px] uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all ${playerGold >= item.price && playerInventory.length < 6 ? 'bg-yellow-400 hover:bg-yellow-300' : 'bg-gray-300 cursor-not-allowed'}`}
+                    >
+                      BUY
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        </footer>
+        </div>
       </div>
 
       <style>{`
