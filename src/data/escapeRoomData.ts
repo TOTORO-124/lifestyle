@@ -1,4 +1,4 @@
-export type PuzzleType = 'TEXT' | 'DIRECTION' | 'COLOR' | 'PATTERN' | 'CHOICE';
+export type PuzzleType = 'TEXT' | 'DIRECTION' | 'COLOR' | 'PATTERN' | 'CHOICE' | 'HIDDEN_OBJECT' | 'SLIDE_PUZZLE' | 'CUBE_PATTERN';
 
 export interface Puzzle {
   id: string;
@@ -12,6 +12,12 @@ export interface Puzzle {
   rewardItem?: string;
   rewardItemExamine?: string; // 아이템 조사 시 나타나는 텍스트
   requiredItem?: string;
+  // New fields for advanced puzzles
+  imageUrl?: string;
+  hiddenObjects?: { id: string; x: number; y: number; width: number; height: number; name: string }[];
+  gridSize?: number;
+  initialGrid?: number[];
+  targetPattern?: string[][];
 }
 
 export interface Room {
@@ -515,6 +521,158 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             hint: '광화문이 있는 곳입니다.',
             superHint: 'ㄱㅂㄱ',
             explanation: '경복궁입니다. 담장을 넘자마자 암행어사의 마패가 빛납니다. 당신은 무사히 억울함을 풀었습니다!'
+          }
+        ]
+      }
+    }
+  },
+  'museum': {
+    id: 'museum',
+    name: '박물관 괴도',
+    genre: '잠입',
+    description: '전설적인 보석 "푸른 별"이 전시된 박물관에 잠입했습니다. 보안 시스템이 가동되기 전에 보석을 훔쳐 탈출해야 합니다.',
+    difficulty: 'NORMAL',
+    startRoomId: 'm_room_1',
+    styles: {
+      primaryColor: '#0f172a',
+      secondaryColor: '#1e293b',
+      bgColor: '#020617',
+      accentColor: '#38bdf8',
+      fontFamily: 'sans-serif'
+    },
+    rooms: {
+      'm_room_1': {
+        id: 'm_room_1',
+        name: '전시실 입구',
+        description: '어두운 복도에 레이저 보안 장치가 깔려 있습니다.',
+        puzzles: [
+          {
+            id: 'm_p1_1',
+            type: 'HIDDEN_OBJECT',
+            question: '보안실 열쇠를 찾으세요.',
+            answer: 'key_found',
+            hint: '책상 아래나 화분 뒤를 살펴보세요.',
+            imageUrl: 'https://picsum.photos/seed/museum_lobby/800/600',
+            hiddenObjects: [
+              { id: 'key_found', x: 70, y: 80, width: 10, height: 10, name: '보안실 열쇠' }
+            ],
+            explanation: '보안실 열쇠를 찾았습니다! 이제 레이저를 끌 수 있습니다.'
+          }
+        ],
+        nextRoomId: 'm_room_2'
+      },
+      'm_room_2': {
+        id: 'm_room_2',
+        name: '보안실',
+        description: '복잡한 회로가 얽힌 제어판이 보입니다.',
+        puzzles: [
+          {
+            id: 'm_p2_1',
+            type: 'SLIDE_PUZZLE',
+            question: '회로를 복구하여 보안을 해제하세요.',
+            answer: 'solved',
+            hint: '조각을 밀어서 그림을 완성하세요.',
+            gridSize: 3,
+            initialGrid: [1, 2, 3, 4, 5, 6, 7, 0, 8], // Almost solved for demo
+            explanation: '회로가 복구되었습니다! 중앙 전시실의 문이 열립니다.'
+          }
+        ],
+        nextRoomId: 'm_room_3'
+      },
+      'm_room_3': {
+        id: 'm_room_3',
+        name: '중앙 전시실',
+        description: '중앙에 "푸른 별" 보석이 찬란하게 빛나고 있습니다.',
+        puzzles: [
+          {
+            id: 'm_p3_1',
+            type: 'CUBE_PATTERN',
+            question: '보석함의 암호를 맞추세요. (3x3 패턴)',
+            answer: '101010101',
+            hint: 'X자 모양으로 버튼을 누르세요.',
+            targetPattern: [
+              ['X', 'O', 'X'],
+              ['O', 'X', 'O'],
+              ['X', 'O', 'X']
+            ],
+            explanation: '보석함이 열렸습니다! 푸른 별을 획득하고 무사히 탈출했습니다.'
+          }
+        ]
+      }
+    }
+  },
+  'temple': {
+    id: 'temple',
+    name: '고대 사원의 비밀',
+    genre: '어드벤처',
+    description: '정글 깊숙한 곳, 잊혀진 고대 사원을 발견했습니다. 사원의 함정을 피해 황금 우상을 찾아야 합니다.',
+    difficulty: 'HARD',
+    startRoomId: 't_room_1',
+    styles: {
+      primaryColor: '#422006',
+      secondaryColor: '#713f12',
+      bgColor: '#1c1917',
+      accentColor: '#fbbf24',
+      fontFamily: 'serif'
+    },
+    rooms: {
+      't_room_1': {
+        id: 't_room_1',
+        name: '사원 입구',
+        description: '거대한 돌문이 앞을 가로막고 있습니다.',
+        puzzles: [
+          {
+            id: 't_p1_1',
+            type: 'HIDDEN_OBJECT',
+            question: '돌문에 끼울 수 있는 문양 조각 3개를 찾으세요.',
+            answer: 'all_found',
+            hint: '넝쿨 사이와 돌 틈을 잘 보세요.',
+            imageUrl: 'https://picsum.photos/seed/temple_entrance/800/600',
+            hiddenObjects: [
+              { id: 'obj1', x: 20, y: 30, width: 8, height: 8, name: '태양 문양' },
+              { id: 'obj2', x: 50, y: 70, width: 8, height: 8, name: '달 문양' },
+              { id: 'obj3', x: 80, y: 40, width: 8, height: 8, name: '별 문양' }
+            ],
+            explanation: '모든 문양을 찾았습니다! 돌문이 굉음을 내며 열립니다.'
+          }
+        ],
+        nextRoomId: 't_room_2'
+      },
+      't_room_2': {
+        id: 't_room_2',
+        name: '미로의 방',
+        description: '벽면이 움직이며 길을 잃게 만듭니다.',
+        puzzles: [
+          {
+            id: 't_p2_1',
+            type: 'SLIDE_PUZZLE',
+            question: '지도를 완성하여 길을 찾으세요.',
+            answer: 'solved',
+            hint: '빈 공간을 이용해 조각을 옮기세요.',
+            gridSize: 4,
+            initialGrid: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 15],
+            explanation: '지도가 완성되었습니다! 안전한 통로를 발견했습니다.'
+          }
+        ],
+        nextRoomId: 't_room_3'
+      },
+      't_room_3': {
+        id: 't_room_3',
+        name: '황금 우상의 방',
+        description: '제단 위에 황금 우상이 놓여 있습니다. 무게를 맞춰야 합니다.',
+        puzzles: [
+          {
+            id: 't_p3_1',
+            type: 'CUBE_PATTERN',
+            question: '제단의 무게 감지 센서를 무력화하세요.',
+            answer: '111000111',
+            hint: '위아래 줄을 모두 채우세요.',
+            targetPattern: [
+              ['X', 'X', 'X'],
+              ['O', 'O', 'O'],
+              ['X', 'X', 'X']
+            ],
+            explanation: '센서가 무력화되었습니다! 황금 우상을 챙겨 사원을 빠져나갑니다.'
           }
         ]
       }

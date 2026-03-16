@@ -6,6 +6,7 @@ const SOUNDS = {
   door: 'https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3',
   hint: 'https://assets.mixkit.co/active_storage/sfx/2015/2015-preview.mp3',
   clear: 'https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3',
+  gameover: 'https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3',
 };
 
 class SoundManager {

@@ -2712,7 +2712,7 @@ export const sessionService = {
       solvedPuzzles: [],
       inventory: [],
       startTime: Date.now(),
-      timeLimit: settings.escapeRoomDifficulty === 'EASY' ? 1800 : settings.escapeRoomDifficulty === 'HARD' ? 600 : 1200,
+      timeLimit: settings.escapeRoomDifficulty === 'EASY' ? 900 : settings.escapeRoomDifficulty === 'HARD' ? 300 : 600,
       status: 'PLAYING',
       hintsUsed: 0,
       superHintsUsed: 0
@@ -2803,6 +2803,17 @@ export const sessionService = {
       await this.addLog(sessionId, '축하합니다! 모든 방을 탈출했습니다!', 'success');
       await this.advanceStatus(sessionId, SessionStatus.SUMMARY);
     }
+  },
+
+  async failEscapeRoom(sessionId: string, session: Session) {
+    if (!db || !session.escapeRoomGame || session.escapeRoomGame.status !== 'PLAYING') return;
+    
+    await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+      status: 'LOST',
+      isRoomCleared: false
+    });
+    await this.addLog(sessionId, '시간이 초과되었습니다. 탈출에 실패했습니다...', 'error');
+    await this.advanceStatus(sessionId, SessionStatus.SUMMARY);
   },
   
   async useEscapeRoomHint(sessionId: string, puzzleId: string, session: Session) {

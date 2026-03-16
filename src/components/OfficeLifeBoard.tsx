@@ -647,7 +647,7 @@ export const OfficeLifeBoard: React.FC<Props> = ({ session, currentUser }) => {
                   .sort((a: any, b: any) => b.timestamp - a.timestamp)
                   .slice(0, 50)
                   .map((log: any, idx) => (
-                  <div key={idx} className="text-[10px] leading-tight border-b border-gray-50 pb-1 last:border-0 animate-in fade-in slide-in-from-top-1">
+                  <div key={log.id || idx} className="text-[10px] leading-tight border-b border-gray-50 pb-1 last:border-0 animate-in fade-in slide-in-from-top-1">
                     <span className="text-gray-400 text-[8px] mr-1">
                       {new Date(log.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>

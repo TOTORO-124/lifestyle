@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Session, Player, SessionStatus, GameType, LiarMode, MafiaRole, MafiaPhase, GameLog, UserProfile, Department } from './types';
 import { sessionService } from './services/sessionService';
-import { isConfigured } from './firebase';
+import { isConfigured, auth } from './firebase';
 import { soundManager } from './utils/sound';
 import { Chat } from './components/Chat';
 import { LIAR_TOPICS } from './data/topics';
@@ -11,6 +11,9 @@ import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
 import { OfficeLifeBoard } from './components/OfficeLifeBoard';
 import { UserProfileCard } from './components/UserProfileCard';
+import { HiddenObjectPuzzle } from './components/HiddenObjectPuzzle';
+import { SlidePuzzle } from './components/SlidePuzzle';
+import { CubePuzzle } from './components/CubePuzzle';
 import { ESCAPE_ROOM_THEMES } from './data/escapeRoomData';
 import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS, SYNERGIES } from './data/cyberArenaData';
 import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, EyeOff, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2, Coffee, StickyNote, Zap, Skull, ShieldCheck, Activity, Key, DoorOpen, Sword, ZapOff, Heart, ShieldAlert, Cpu, Coins, Package, Target, ShoppingBag, ChevronRight, Star, Info, Trash2, Sparkles } from 'lucide-react';
@@ -26,9 +29,9 @@ const LogTicker = ({ logs }: { logs: GameLog[] }) => {
         </span>
       </div>
       <div className="p-1.5 md:p-2 space-y-1">
-        {latestLogs.slice(0, window.innerWidth < 768 ? 1 : 3).map((log) => (
+        {latestLogs.slice(0, window.innerWidth < 768 ? 1 : 3).map((log, idx) => (
           <motion.div 
-            key={log.id}
+            key={`${log.id}-${idx}`}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             className="text-[9px] md:text-[10px] flex gap-2 items-start"
@@ -249,8 +252,24 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
     }
   }, [timeLeft, isTimeLow, lastTick]);
 
+  // Handle game over
+  useEffect(() => {
+    if (timeLeft === 0 && game.status === 'PLAYING' && session.hostId === auth.currentUser?.uid) {
+      soundManager.play('gameover');
+      sessionService.failEscapeRoom(session.id, session);
+    }
+  }, [timeLeft, game.status, session.hostId, session.id, session]);
+
+  // Play clear sound when room is cleared
+  useEffect(() => {
+    if (game.isRoomCleared) {
+      soundManager.play('clear');
+    }
+  }, [game.isRoomCleared]);
+
   // Summary Screen
   if (session.status === SessionStatus.SUMMARY) {
+    const isWin = game.status === 'WON';
     const timeTaken = Math.floor((Date.now() - game.startTime) / 1000);
     const minutes = Math.floor(timeTaken / 60);
     const seconds = timeTaken % 60;
@@ -261,23 +280,27 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="max-w-2xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden border-8"
-          style={{ borderColor: styles.primaryColor }}
+          style={{ borderColor: isWin ? styles.primaryColor : '#ef4444' }}
         >
           <div className="p-12 text-center space-y-8">
             <div className="flex justify-center">
               <motion.div 
-                animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }}
+                animate={isWin ? { rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] } : { y: [0, -10, 0] }}
                 transition={{ repeat: Infinity, duration: 4 }}
                 className="w-24 h-24 rounded-full flex items-center justify-center shadow-2xl"
-                style={{ backgroundColor: styles.primaryColor, color: styles.accentColor }}
+                style={{ backgroundColor: isWin ? styles.primaryColor : '#ef4444', color: styles.accentColor }}
               >
-                <Trophy size={48} />
+                {isWin ? <Trophy size={48} /> : <Skull size={48} />}
               </motion.div>
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-4xl font-black tracking-tighter" style={{ color: styles.primaryColor }}>ESCAPE SUCCESS!</h2>
-              <p className="text-gray-500 font-medium">축하합니다! 무사히 탈출에 성공하셨습니다.</p>
+              <h2 className="text-4xl font-black tracking-tighter" style={{ color: isWin ? styles.primaryColor : '#ef4444' }}>
+                {isWin ? 'ESCAPE SUCCESS!' : 'MISSION FAILED'}
+              </h2>
+              <p className="text-gray-500 font-medium">
+                {isWin ? '축하합니다! 무사히 탈출에 성공하셨습니다.' : '시간이 초과되었습니다. 다음 기회에 도전하세요.'}
+              </p>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -399,16 +422,41 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
           </div>
         )}
         {game.themeId === 'mystery' && (
-          <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_20%,black_150%)]" />
+          <div className="absolute inset-0">
+            <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_20%,black_150%)]" />
+            {[...Array(10)].map((_, i) => (
+              <motion.div
+                key={i}
+                animate={{ 
+                  x: [Math.random() * 1000, Math.random() * 1000],
+                  y: [Math.random() * 600, Math.random() * 600],
+                  opacity: [0, 0.2, 0],
+                  scale: [1, 2, 1]
+                }}
+                transition={{ repeat: Infinity, duration: 10 + Math.random() * 10 }}
+                className="absolute w-32 h-32 bg-gray-500/10 rounded-full blur-3xl"
+              />
+            ))}
+          </div>
         )}
         {game.themeId === 'historical' && (
-          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/paper-fibers.png")' }} />
+          <div className="absolute inset-0">
+            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/paper-fibers.png")' }} />
+            <div className="absolute inset-0 bg-orange-900/5 mix-blend-sepia" />
+          </div>
         )}
       </div>
 
       <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
-        <div className="lg:col-span-2 space-y-6">
-          {lastSolvedPuzzle && (
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={room.id}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="lg:col-span-2 space-y-6"
+          >
+            {lastSolvedPuzzle && (
             <motion.div 
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -498,11 +546,29 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
                     ) : (
                       <div className="space-y-4 pl-12">
                         <div className="flex flex-col gap-4">
-                          {puzzle.type === 'CHOICE' ? (
+                          {puzzle.type === 'HIDDEN_OBJECT' ? (
+                            <HiddenObjectPuzzle 
+                              puzzle={puzzle} 
+                              onSolve={(ans) => handleSolve(puzzle.id, ans)} 
+                              isSpectator={isSpectator} 
+                            />
+                          ) : puzzle.type === 'SLIDE_PUZZLE' ? (
+                            <SlidePuzzle 
+                              puzzle={puzzle} 
+                              onSolve={(ans) => handleSolve(puzzle.id, ans)} 
+                              isSpectator={isSpectator} 
+                            />
+                          ) : puzzle.type === 'CUBE_PATTERN' ? (
+                            <CubePuzzle 
+                              puzzle={puzzle} 
+                              onSolve={(ans) => handleSolve(puzzle.id, ans)} 
+                              isSpectator={isSpectator} 
+                            />
+                          ) : puzzle.type === 'CHOICE' ? (
                             <div className="grid grid-cols-2 gap-3">
-                              {puzzle.options?.map((opt) => (
+                              {puzzle.options?.map((opt, idx) => (
                                 <button
-                                  key={opt}
+                                  key={`${opt}-${idx}`}
                                   onClick={() => !isSpectator && handleSolve(puzzle.id, opt)}
                                   disabled={isSpectator}
                                   className="py-3 px-4 text-xs font-bold rounded-lg border-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
@@ -710,7 +776,8 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
+      </AnimatePresence>
 
         {/* Team Activity Column */}
         <div className="space-y-6">
@@ -726,9 +793,9 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
               <span className="text-xs font-black uppercase tracking-widest">팀 활동 로그</span>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-              {game.activityLog?.slice().reverse().map((activity) => (
+              {game.activityLog?.slice().reverse().map((activity, idx) => (
                 <motion.div 
-                  key={activity.id}
+                  key={`${activity.id}-${idx}`}
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   className="p-3 rounded-lg border bg-white shadow-sm space-y-1"
@@ -780,6 +847,41 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
         </div>
 
         <AnimatePresence>
+          {game.isRoomCleared && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            >
+              <motion.div 
+                initial={{ scale: 0.5, y: 50 }}
+                animate={{ scale: 1, y: 0 }}
+                className="text-center space-y-6 p-12 bg-white rounded-3xl shadow-2xl border-4"
+                style={{ borderColor: styles.accentColor }}
+              >
+                <motion.div 
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ repeat: Infinity, duration: 2 }}
+                  className="inline-block p-4 rounded-full bg-green-100 text-green-600"
+                >
+                  <DoorOpen size={64} />
+                </motion.div>
+                <div className="space-y-2">
+                  <h3 className="text-4xl font-black tracking-tighter text-gray-900 uppercase">Room Cleared!</h3>
+                  <p className="text-gray-500 font-bold">모든 퍼즐을 해결했습니다. 다음 방으로 이동하세요.</p>
+                </div>
+                <button 
+                  onClick={handleNextStage}
+                  className="px-12 py-4 rounded-2xl font-black text-white shadow-xl transition-all hover:scale-105 active:scale-95"
+                  style={{ backgroundColor: styles.primaryColor }}
+                >
+                  다음 방으로 이동
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+
           {viewingExplanation && (
             <motion.div 
               initial={{ opacity: 0 }}
@@ -1874,8 +1976,8 @@ const ArenaRebuild = () => {
             <h3 className="font-black text-[10px] uppercase mb-2 italic text-gray-400">Active Synergies</h3>
             <div className="flex flex-col gap-1.5">
               {activeSynergies.length > 0 ? (
-                activeSynergies.map(s => (
-                  <div key={s} className="bg-purple-600 text-white px-3 py-1 rounded-lg text-[10px] font-black animate-pulse border-2 border-gray-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] w-fit">
+                activeSynergies.map((s, idx) => (
+                  <div key={`${s}-${idx}`} className="bg-purple-600 text-white px-3 py-1 rounded-lg text-[10px] font-black animate-pulse border-2 border-gray-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] w-fit">
                     {s} 발동!
                   </div>
                 ))
@@ -1927,8 +2029,8 @@ const ArenaRebuild = () => {
                   <div className="text-center mb-2">
                     <p className="font-black text-xs uppercase leading-tight h-8 flex items-center justify-center">{item.name}</p>
                     <div className="flex justify-center gap-1 mt-1">
-                      {item.tags.map(tag => (
-                        <span key={tag} className="text-[7px] bg-white border border-gray-300 px-1 rounded font-bold text-gray-500">#{tag}</span>
+                      {item.tags.map((tag, idx) => (
+                        <span key={`${tag}-${idx}`} className="text-[7px] bg-white border border-gray-300 px-1 rounded font-bold text-gray-500">#{tag}</span>
                       ))}
                     </div>
                   </div>
@@ -3076,7 +3178,7 @@ export default function App() {
                               onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, liarCategory: e.target.value })}
                             >
                               <option value="랜덤">랜덤</option>
-                              {LIAR_TOPICS.map(t => <option key={t.category} value={t.category}>{t.category}</option>)}
+                              {LIAR_TOPICS.map((t, idx) => <option key={`${t.category}-${idx}`} value={t.category}>{t.category}</option>)}
                             </select>
                           </div>
                         </div>
@@ -3189,9 +3291,9 @@ export default function App() {
                               value={session.settings.escapeRoomDifficulty || 'NORMAL'}
                               onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, escapeRoomDifficulty: e.target.value })}
                             >
-                              <option value="EASY">쉬움 (30분)</option>
-                              <option value="NORMAL">보통 (20분)</option>
-                              <option value="HARD">어려움 (10분)</option>
+                              <option value="EASY">쉬움 (15분)</option>
+                              <option value="NORMAL">보통 (10분)</option>
+                              <option value="HARD">어려움 (5분)</option>
                             </select>
                           </div>
                         </div>
@@ -3372,7 +3474,7 @@ export default function App() {
                               onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, bingoCategory: e.target.value })}
                             >
                               <option value="랜덤">랜덤</option>
-                              {BINGO_TOPICS.map(t => <option key={t.category} value={t.category}>{t.category}</option>)}
+                              {BINGO_TOPICS.map((t, idx) => <option key={`${t.category}-${idx}`} value={t.category}>{t.category}</option>)}
                             </select>
                           </div>
                         </div>
@@ -3412,7 +3514,7 @@ export default function App() {
                               onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, drawCategory: e.target.value })}
                             >
                               <option value="랜덤">랜덤</option>
-                              {DRAW_TOPICS.map(t => <option key={t.category} value={t.category}>{t.category}</option>)}
+                              {DRAW_TOPICS.map((t, idx) => <option key={`${t.category}-${idx}`} value={t.category}>{t.category}</option>)}
                             </select>
                           </div>
                         </div>
@@ -3624,9 +3726,9 @@ export default function App() {
                         {(session.bingoGame?.category === '랜덤' 
                           ? Array.from(new Set(BINGO_TOPICS.flatMap(t => t.words)))
                           : Array.from(new Set(BINGO_TOPICS.find(t => t.category === session.bingoGame?.category)?.words || []))
-                        ).map(word => (
+                        ).map((word, idx) => (
                           <button
-                            key={word}
+                            key={`${word}-${idx}`}
                             onClick={() => {
                               if (bingoSubmitted) return;
                               // Find first empty cell
@@ -5407,7 +5509,7 @@ export default function App() {
                   </thead>
                   <tbody>
                     {(Object.values(session.logs || {}) as GameLog[]).sort((a, b) => b.timestamp - a.timestamp).map((log, idx) => (
-                      <tr key={log.id}>
+                      <tr key={`${log.id}-${idx}`}>
                         <td className="bg-[#f8f9fa] border-r border-b border-[#d1d1d1] text-[9px] font-bold text-[#999] text-center">{idx + 1}</td>
                         <td className="excel-cell font-mono text-[10px]">
                           {new Date(log.timestamp).toLocaleTimeString()}
