@@ -9,7 +9,7 @@ import { OFFICE_LIFE_BOARD } from '../data/officeLifeBoard';
 import { CHANCE_CARDS } from '../data/chanceCards';
 import { OFFICE_ITEMS } from '../data/officeItems';
 import { OFFICE_RANKS, OFFICE_ROLES } from '../data/officeRanks';
-import { ESCAPE_ROOM_DATA } from '../data/escapeRoomData';
+import { ESCAPE_ROOM_THEMES } from '../data/escapeRoomData';
 import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS } from '../data/cyberArenaData';
 
 export const sessionService = {
@@ -89,6 +89,7 @@ export const sessionService = {
         doctorCount: 1,
         policeCount: 1,
         escapeRoomDifficulty: 'NORMAL',
+        escapeRoomThemeId: 'horror',
         cyberArenaPvE: true,
       },
     };
@@ -2702,27 +2703,33 @@ export const sessionService = {
   },
 
   // --- Escape Room ---
-  async startEscapeRoom(sessionId: string, settings: any) {
+  async startEscapeRoom(sessionId: string, themeId: string, settings: any) {
     if (!db) return;
+    const theme = ESCAPE_ROOM_THEMES[themeId] || ESCAPE_ROOM_THEMES['horror'];
     const escapeRoomGame: EscapeRoomGameState = {
-      currentRoomId: 'room_1',
+      themeId: theme.id,
+      currentRoomId: theme.startRoomId,
       solvedPuzzles: [],
       inventory: [],
       startTime: Date.now(),
       timeLimit: settings.escapeRoomDifficulty === 'EASY' ? 1800 : settings.escapeRoomDifficulty === 'HARD' ? 600 : 1200,
       status: 'PLAYING',
-      hintsUsed: 0
+      hintsUsed: 0,
+      superHintsUsed: 0
     };
     await update(ref(db, `sessions/${sessionId}`), {
       status: SessionStatus.PLAYING,
       escapeRoomGame
     });
-    await this.addLog(sessionId, '방탈출이 시작되었습니다. 첫 번째 방을 탐색하세요!', 'success');
+    await this.addLog(sessionId, `방탈출이 시작되었습니다. 테마: ${theme.name}`, 'success');
   },
 
   async submitEscapeRoomAnswer(sessionId: string, puzzleId: string, answer: string, session: Session) {
     if (!db || !session.escapeRoomGame) return;
-    const room = ESCAPE_ROOM_DATA[session.escapeRoomGame.currentRoomId];
+    const theme = ESCAPE_ROOM_THEMES[session.escapeRoomGame.themeId];
+    if (!theme) return;
+    const room = theme.rooms[session.escapeRoomGame.currentRoomId];
+    if (!room) return;
     const puzzle = room.puzzles.find(p => p.id === puzzleId);
     if (!puzzle) return;
 
@@ -2738,7 +2745,7 @@ export const sessionService = {
       if (allSolved) {
         if (room.nextRoomId) {
           nextRoomId = room.nextRoomId;
-          await this.addLog(sessionId, `방을 탈출했습니다! 다음 방: ${ESCAPE_ROOM_DATA[nextRoomId].name}`, 'success');
+          await this.addLog(sessionId, `방을 탈출했습니다! 다음 방: ${theme.rooms[nextRoomId].name}`, 'success');
         } else {
           status = 'WON';
           await this.addLog(sessionId, '축하합니다! 모든 방을 탈출했습니다!', 'success');
@@ -2761,13 +2768,31 @@ export const sessionService = {
   
   async useEscapeRoomHint(sessionId: string, puzzleId: string, session: Session) {
     if (!db || !session.escapeRoomGame) return;
-    const room = ESCAPE_ROOM_DATA[session.escapeRoomGame.currentRoomId];
+    const theme = ESCAPE_ROOM_THEMES[session.escapeRoomGame.themeId];
+    if (!theme) return;
+    const room = theme.rooms[session.escapeRoomGame.currentRoomId];
     const puzzle = room.puzzles.find(p => p.id === puzzleId);
     if (!puzzle) return;
 
     await this.addLog(sessionId, `힌트 사용: ${puzzle.hint}`, 'info');
     await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
-      hintsUsed: (session.escapeRoomGame.hintsUsed || 0) + 1
+      hintsUsed: (session.escapeRoomGame.hintsUsed || 0) + 1,
+      lastClue: puzzle.hint
+    });
+  },
+
+  async useEscapeRoomSuperHint(sessionId: string, puzzleId: string, session: Session) {
+    if (!db || !session.escapeRoomGame) return;
+    const theme = ESCAPE_ROOM_THEMES[session.escapeRoomGame.themeId];
+    if (!theme) return;
+    const room = theme.rooms[session.escapeRoomGame.currentRoomId];
+    const puzzle = room.puzzles.find(p => p.id === puzzleId);
+    if (!puzzle || !puzzle.superHint) return;
+
+    await this.addLog(sessionId, `슈퍼 힌트 사용: ${puzzle.superHint}`, 'info');
+    await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+      superHintsUsed: (session.escapeRoomGame.superHintsUsed || 0) + 1,
+      lastClue: `[슈퍼 힌트] ${puzzle.superHint}`
     });
   },
 

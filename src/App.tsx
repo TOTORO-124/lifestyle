@@ -10,9 +10,9 @@ import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
 import { OfficeLifeBoard } from './components/OfficeLifeBoard';
 import { UserProfileCard } from './components/UserProfileCard';
-import { ESCAPE_ROOM_DATA } from './data/escapeRoomData';
+import { ESCAPE_ROOM_THEMES } from './data/escapeRoomData';
 import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS, SYNERGIES } from './data/cyberArenaData';
-import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, EyeOff, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2, Coffee, StickyNote, Zap, Skull, ShieldCheck, Activity, Key, DoorOpen, Sword, ZapOff, Heart, ShieldAlert, Cpu, Coins, Package, Target, ShoppingBag, ChevronRight, Star, Info, Trash2 } from 'lucide-react';
+import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, EyeOff, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2, Coffee, StickyNote, Zap, Skull, ShieldCheck, Activity, Key, DoorOpen, Sword, ZapOff, Heart, ShieldAlert, Cpu, Coins, Package, Target, ShoppingBag, ChevronRight, Star, Info, Trash2, Sparkles } from 'lucide-react';
 
 const LogTicker = ({ logs }: { logs: GameLog[] }) => {
   const latestLogs = [...Object.values(logs || {})].sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
@@ -196,8 +196,16 @@ const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], 
 const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session, currentUser: any, isSpectator: boolean }) => {
   const game = session.escapeRoomGame;
   if (!game) return null;
-  const room = ESCAPE_ROOM_DATA[game.currentRoomId];
+  const theme = ESCAPE_ROOM_THEMES[game.themeId] || ESCAPE_ROOM_THEMES['horror'];
+  const room = theme.rooms[game.currentRoomId];
   const [answer, setAnswer] = useState('');
+
+  if (!room) return <div className="p-8 text-center text-gray-500">방 정보를 불러올 수 없습니다.</div>;
+
+  const handleSolve = (puzzleId: string, val: string) => {
+    sessionService.submitEscapeRoomAnswer(session.id, puzzleId, val, session);
+    setAnswer('');
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -205,7 +213,7 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
         <div className="bg-[#217346] text-white px-4 py-2 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <DoorOpen size={16} />
-            <span className="text-xs font-bold uppercase tracking-widest">{room.name}</span>
+            <span className="text-xs font-bold uppercase tracking-widest">{theme.name} - {room.name}</span>
           </div>
           <div className="flex items-center gap-3 text-[10px] font-mono">
             <Timer size={12} />
@@ -218,12 +226,17 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
             <p className="text-sm text-gray-700 leading-relaxed italic">"{room.description}"</p>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-8">
             {room.puzzles.map((puzzle) => (
-              <div key={puzzle.id} className="space-y-4">
+              <div key={puzzle.id} className="space-y-4 p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors">
                 <div className="flex items-start gap-3">
                   <div className="w-6 h-6 bg-[#217346] text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">?</div>
-                  <p className="text-sm font-medium text-gray-800">{puzzle.question}</p>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded uppercase tracking-tighter">{puzzle.type}</span>
+                      <p className="text-sm font-medium text-gray-800">{puzzle.question}</p>
+                    </div>
+                  </div>
                 </div>
 
                 {game.solvedPuzzles?.includes(puzzle.id) ? (
@@ -231,46 +244,129 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
                     <CheckCircle2 size={14} /> 해결됨! {puzzle.rewardItem && `(획득: ${puzzle.rewardItem})`}
                   </div>
                 ) : (
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      value={answer}
-                      onChange={(e) => setAnswer(e.target.value)}
-                      placeholder={isSpectator ? "관전자 모드입니다..." : "정답을 입력하세요..."}
-                      disabled={isSpectator}
-                      className="flex-1 office-input py-2"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && answer.trim() && !isSpectator) {
-                          sessionService.submitEscapeRoomAnswer(session.id, puzzle.id, answer, session);
-                          setAnswer('');
-                        }
-                      }}
-                    />
-                    <button 
-                      onClick={() => {
-                        if (answer.trim() && !isSpectator) {
-                          sessionService.submitEscapeRoomAnswer(session.id, puzzle.id, answer, session);
-                          setAnswer('');
-                        }
-                      }}
-                      disabled={isSpectator}
-                      className="office-btn-primary px-6"
-                    >
-                      확인
-                    </button>
-                    <button 
-                      onClick={() => !isSpectator && sessionService.useEscapeRoomHint(session.id, puzzle.id, session)}
-                      disabled={isSpectator}
-                      className="office-btn-secondary px-3"
-                      title="힌트 보기"
-                    >
-                      <HelpCircle size={16} />
-                    </button>
+                  <div className="space-y-3">
+                    <div className="flex flex-col gap-3">
+                      {puzzle.type === 'CHOICE' ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          {puzzle.options?.map((opt) => (
+                            <button
+                              key={opt}
+                              onClick={() => !isSpectator && handleSolve(puzzle.id, opt)}
+                              disabled={isSpectator}
+                              className="py-2 px-4 text-xs font-bold rounded border-2 border-gray-200 bg-white text-gray-700 hover:border-[#217346] hover:bg-gray-50 transition-all"
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      ) : puzzle.type === 'DIRECTION' ? (
+                        <div className="flex gap-3 justify-center">
+                          {[
+                            { id: '상', icon: <ArrowUp size={18} /> },
+                            { id: '하', icon: <ArrowDown size={18} /> },
+                            { id: '좌', icon: <ArrowLeft size={18} /> },
+                            { id: '우', icon: <ArrowRight size={18} /> },
+                          ].map(dir => (
+                            <button
+                              key={dir.id}
+                              onClick={() => !isSpectator && handleSolve(puzzle.id, dir.id)}
+                              disabled={isSpectator}
+                              className="w-12 h-12 flex items-center justify-center bg-white border-2 border-gray-200 rounded-full hover:border-[#217346] hover:bg-gray-50 transition-all shadow-sm"
+                              title={dir.id}
+                            >
+                              {dir.icon}
+                            </button>
+                          ))}
+                        </div>
+                      ) : puzzle.type === 'COLOR' ? (
+                        <div className="flex gap-3 justify-center">
+                          {[
+                            { id: '빨강', color: '#ef4444' },
+                            { id: '초록', color: '#22c55e' },
+                            { id: '파랑', color: '#3b82f6' },
+                            { id: '노랑', color: '#eab308' },
+                            { id: '보라', color: '#a855f7' },
+                            { id: '주황', color: '#f97316' },
+                          ].map(c => (
+                            <button
+                              key={c.id}
+                              onClick={() => !isSpectator && handleSolve(puzzle.id, c.id)}
+                              disabled={isSpectator}
+                              style={{ backgroundColor: c.color }}
+                              className="w-10 h-10 rounded-full border-2 border-white shadow-md hover:scale-110 transition-all"
+                              title={c.id}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <input 
+                            type="text" 
+                            value={answer}
+                            onChange={(e) => setAnswer(e.target.value)}
+                            placeholder={isSpectator ? "관전자 모드입니다..." : "정답을 입력하세요..."}
+                            disabled={isSpectator}
+                            className="flex-1 office-input py-2"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && answer.trim() && !isSpectator) {
+                                handleSolve(puzzle.id, answer);
+                              }
+                            }}
+                          />
+                          <button 
+                            onClick={() => {
+                              if (answer.trim() && !isSpectator) {
+                                handleSolve(puzzle.id, answer);
+                              }
+                            }}
+                            disabled={!answer.trim() || isSpectator}
+                            className="office-btn-primary px-6"
+                          >
+                            확인
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2 justify-end">
+                        <button 
+                          onClick={() => !isSpectator && sessionService.useEscapeRoomHint(session.id, puzzle.id, session)}
+                          disabled={isSpectator}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold hover:bg-blue-100 transition-colors"
+                          title="일반 힌트"
+                        >
+                          <HelpCircle size={14} />
+                          힌트 ({game.hintsUsed || 0})
+                        </button>
+                        {puzzle.superHint && (
+                          <button 
+                            onClick={() => !isSpectator && sessionService.useEscapeRoomSuperHint(session.id, puzzle.id, session)}
+                            disabled={isSpectator}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded text-[10px] font-bold hover:bg-purple-100 transition-colors"
+                            title="슈퍼 힌트 (정답에 가까운 힌트)"
+                          >
+                            <Sparkles size={14} />
+                            슈퍼 힌트 ({game.superHintsUsed || 0})
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
             ))}
           </div>
+
+          {game.lastClue && (
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg flex items-start gap-3 shadow-sm">
+              <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+                <HelpCircle className="text-amber-600" size={18} />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest">최근 획득한 단서</p>
+                <p className="text-sm text-amber-900 font-medium leading-relaxed">{game.lastClue}</p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="bg-gray-100 px-4 py-3 border-t border-gray-200 flex justify-between items-center">
@@ -279,10 +375,13 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
             <span className="text-[10px] font-bold text-gray-500 uppercase">인벤토리:</span>
             <div className="flex gap-1">
               {game.inventory?.map((item, i) => (
-                <span key={i} className="bg-white border border-gray-300 px-2 py-0.5 rounded text-[9px] font-bold text-gray-600">{item}</span>
+                <span key={i} className="bg-white border border-gray-300 px-2 py-0.5 rounded text-[9px] font-bold text-gray-600 shadow-sm">{item}</span>
               ))}
               {(!game.inventory || game.inventory.length === 0) && <span className="text-[9px] text-gray-400 italic">비어 있음</span>}
             </div>
+          </div>
+          <div className="text-[9px] font-bold text-gray-400 uppercase">
+            힌트 사용량: {game.hintsUsed || 0} | 슈퍼 힌트: {game.superHintsUsed || 0}
           </div>
         </div>
       </div>
@@ -290,53 +389,391 @@ const EscapeRoomUI = ({ session, currentUser, isSpectator }: { session: Session,
   );
 };
 
+// [타이머 및 루프 중앙 관리용 Ref 인터페이스]
+interface ArenaTimers {
+  phaseTimer: any;
+  animationId: any;
+  minionInterval: any;
+  battleInterval: any;
+  enemyBattleInterval: any;
+  countdownInterval: any;
+}
+
 const ArenaRebuild = () => {
+  // [Ref 선언] 타이머 및 루프 중앙 관리
+  const timers = useRef<ArenaTimers>({
+    phaseTimer: null,
+    animationId: null,
+    minionInterval: null,
+    battleInterval: null,
+    enemyBattleInterval: null,
+    countdownInterval: null
+  });
   // [데이터 구조화] 캐릭터 데이터
   const characters = [
-    { id: 'milkjin', name: '밀크진(우유)', maxHp: 150, currentHp: 150, attackPower: 10, attackSpeed: 1.0, defense: 20, passiveName: '단단한 유막' },
-    { id: 'sodachan', name: '소다찬(탄산)', maxHp: 100, currentHp: 100, attackPower: 25, attackSpeed: 1.8, defense: 5, passiveName: '톡 쏘는 기포' },
-    { id: 'coffee', name: '커피', maxHp: 110, currentHp: 110, attackPower: 15, attackSpeed: 1.5, defense: 10, passiveName: '카페인 각성' },
-    { id: 'ion', name: '이온음료', maxHp: 120, currentHp: 120, attackPower: 12, attackSpeed: 1.2, defense: 15, passiveName: '수분 흡수' },
-    { id: 'vitamin', name: '비타민', maxHp: 105, currentHp: 105, attackPower: 18, attackSpeed: 1.6, defense: 8, passiveName: '피로 회복' },
+    { id: 'milk', name: '우유(밸런스)', maxHp: 150, currentHp: 150, attackPower: 15, attackSpeed: 1.0, defense: 15, speed: 3, evasion: 5, passiveName: '단단한 유막', color: '#3b82f6' },
+    { id: 'soda', name: '탄산(공격)', maxHp: 100, currentHp: 100, attackPower: 25, attackSpeed: 1.8, defense: 5, speed: 3.5, evasion: 5, passiveName: '톡 쏘는 기포', color: '#ef4444' },
+    { id: 'coffee', name: '커피(회피)', maxHp: 110, currentHp: 110, attackPower: 18, attackSpeed: 1.4, defense: 10, speed: 4, evasion: 25, passiveName: '카페인 각성', color: '#78350f' },
+    { id: 'ion', name: '이온(탱커)', maxHp: 220, currentHp: 220, attackPower: 12, attackSpeed: 1.1, defense: 25, speed: 2.5, evasion: 0, passiveName: '수분 흡수', color: '#10b981' },
+    { id: 'vitamin', name: '비타민(신속)', maxHp: 105, currentHp: 105, attackPower: 20, attackSpeed: 1.6, defense: 8, speed: 4.5, evasion: 15, passiveName: '피로 회복', color: '#fbbf24' },
   ];
 
-  // [데이터 구조화] 아이템 데이터
-  const items = [
-    { id: 'ice_cube', name: '꽁꽁 얼음', price: 10, statBoost: { attackPower: 5 }, tags: ['얼음'] },
-    { id: 'sugar_pack', name: '달콤 설탕', price: 15, statBoost: { attackSpeed: 0.2 }, tags: ['설탕'] },
-    { id: 'caffeine_pill', name: '고농축 카페인', price: 20, statBoost: { attackPower: 10 }, tags: ['카페인'] },
-    { id: 'protein_powder', name: '근육 단백질', price: 25, statBoost: { maxHp: 30 }, tags: ['단백질'] },
-    { id: 'lemon_slice', name: '상큼 레몬', price: 12, statBoost: { defense: 5 }, tags: ['비타민'] },
+  // [데이터 구조화] 50가지 아이템 데이터 생성
+  const tags = ['얼음', '설탕', '카페인', '탄산', '과일', '단백질', '강철'];
+  const itemNames = [
+    '녹슨 검', '가죽 갑옷', '속도의 장화', '생명력의 반지', '날카로운 단검',
+    '강철 방패', '마법사의 지팡이', '민첩의 망토', '힘의 벨트', '수호의 펜던트',
+    '화염의 검', '얼음의 방패', '번개의 장화', '독이 든 단검', '성스러운 갑옷',
+    '암흑의 망토', '빛의 지팡이', '대지의 망토', '바람의 장화', '바다의 반지',
+    '드래곤 슬레이어', '티타늄 방패', '광속의 신발', '불사조의 깃털', '거인의 장갑',
+    '요정의 가루', '고대인의 유산', '미스릴 갑옷', '사신의 낫', '천사의 날개',
+    '발뭉', '이지스', '헤르메스의 신발', '성배', '묠니르',
+    '궁니르', '엑스칼리버', '무라마사', '마사무네', '간장',
+    '막야', '청룡언월도', '장팔사모', '방천화극', '의천검',
+    '청강검', '칠성검', '유성추', '곤봉', '목검'
   ];
+
+  const items = itemNames.map((name, i) => {
+    const tag1 = tags[i % tags.length];
+    const tag2 = i % 5 === 0 ? tags[(i + 3) % tags.length] : null;
+    const price = 5 + (i % 8) * 5 + Math.floor(i / 10) * 5;
+    
+    // 스탯 다양화
+    const statType = i % 4;
+    return {
+      id: `item_${i}`,
+      name,
+      price,
+      statBoost: {
+        attackPower: statType === 0 ? 5 + Math.floor(i / 5) : 0,
+        attackSpeed: statType === 1 ? 0.1 + (i % 5) * 0.05 : 0,
+        defense: statType === 2 ? 3 + Math.floor(i / 6) : 0,
+        maxHp: statType === 3 ? 20 + (i % 10) * 5 : 0,
+      },
+      tags: tag2 ? [tag1, tag2] : [tag1]
+    };
+  });
 
   // [게임 상태 변수]
   const [currentRound, setCurrentRound] = useState(1);
   const [playerGold, setPlayerGold] = useState(20);
   const [playerInventory, setPlayerInventory] = useState<any[]>([]);
+  const [enemyInventory, setEnemyInventory] = useState<any[]>([]);
+  const [baseStats, setBaseStats] = useState<any>(null);
   const [playerStats, setPlayerStats] = useState<any>(null);
   const [enemyStats, setEnemyStats] = useState<any>(null);
+
+  // [Ref 선언] 최신 스탯 참조용 (클로저 문제 해결)
+  const playerStatsRef = useRef<any>(null);
+  const enemyStatsRef = useRef<any>(null);
+
+  useEffect(() => {
+    playerStatsRef.current = playerStats;
+  }, [playerStats]);
+
+  useEffect(() => {
+    enemyStatsRef.current = enemyStats;
+  }, [enemyStats]);
+  const [playerWins, setPlayerWins] = useState(0);
+  const [enemyWins, setEnemyWins] = useState(0);
+  const [finalWinner, setFinalWinner] = useState<string | null>(null);
+  const [enemyGrowthMessage, setEnemyGrowthMessage] = useState<string | null>(null);
+  const [currentPhase, setCurrentPhase] = useState<'SELECT' | 'FARMING' | 'SHOP' | 'BATTLE'>('SELECT');
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [evasionLog, setEvasionLog] = useState<{ x: number, y: number, text: string } | null>(null);
   
   // [전투 관련 상태]
   const [isBattleActive, setIsBattleActive] = useState(false);
   const [battleWinner, setBattleWinner] = useState<string | null>(null);
+  const [activeSynergies, setActiveSynergies] = useState<string[]>([]);
+  const isRoundOver = useRef(false);
+  
+  // [Canvas 게임 관련 상태]
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [playerPos, setPlayerPos] = useState({ x: 250, y: 200 });
+  const playerPosRef = useRef({ x: 250, y: 200 });
+  const [minions, setMinions] = useState<any[]>([]);
+  const minionsRef = useRef<any[]>([]);
+  const keysPressed = useRef<{ [key: string]: boolean }>({});
+
+  // [초기 렌더링 함수]
+  useEffect(() => {
+    return () => {
+      clearAllTimers();
+    };
+  }, []);
+
+  const clearAllTimers = () => {
+    if (timers.current.phaseTimer) clearTimeout(timers.current.phaseTimer);
+    if (timers.current.minionInterval) clearInterval(timers.current.minionInterval);
+    if (timers.current.battleInterval) clearInterval(timers.current.battleInterval);
+    if (timers.current.enemyBattleInterval) clearInterval(timers.current.enemyBattleInterval);
+    if (timers.current.countdownInterval) clearInterval(timers.current.countdownInterval);
+    if (timers.current.animationId) cancelAnimationFrame(timers.current.animationId);
+    
+    timers.current = {
+      phaseTimer: null,
+      animationId: null,
+      minionInterval: null,
+      battleInterval: null,
+      enemyBattleInterval: null,
+      countdownInterval: null
+    };
+
+    if (playerAttackTimer.current) clearInterval(playerAttackTimer.current);
+    if (enemyAttackTimer.current) clearInterval(enemyAttackTimer.current);
+    playerAttackTimer.current = null;
+    enemyAttackTimer.current = null;
+    setIsBattleActive(false);
+  };
+
+  const startPhase = (phase: 'SELECT' | 'FARMING' | 'SHOP' | 'BATTLE') => {
+    // 1. 모든 타이머 및 루프 강제 초기화
+    clearAllTimers();
+    setCurrentPhase(phase);
+    resetInput();
+
+    if (phase === 'FARMING') {
+      setTimeLeft(20);
+      spawnMinions(8);
+      
+      // 미니언 생성 루프
+      timers.current.minionInterval = setInterval(() => {
+        const types = [
+          { type: 'small', size: 10, gold: 2, hp: 1, speed: 1.2, color: '#fbbf24' },
+          { type: 'medium', size: 18, gold: 5, hp: 3, speed: 0.8, color: '#f59e0b' },
+          { type: 'large', size: 30, gold: 10, hp: 8, speed: 0.5, color: '#d97706' },
+        ];
+        const t = types[Math.floor(Math.random() * types.length)];
+        const newMinion = {
+          id: Math.random(),
+          x: Math.random() * 460 + 20,
+          y: Math.random() * 360 + 20,
+          ...t,
+          currentHp: t.hp
+        };
+        
+        if (minionsRef.current.length < 15) {
+          const updatedMinions = [...minionsRef.current, newMinion];
+          minionsRef.current = updatedMinions;
+          setMinions(updatedMinions);
+        }
+      }, 2000);
+
+      // 애니메이션 루프
+      timers.current.animationId = requestAnimationFrame(update);
+      
+      // 페이즈 전환 예약
+      timers.current.phaseTimer = setTimeout(() => startPhase('SHOP'), 20000);
+      
+      // UI 카운트다운
+      timers.current.countdownInterval = setInterval(() => {
+        setTimeLeft(prev => prev > 0 ? prev - 1 : 0);
+      }, 1000);
+    } 
+    else if (phase === 'SHOP') {
+      setTimeLeft(10);
+      // 상점 페이즈 전환 예약
+      timers.current.phaseTimer = setTimeout(() => startPhase('BATTLE'), 10000);
+      
+      // UI 카운트다운
+      timers.current.countdownInterval = setInterval(() => {
+        setTimeLeft(prev => prev > 0 ? prev - 1 : 0);
+      }, 1000);
+    } 
+    else if (phase === 'BATTLE') {
+      setTimeLeft(0);
+      // 약간의 지연 후 전투 시작 (UI 전환 보장)
+      setTimeout(() => {
+        startBattle();
+      }, 500);
+    }
+  };
+
+  const selectCharacter = (charId: string) => {
+    const p = characters.find(c => c.id === charId);
+    const randomEnemyChar = characters[Math.floor(Math.random() * characters.length)];
+    if (p) {
+      setBaseStats({ ...p });
+      setPlayerStats({ ...p });
+      setEnemyStats({ ...randomEnemyChar });
+      startPhase('FARMING');
+    }
+  };
+
+  const spawnMinions = (count: number) => {
+    const types = [
+      { type: 'small', size: 10, gold: 2, hp: 1, speed: 1.5, color: '#fbbf24' },
+      { type: 'medium', size: 18, gold: 5, hp: 3, speed: 1.0, color: '#f59e0b' },
+      { type: 'large', size: 30, gold: 10, hp: 8, speed: 0.6, color: '#d97706' },
+    ];
+    const newMinions = Array.from({ length: count }).map(() => {
+      const t = types[Math.floor(Math.random() * types.length)];
+      return {
+        id: Math.random(),
+        x: Math.random() * 460 + 20,
+        y: Math.random() * 360 + 20,
+        ...t,
+        currentHp: t.hp
+      };
+    });
+    const updatedMinions = [...minionsRef.current, ...newMinions];
+    minionsRef.current = updatedMinions;
+    setMinions(updatedMinions);
+  };
+
+  // [키보드 이벤트 리스너]
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      keysPressed.current[e.key.toLowerCase()] = true;
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysPressed.current[e.key.toLowerCase()] = false;
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // [게임 루프]
+  const update = () => {
+    // FARMING 페이즈가 아니거나 스탯이 없으면 루프 중단
+    if (currentPhase !== 'FARMING' || !playerStats) {
+      if (timers.current.animationId) cancelAnimationFrame(timers.current.animationId);
+      return;
+    }
+
+    // 플레이어 이동 계산
+    const speed = playerStats?.speed || 3;
+    let nextX = playerPosRef.current.x;
+    let nextY = playerPosRef.current.y;
+
+    if (keysPressed.current['w'] || keysPressed.current['arrowup']) nextY -= speed;
+    if (keysPressed.current['s'] || keysPressed.current['arrowdown']) nextY += speed;
+    if (keysPressed.current['a'] || keysPressed.current['arrowleft']) nextX -= speed;
+    if (keysPressed.current['d'] || keysPressed.current['arrowright']) nextX += speed;
+
+    nextX = Math.max(15, Math.min(485, nextX));
+    nextY = Math.max(15, Math.min(385, nextY));
+
+    playerPosRef.current = { x: nextX, y: nextY };
+    setPlayerPos({ x: nextX, y: nextY });
+
+    // 미니언 AI 및 충돌 판정
+    const nextMinions = minionsRef.current.map(m => {
+      // 추적 AI: 부드러운 소수점 이동
+      const dx = playerPosRef.current.x - m.x;
+      const dy = playerPosRef.current.y - m.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 1) {
+        m.x += (dx / dist) * m.speed;
+        m.y += (dy / dist) * m.speed;
+      }
+      return m;
+    });
+
+    const remainingMinions = nextMinions.filter(m => {
+      const dist = Math.sqrt(Math.pow(m.x - playerPosRef.current.x, 2) + Math.pow(m.y - playerPosRef.current.y, 2));
+      if (dist < 20) {
+        // 플레이어 피격 (하드코어)
+        setPlayerStats((prev: any) => ({
+          ...prev,
+          currentHp: Math.max(0, prev.currentHp - (m.type === 'large' ? 2 : 1))
+        }));
+        setPlayerGold(gold => gold + m.gold);
+        return false;
+      }
+      return true;
+    });
+
+    minionsRef.current = remainingMinions;
+    setMinions(remainingMinions);
+
+    draw();
+    timers.current.animationId = requestAnimationFrame(update);
+  };
+
+  const draw = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // 캔버스 클리어 (매 프레임 한 번)
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = '#374151';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < canvas.width; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+    for (let i = 0; i < canvas.height; i += 40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
+
+    minionsRef.current.forEach(m => {
+      ctx.fillStyle = m.color;
+      ctx.fillRect(m.x - m.size / 2, m.y - m.size / 2, m.size, m.size);
+    });
+
+    ctx.fillStyle = playerStats.color || '#3b82f6';
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.fillRect(playerPosRef.current.x - 15, playerPosRef.current.y - 15, 30, 30);
+    ctx.strokeRect(playerPosRef.current.x - 15, playerPosRef.current.y - 15, 30, 30);
+    
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(playerStats.name, playerPosRef.current.x, playerPosRef.current.y - 20);
+  };
+
+  useEffect(() => {
+    if (currentPhase === 'FARMING') {
+      timers.current.animationId = requestAnimationFrame(update);
+    }
+    return () => {
+      if (timers.current.animationId) cancelAnimationFrame(timers.current.animationId);
+    };
+  }, [currentPhase]);
+
+  // [승리 조건 체크]
+  const checkWinCondition = (pWins: number, eWins: number) => {
+    if (pWins >= 3) {
+      setFinalWinner(playerStats?.name || 'PLAYER');
+      stopAllTimers();
+      return true;
+    } else if (eWins >= 3) {
+      setFinalWinner(enemyStats?.name || 'ENEMY');
+      stopAllTimers();
+      return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    checkWinCondition(playerWins, enemyWins);
+  }, [playerWins, enemyWins]);
+
+  // [가상 방향키 제어 함수]
+  const handleDpad = (key: string, isPressed: boolean) => {
+    keysPressed.current[key] = isPressed;
+  };
+
+  // [입력 초기화 함수]
+  const resetInput = () => {
+    keysPressed.current = {};
+  };
+
   const playerAttackTimer = useRef<any>(null);
   const enemyAttackTimer = useRef<any>(null);
 
-  // [초기 렌더링 함수] initGame
-  useEffect(() => {
-    const initGame = () => {
-      const p = characters.find(c => c.id === 'milkjin');
-      const e = characters.find(c => c.id === 'sodachan');
-      if (p && e) {
-        setPlayerStats({ ...p });
-        setEnemyStats({ ...e });
-      }
-    };
-    initGame();
-    return () => stopAllTimers();
-  }, []);
-
   const stopAllTimers = () => {
+    if (timers.current.battleInterval) clearInterval(timers.current.battleInterval);
+    if (timers.current.enemyBattleInterval) clearInterval(timers.current.enemyBattleInterval);
     if (playerAttackTimer.current) clearInterval(playerAttackTimer.current);
     if (enemyAttackTimer.current) clearInterval(enemyAttackTimer.current);
     playerAttackTimer.current = null;
@@ -346,106 +783,396 @@ const ArenaRebuild = () => {
 
   // [전투 로직] startBattle
   const startBattle = () => {
-    if (isBattleActive || battleWinner) return;
-    setIsBattleActive(true);
+    if (!playerStats || !enemyStats) {
+      console.warn("Battle started without stats!", { playerStats, enemyStats });
+      return;
+    }
+    
+    // 이미 전투 중이거나 승패가 결정된 경우 중복 실행 방지
+    if (isBattleActive || battleWinner || finalWinner) {
+      console.log("Battle already active or finished, skipping startBattle.");
+      return;
+    }
 
-    // 1. 밀크진(플레이어)이 소다찬(적)을 때리는 독립적인 타이머
-    playerAttackTimer.current = setInterval(() => {
+    console.log("Starting Battle Loop...");
+    setIsBattleActive(true);
+    isRoundOver.current = false;
+
+    const getDamageLocal = (attacker: any, defender: any, isAttackerPlayer: boolean) => {
+      // 스탯 안전장치 (undefined 방지)
+      const atkPower = Number(attacker?.attackPower) || 0;
+      const defPower = Number(defender?.defense) || 0;
+      const evasion = Number(defender?.evasion) || 0;
+
+      // 회피 로직
+      if (Math.random() * 100 < evasion) {
+        setEvasionLog({ x: isAttackerPlayer ? 300 : 100, y: 150, text: 'EVADED!' });
+        setTimeout(() => setEvasionLog(null), 500);
+        return { damage: 0, isEvaded: true };
+      }
+      
+      // 시너지 효과 반영 (statsUpdate에서 합산된 값들)
+      const atkMult = Number(attacker?.atkMult) || 1;
+      const effectiveAtk = atkPower * atkMult;
+      
+      const armorPen = Number(attacker?.armorPen) || 0;
+      const bonusDef = Number(defender?.bonusDef) || 0;
+      const effectiveDefense = Math.max(0, (defPower + bonusDef) - armorPen);
+      
+      const damage = Math.max(1, Math.floor(effectiveAtk - effectiveDefense));
+      return { damage, isEvaded: false };
+    };
+
+    // 설탕 시너지 (재생)
+    const regenInterval = setInterval(() => {
+      if (isRoundOver.current) {
+        clearInterval(regenInterval);
+        return;
+      }
+      setPlayerStats((p: any) => {
+        if (p?.regen) return { ...p, currentHp: Math.min(p.maxHp, p.currentHp + p.regen) };
+        return p;
+      });
+      setEnemyStats((e: any) => {
+        if (e?.regen) return { ...e, currentHp: Math.min(e.maxHp, e.currentHp + e.regen) };
+        return e;
+      });
+    }, 1000);
+
+    const pAtkSpeed = Math.max(0.1, playerStatsRef.current?.attackSpeed || 1);
+    const pAtkSpeedMult = Math.max(0.1, playerStatsRef.current?.attackSpeedMult || 1);
+    const pInterval = (1 / (pAtkSpeed * pAtkSpeedMult)) * 1000;
+
+    console.log(`Player Attack Interval: ${pInterval}ms`);
+
+    timers.current.battleInterval = setInterval(() => {
       setEnemyStats((prevE: any) => {
-        if (!prevE || prevE.currentHp <= 0) return prevE;
-        const damage = Math.max(1, playerStats.attackPower - prevE.defense);
-        const nextHp = Math.max(0, prevE.currentHp - damage);
+        const currentPlayerStats = playerStatsRef.current;
+        if (!prevE || prevE.currentHp <= 0 || isRoundOver.current || !currentPlayerStats) return prevE;
         
+        const { damage, isEvaded } = getDamageLocal(currentPlayerStats, prevE, true);
+        if (isEvaded) return prevE;
+
+        const nextHp = Math.max(0, prevE.currentHp - damage);
+        console.log(`Player deals ${damage} damage. Enemy HP: ${nextHp}`);
+        
+        // 흡혈 시너지
+        if (currentPlayerStats?.lifesteal && damage > 0) {
+          setPlayerStats((p: any) => ({ ...p, currentHp: Math.min(p.maxHp, p.currentHp + damage * currentPlayerStats.lifesteal) }));
+        }
+
         if (nextHp <= 0) {
+          isRoundOver.current = true;
+          console.log("Enemy Defeated!");
           stopAllTimers();
-          setBattleWinner(playerStats.name);
+          clearInterval(regenInterval);
+          setBattleWinner(currentPlayerStats?.name || 'PLAYER');
+          
+          const newWins = playerWins + 1;
+          setPlayerWins(newWins);
+          
+          const isFinal = checkWinCondition(newWins, enemyWins);
+          if (!isFinal) {
+            setTimeout(() => nextRound(), 3000);
+          }
         }
         return { ...prevE, currentHp: nextHp };
       });
-    }, (1 / playerStats.attackSpeed) * 1000); 
+    }, pInterval); 
 
-    // 2. 소다찬(적)이 밀크진(플레이어)을 때리는 독립적인 타이머
-    enemyAttackTimer.current = setInterval(() => {
+    const eAtkSpeed = Math.max(0.1, enemyStatsRef.current?.attackSpeed || 1);
+    const eAtkSpeedMult = Math.max(0.1, enemyStatsRef.current?.attackSpeedMult || 1);
+    const eInterval = (1 / (eAtkSpeed * eAtkSpeedMult)) * 1000;
+
+    console.log(`Enemy Attack Interval: ${eInterval}ms`);
+
+    timers.current.enemyBattleInterval = setInterval(() => {
       setPlayerStats((prevP: any) => {
-        if (!prevP || prevP.currentHp <= 0) return prevP;
-        const damage = Math.max(1, enemyStats.attackPower - prevP.defense);
+        const currentEnemyStats = enemyStatsRef.current;
+        if (!prevP || prevP.currentHp <= 0 || isRoundOver.current || !currentEnemyStats) return prevP;
+        
+        const { damage, isEvaded } = getDamageLocal(currentEnemyStats, prevP, false);
+        if (isEvaded) return prevP;
+
         const nextHp = Math.max(0, prevP.currentHp - damage);
+        console.log(`Enemy deals ${damage} damage. Player HP: ${nextHp}`);
         
         if (nextHp <= 0) {
+          isRoundOver.current = true;
+          console.log("Player Defeated!");
           stopAllTimers();
-          setBattleWinner(enemyStats.name);
+          clearInterval(regenInterval);
+          setBattleWinner(currentEnemyStats?.name || 'ENEMY');
+          
+          const newWins = enemyWins + 1;
+          setEnemyWins(newWins);
+          
+          const isFinal = checkWinCondition(playerWins, newWins);
+          if (!isFinal) {
+            setTimeout(() => nextRound(), 3000);
+          }
         }
         return { ...prevP, currentHp: nextHp };
       });
-    }, (1 / enemyStats.attackSpeed) * 1000);
+    }, eInterval);
+  };
+
+  // [시너지 체크 함수]
+  const getSynergyEffects = (inventory: any[]) => {
+    const tagCounts: { [key: string]: number } = {};
+    inventory.forEach(item => {
+      item.tags.forEach((tag: string) => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      });
+    });
+
+    const synergies: string[] = [];
+    const statsUpdate: any = {
+      attackSpeedMult: 1,
+      armorPen: 0,
+      atkMult: 1,
+      lifesteal: 0,
+      bonusDef: 0,
+      regen: 0
+    };
+
+    if (tagCounts['얼음'] >= 6) synergies.push('빙결(6)');
+    else if (tagCounts['얼음'] >= 4) synergies.push('빙결(4)');
+    else if (tagCounts['얼음'] >= 2) synergies.push('빙결(2)');
+
+    if (tagCounts['설탕'] >= 6) statsUpdate.regen = 10;
+    else if (tagCounts['설탕'] >= 4) statsUpdate.regen = 5;
+    else if (tagCounts['설탕'] >= 2) statsUpdate.regen = 2;
+
+    if (tagCounts['카페인'] >= 6) statsUpdate.attackSpeedMult = 1.8;
+    else if (tagCounts['카페인'] >= 4) statsUpdate.attackSpeedMult = 1.45;
+    else if (tagCounts['카페인'] >= 2) statsUpdate.attackSpeedMult = 1.2;
+
+    if (tagCounts['탄산'] >= 6) statsUpdate.armorPen = 50;
+    else if (tagCounts['탄산'] >= 4) statsUpdate.armorPen = 25;
+    else if (tagCounts['탄산'] >= 2) statsUpdate.armorPen = 10;
+
+    if (tagCounts['과일'] >= 6) statsUpdate.atkMult = 1.6;
+    else if (tagCounts['과일'] >= 4) statsUpdate.atkMult = 1.35;
+    else if (tagCounts['과일'] >= 2) statsUpdate.atkMult = 1.15;
+
+    if (tagCounts['단백질'] >= 6) statsUpdate.lifesteal = 0.4;
+    else if (tagCounts['단백질'] >= 4) statsUpdate.lifesteal = 0.2;
+    else if (tagCounts['단백질'] >= 2) statsUpdate.lifesteal = 0.1;
+
+    if (tagCounts['강철'] >= 6) statsUpdate.bonusDef = 70;
+    else if (tagCounts['강철'] >= 4) statsUpdate.bonusDef = 30;
+    else if (tagCounts['강철'] >= 2) statsUpdate.bonusDef = 10;
+
+    return { synergies, statsUpdate };
+  };
+
+  // [스탯 통합 정산 함수]
+  const updatePlayerStats = (inventory: any[]) => {
+    if (!baseStats) return;
+    
+    // 1. 기본 스탯으로 리셋
+    let next = { ...baseStats };
+    
+    // 2. 아이템 스탯 합산
+    inventory.forEach(item => {
+      if (item.statBoost.attackPower) next.attackPower += item.statBoost.attackPower;
+      if (item.statBoost.attackSpeed) next.attackSpeed += item.statBoost.attackSpeed;
+      if (item.statBoost.defense) next.defense += item.statBoost.defense;
+      if (item.statBoost.maxHp) next.maxHp += item.statBoost.maxHp;
+    });
+
+    // 3. 시너지 체크 및 합산
+    const { synergies, statsUpdate } = getSynergyEffects(inventory);
+    next = { ...next, ...statsUpdate };
+    
+    // 4. 상태 업데이트
+    setActiveSynergies(synergies);
+    setPlayerStats(next);
   };
 
   // [아이템 구매 함수]
   const buyItem = (item: any) => {
-    if (playerInventory.length >= 6) {
-      console.log("인벤토리가 가득 찼습니다!");
-      return;
-    }
-    if (playerGold < item.price) {
-      console.log("골드가 부족합니다!");
-      return;
-    }
+    if (playerInventory.length >= 6) return;
+    if (playerGold < item.price) return;
 
-    // 골드 차감 및 인벤토리 추가
+    const newInventory = [...playerInventory, item];
     setPlayerGold(prev => prev - item.price);
-    setPlayerInventory(prev => [...prev, item]);
+    setPlayerInventory(newInventory);
 
-    // 스탯 즉시 적용
-    setPlayerStats((prev: any) => {
-      const next = { ...prev };
-      if (item.statBoost.attackPower) next.attackPower += item.statBoost.attackPower;
-      if (item.statBoost.attackSpeed) next.attackSpeed += item.statBoost.attackSpeed;
-      if (item.statBoost.defense) next.defense += item.statBoost.defense;
-      if (item.statBoost.maxHp) {
-        next.maxHp += item.statBoost.maxHp;
-        next.currentHp += item.statBoost.maxHp; // 최대 체력 증가 시 현재 체력도 보정
-      }
-      return next;
-    });
+    // 통합 정산 함수 호출
+    updatePlayerStats(newInventory);
   };
 
   // [다음 라운드 진행]
   const nextRound = () => {
-    stopAllTimers();
+    if (finalWinner || !playerStats || !enemyStats) return; 
+
+    clearAllTimers();
+    isRoundOver.current = false;
     
-    // 골드 시스템: 승리 10G, 패배 15G
-    const isPlayerWinner = battleWinner === playerStats.name;
+    const isPlayerWinner = battleWinner === playerStats?.name;
     const reward = isPlayerWinner ? 10 : 15;
     setPlayerGold(prev => prev + reward);
 
     setCurrentRound(prev => prev + 1);
     setBattleWinner(null);
     
-    // 체력 회복 및 스탯 유지 (인벤토리 기반 재계산)
-    const baseP = characters.find(c => c.id === 'milkjin');
-    const baseE = characters.find(c => c.id === 'sodachan');
+    // 체력 회복
+    setPlayerStats((prev: any) => ({
+      ...prev,
+      currentHp: prev.maxHp
+    }));
+
+    // 적군 강화 로직
+    const randomItemCount = Math.floor(Math.random() * 2) + 1;
+    const selectedItems: any[] = [];
     
-    if (baseP && baseE) {
-      // 플레이어는 현재 인벤토리의 스탯 보너스를 유지한 채 체력만 풀회복
-      setPlayerStats((prev: any) => ({
-        ...prev,
-        currentHp: prev.maxHp
-      }));
-      // 적은 라운드마다 강해지도록 설정 (선택 사항이나 밸런스를 위해 기본값 유지)
-      setEnemyStats({ ...baseE });
-    }
+    setEnemyStats((prev: any) => {
+      const next = { ...prev, currentHp: prev.maxHp };
+      for (let i = 0; i < randomItemCount; i++) {
+        const randomIndex = Math.floor(Math.random() * items.length);
+        const item = items[randomIndex];
+        selectedItems.push(item);
+        if (item.statBoost.attackPower) next.attackPower += item.statBoost.attackPower;
+        if (item.statBoost.attackSpeed) next.attackSpeed += item.statBoost.attackSpeed;
+        if (item.statBoost.defense) next.defense += item.statBoost.defense;
+        if (item.statBoost.maxHp) {
+          next.maxHp += item.statBoost.maxHp;
+          next.currentHp += item.statBoost.maxHp;
+        }
+      }
+      return next;
+    });
+
+    const newEnemyInventory = [...enemyInventory, ...selectedItems];
+    setEnemyInventory(newEnemyInventory);
+    
+    // 적군 시너지 체크 (간소화)
+    const { statsUpdate } = getSynergyEffects(newEnemyInventory);
+    setEnemyStats((prev: any) => ({ ...prev, ...statsUpdate }));
+
+    const itemNames = selectedItems.map(it => it.name).join(', ');
+    setEnemyGrowthMessage(`적이 [${itemNames}]을(를) 장착하여 강해졌습니다!`);
+    setTimeout(() => setEnemyGrowthMessage(null), 3000);
+
+    startPhase('FARMING');
   };
 
-  if (!playerStats || !enemyStats) return <div className="p-10 text-center font-black">LOADING ARENA...</div>;
+  // [새 게임 시작 함수]
+  const startNewGame = () => {
+    clearAllTimers();
+    resetInput();
+    isRoundOver.current = false;
+    setCurrentPhase('SELECT');
+    setTimeLeft(0);
+    setCurrentRound(1);
+    setPlayerGold(20);
+    setPlayerInventory([]);
+    setEnemyInventory([]);
+    setPlayerWins(0);
+    setEnemyWins(0);
+    setFinalWinner(null);
+    setBattleWinner(null);
+    setActiveSynergies([]);
+    setEnemyGrowthMessage(null);
+    setPlayerStats(null);
+    setEnemyStats(null);
+    setBaseStats(null);
+    playerPosRef.current = { x: 250, y: 200 };
+    setPlayerPos({ x: 250, y: 200 });
+    minionsRef.current = [];
+    setMinions([]);
+  };
+
+  if (currentPhase === 'SELECT' || !playerStats || !enemyStats) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 overflow-y-auto font-sans">
+        <h1 className="text-4xl font-black italic uppercase text-yellow-400 mb-2 drop-shadow-[4px_4px_0_rgba(0,0,0,1)]">CYBER ARENA</h1>
+        <p className="text-gray-400 font-bold mb-8 uppercase tracking-widest italic">Select Your Champion</p>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl">
+          {characters.map(char => (
+            <button 
+              key={char.id}
+              onClick={() => selectCharacter(char.id)}
+              className="group relative bg-white border-4 border-gray-900 p-6 rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all text-left"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{char.passiveName}</span>
+                  <span className="font-black text-2xl italic uppercase leading-none" style={{ color: char.color }}>{char.name}</span>
+                </div>
+                <div className="w-12 h-12 rounded-2xl border-2 border-gray-900 flex items-center justify-center bg-gray-50 group-hover:bg-yellow-400 transition-colors">
+                  <Sword size={24} className="text-gray-900" />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs font-black uppercase">
+                  <span className="text-gray-400">HP</span>
+                  <span>{char.maxHp}</span>
+                </div>
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+                  <div className="h-full bg-red-500" style={{ width: `${(char.maxHp / 220) * 100}%` }}></div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-gray-400 uppercase">Attack</span>
+                    <span className="font-black text-sm italic">{char.attackPower}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-gray-400 uppercase">Defense</span>
+                    <span className="font-black text-sm italic">{char.defense}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-gray-400 uppercase">Speed</span>
+                    <span className="font-black text-sm italic">{char.speed}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-gray-400 uppercase">Evasion</span>
+                    <span className="font-black text-sm italic text-blue-500">{char.evasion}%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t-2 border-dashed border-gray-100">
+                <span className="text-[10px] font-black text-yellow-600 uppercase italic group-hover:underline">Click to Select Champion</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-2 sm:p-4 pb-16 font-sans text-gray-900">
       <div className="w-full max-w-[500px] mx-auto space-y-4">
         
         <header className="bg-white border-4 border-gray-900 p-3 sm:p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+          <div id="score-board" className="mb-4 bg-gray-900 text-white p-2 rounded-xl flex justify-between items-center border-2 border-gray-900 shadow-[4px_4px_0px_0px_rgba(33,115,70,1)]">
+            <div className="flex flex-col items-center flex-1">
+              <span className="text-[8px] font-black uppercase text-blue-400">MILKJIN</span>
+              <span className="text-xl font-black italic">{playerWins}</span>
+            </div>
+            <div className="px-4 font-black text-lg italic text-yellow-400">VS</div>
+            <div className="flex flex-col items-center flex-1">
+              <span className="text-[8px] font-black uppercase text-red-400">SODACHAN</span>
+              <span className="text-xl font-black italic">{enemyWins}</span>
+            </div>
+          </div>
+
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-1.5 bg-yellow-400 border-2 border-gray-900 px-3 py-1 font-black text-sm italic">
               <Coins size={16} /> {playerGold} GOLD
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] font-black uppercase text-gray-400 leading-none mb-1">{currentPhase} PHASE</span>
+              <span className={`text-2xl font-black italic leading-none ${timeLeft <= 5 ? 'text-red-600 animate-pulse' : 'text-gray-900'}`}>
+                {currentPhase === 'BATTLE' ? 'VS' : timeLeft}
+              </span>
             </div>
             <span className="bg-gray-900 text-white px-4 py-1 font-black text-base uppercase italic rounded-lg">
               ROUND {currentRound}
@@ -457,15 +1184,15 @@ const ArenaRebuild = () => {
             <div className="w-full space-y-1">
               <div className="flex justify-between items-end">
                 <div className="flex flex-col">
-                  <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest leading-none">{playerStats.passiveName}</span>
-                  <span className="font-black text-lg italic uppercase leading-tight">{playerStats.name}</span>
+                  <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest leading-none">{playerStats?.passiveName}</span>
+                  <span className="font-black text-lg italic uppercase leading-tight">{playerStats?.name}</span>
                 </div>
-                <span className="font-bold text-xs text-red-600">{Math.ceil(playerStats.currentHp)} / {playerStats.maxHp}</span>
+                <span className="font-bold text-xs text-red-600">{Math.ceil(playerStats?.currentHp || 0)} / {playerStats?.maxHp || 100}</span>
               </div>
               <div className="w-full h-6 bg-gray-200 border-2 border-gray-900 rounded-full overflow-hidden">
                 <div 
-                  className={`h-full border-r-2 border-gray-900 transition-all duration-100 ${playerStats.currentHp < playerStats.maxHp * 0.3 ? 'bg-red-500' : 'bg-green-500'}`}
-                  style={{ width: `${(playerStats.currentHp / playerStats.maxHp) * 100}%` }}
+                  className={`h-full border-r-2 border-gray-900 transition-all duration-100 ${playerStats?.currentHp < (playerStats?.maxHp || 100) * 0.3 ? 'bg-red-500' : 'bg-green-500'}`}
+                  style={{ width: `${((playerStats?.currentHp || 0) / (playerStats?.maxHp || 100)) * 100}%` }}
                 ></div>
               </div>
             </div>
@@ -474,75 +1201,189 @@ const ArenaRebuild = () => {
             <div className="w-full space-y-1 text-right">
               <div className="flex justify-between items-end flex-row-reverse">
                 <div className="flex flex-col">
-                  <span className="text-[8px] font-black text-red-600 uppercase tracking-widest leading-none">{enemyStats.passiveName}</span>
-                  <span className="font-black text-lg italic uppercase leading-tight">{enemyStats.name}</span>
+                  <span className="text-[8px] font-black text-red-600 uppercase tracking-widest leading-none">{enemyStats?.passiveName}</span>
+                  <span className="font-black text-lg italic uppercase leading-tight">{enemyStats?.name}</span>
                 </div>
-                <span className="font-bold text-xs text-red-600">{Math.ceil(enemyStats.currentHp)} / {enemyStats.maxHp}</span>
+                <span className="font-bold text-xs text-red-600">{Math.ceil(enemyStats?.currentHp || 0)} / {enemyStats?.maxHp || 100}</span>
               </div>
               <div className="w-full h-6 bg-gray-200 border-2 border-gray-900 rounded-full overflow-hidden">
                 <div 
-                  className={`h-full border-l-2 border-gray-900 float-right transition-all duration-100 ${enemyStats.currentHp < enemyStats.maxHp * 0.3 ? 'bg-red-500' : 'bg-green-500'}`}
-                  style={{ width: `${(enemyStats.currentHp / enemyStats.maxHp) * 100}%` }}
+                  className={`h-full border-l-2 border-gray-900 float-right transition-all duration-100 ${enemyStats?.currentHp < (enemyStats?.maxHp || 100) * 0.3 ? 'bg-red-500' : 'bg-green-500'}`}
+                  style={{ width: `${((enemyStats?.currentHp || 0) / (enemyStats?.maxHp || 100)) * 100}%` }}
                 ></div>
               </div>
             </div>
           </div>
         </header>
 
-        <main className="relative bg-gray-900 border-4 border-gray-900 rounded-3xl h-[300px] overflow-hidden shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex items-center justify-around p-4">
-          <div className="absolute inset-0 opacity-20 pointer-events-none" 
-               style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
-          
-          {!isBattleActive && !battleWinner && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-              <button 
-                onClick={startBattle}
-                className="bg-red-600 hover:bg-red-500 text-white border-4 border-gray-900 px-8 py-3 font-black text-xl italic uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
-              >
-                전투 시작
-              </button>
+        <main className="relative bg-gray-900 border-4 border-gray-900 rounded-3xl h-[400px] overflow-hidden shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex items-center justify-around">
+          {currentPhase === 'FARMING' ? (
+            <>
+              <canvas 
+                ref={canvasRef}
+                width={500}
+                height={400}
+                className="w-full h-full block"
+              />
+              
+              <div className="absolute top-4 left-4 z-10 bg-black/60 backdrop-blur-sm p-2 rounded-lg border border-white/20">
+                <p className="text-[10px] font-black text-white uppercase italic">WASD / Arrow Keys to Move</p>
+                <p className="text-[10px] font-black text-yellow-400 uppercase italic">Collect Yellow Cubes for Gold</p>
+              </div>
+
+              {/* 모바일 가상 방향키 (D-pad) */}
+              <div id="mobile-dpad" className="absolute bottom-6 left-6 z-50 grid grid-cols-3 gap-2 select-none pointer-events-auto md:hidden">
+                <div />
+                <button 
+                  onMouseDown={() => handleDpad('w', true)} 
+                  onMouseUp={() => handleDpad('w', false)}
+                  onMouseLeave={() => handleDpad('w', false)}
+                  onTouchStart={(e) => { e.preventDefault(); handleDpad('w', true); }}
+                  onTouchEnd={(e) => { e.preventDefault(); handleDpad('w', false); }}
+                  onTouchCancel={(e) => { e.preventDefault(); handleDpad('w', false); }}
+                  className="w-14 h-14 bg-white/20 backdrop-blur-md border-2 border-white/40 rounded-2xl flex items-center justify-center active:bg-white/40 shadow-lg"
+                >
+                  <span className="text-white text-xl">⬆️</span>
+                </button>
+                <div />
+                <button 
+                  onMouseDown={() => handleDpad('a', true)} 
+                  onMouseUp={() => handleDpad('a', false)}
+                  onMouseLeave={() => handleDpad('a', false)}
+                  onTouchStart={(e) => { e.preventDefault(); handleDpad('a', true); }}
+                  onTouchEnd={(e) => { e.preventDefault(); handleDpad('a', false); }}
+                  onTouchCancel={(e) => { e.preventDefault(); handleDpad('a', false); }}
+                  className="w-14 h-14 bg-white/20 backdrop-blur-md border-2 border-white/40 rounded-2xl flex items-center justify-center active:bg-white/40 shadow-lg"
+                >
+                  <span className="text-white text-xl">⬅️</span>
+                </button>
+                <button 
+                  onMouseDown={() => handleDpad('s', true)} 
+                  onMouseUp={() => handleDpad('s', false)}
+                  onMouseLeave={() => handleDpad('s', false)}
+                  onTouchStart={(e) => { e.preventDefault(); handleDpad('s', true); }}
+                  onTouchEnd={(e) => { e.preventDefault(); handleDpad('s', false); }}
+                  onTouchCancel={(e) => { e.preventDefault(); handleDpad('s', false); }}
+                  className="w-14 h-14 bg-white/20 backdrop-blur-md border-2 border-white/40 rounded-2xl flex items-center justify-center active:bg-white/40 shadow-lg"
+                >
+                  <span className="text-white text-xl">⬇️</span>
+                </button>
+                <button 
+                  onMouseDown={() => handleDpad('d', true)} 
+                  onMouseUp={() => handleDpad('d', false)}
+                  onMouseLeave={() => handleDpad('d', false)}
+                  onTouchStart={(e) => { e.preventDefault(); handleDpad('d', true); }}
+                  onTouchEnd={(e) => { e.preventDefault(); handleDpad('d', false); }}
+                  onTouchCancel={(e) => { e.preventDefault(); handleDpad('d', false); }}
+                  className="w-14 h-14 bg-white/20 backdrop-blur-md border-2 border-white/40 rounded-2xl flex items-center justify-center active:bg-white/40 shadow-lg"
+                >
+                  <span className="text-white text-xl">➡️</span>
+                </button>
+              </div>
+            </>
+          ) : currentPhase === 'SHOP' ? (
+            <div className="flex flex-col items-center justify-center text-center p-6">
+              <div className="w-20 h-20 bg-yellow-400 border-4 border-gray-900 rounded-full flex items-center justify-center mb-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-bounce">
+                <ShoppingBag size={40} className="text-gray-900" />
+              </div>
+              <h2 className="text-2xl font-black italic uppercase text-white mb-2">Shop Phase</h2>
+              <p className="text-gray-400 text-sm font-bold uppercase italic">Buy items and prepare for battle!</p>
+              <div className="mt-8 bg-white/10 border-2 border-white/20 p-4 rounded-2xl backdrop-blur-sm">
+                <p className="text-yellow-400 font-black text-xl italic">{timeLeft}s REMAINING</p>
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="absolute inset-0 opacity-20 pointer-events-none" 
+                   style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+              
+              {battleWinner && (
+                <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md p-4 text-center">
+                  <h2 className="text-yellow-400 font-black italic uppercase mb-6 drop-shadow-[0_2px_0_rgba(0,0,0,1)]"
+                      style={{ fontSize: 'clamp(1.5rem, 8vw, 3rem)', maxWidth: '90%' }}>
+                    {battleWinner} 승리!
+                  </h2>
+                  {!finalWinner ? (
+                    <button 
+                      onClick={nextRound}
+                      className="bg-white hover:bg-yellow-400 text-gray-900 border-4 border-gray-900 px-6 py-2 font-black text-base uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+                    >
+                      다음 라운드로
+                    </button>
+                  ) : (
+                    <div className="bg-white border-4 border-gray-900 p-6 rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in zoom-in duration-300">
+                      <h1 className="text-3xl font-black italic uppercase text-red-600 mb-2">FINAL WINNER</h1>
+                      <p className="text-xl font-black uppercase mb-6">{finalWinner}!</p>
+                      <button 
+                        onClick={startNewGame}
+                        className="bg-red-600 hover:bg-red-500 text-white border-4 border-gray-900 px-8 py-3 font-black text-lg italic uppercase shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
+                      >
+                        새 게임 시작
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {evasionLog && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 0 }}
+                  animate={{ opacity: 1, y: -50 }}
+                  className="absolute z-50 font-black text-blue-400 italic text-xl drop-shadow-md"
+                  style={{ left: evasionLog.x, top: evasionLog.y }}
+                >
+                  {evasionLog.text}
+                </motion.div>
+              )}
+
+              {/* 플레이어 더미 */}
+              <div className={`z-10 flex flex-col items-center gap-2 transition-transform ${isBattleActive ? 'animate-bounce' : ''}`}>
+                <div className="w-16 h-16 bg-blue-500 border-2 border-gray-900 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center text-white font-black">
+                  <span className="text-[8px] opacity-70">ATK: {playerStats?.attackPower}</span>
+                  <span className="text-xs">PLAYER</span>
+                  <span className="text-[8px] opacity-70">DEF: {playerStats?.defense}</span>
+                </div>
+                <span className="bg-white border-2 border-gray-900 px-2 py-0.5 font-black text-[10px]">{playerStats?.name}</span>
+              </div>
+
+              <div className="font-black text-2xl italic text-gray-700 px-2">VS</div>
+
+              {/* 적 더미 */}
+              <div className={`z-10 flex flex-col items-center gap-2 transition-transform ${isBattleActive ? 'animate-pulse' : ''}`}>
+                <div className="w-16 h-16 bg-red-500 border-2 border-gray-900 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center text-white font-black">
+                  <span className="text-[8px] opacity-70">ATK: {enemyStats?.attackPower}</span>
+                  <span className="text-xs">ENEMY</span>
+                  <span className="text-[8px] opacity-70">DEF: {enemyStats?.defense}</span>
+                </div>
+                <span className="bg-white border-2 border-gray-900 px-2 py-0.5 font-black text-[10px]">{enemyStats?.name}</span>
+              </div>
+            </>
           )}
 
-          {battleWinner && (
-            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md p-4 text-center">
-              <h2 className="text-yellow-400 font-black italic uppercase mb-6 drop-shadow-[0_2px_0_rgba(0,0,0,1)]"
-                  style={{ fontSize: 'clamp(1.5rem, 8vw, 3rem)', maxWidth: '90%' }}>
-                {battleWinner} 승리!
-              </h2>
-              <button 
-                onClick={nextRound}
-                className="bg-white hover:bg-yellow-400 text-gray-900 border-4 border-gray-900 px-6 py-2 font-black text-base uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all"
-              >
-                다음 라운드로
-              </button>
+          {enemyGrowthMessage && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-red-600 text-white px-4 py-2 border-2 border-gray-900 font-black text-[10px] uppercase italic shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-in slide-in-from-top duration-300">
+              {enemyGrowthMessage}
             </div>
           )}
-
-          {/* 플레이어 더미 */}
-          <div className={`z-10 flex flex-col items-center gap-2 transition-transform ${isBattleActive ? 'animate-bounce' : ''}`}>
-            <div className="w-16 h-16 bg-blue-500 border-2 border-gray-900 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center text-white font-black">
-              <span className="text-[8px] opacity-70">ATK: {playerStats.attackPower}</span>
-              <span className="text-xs">DUMMY</span>
-              <span className="text-[8px] opacity-70">DEF: {playerStats.defense}</span>
-            </div>
-            <span className="bg-white border-2 border-gray-900 px-2 py-0.5 font-black text-[10px]">{playerStats.name}</span>
-          </div>
-
-          <div className="font-black text-2xl italic text-gray-700 px-2">VS</div>
-
-          {/* 적 더미 */}
-          <div className={`z-10 flex flex-col items-center gap-2 transition-transform ${isBattleActive ? 'animate-pulse' : ''}`}>
-            <div className="w-16 h-16 bg-red-500 border-2 border-gray-900 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center text-white font-black">
-              <span className="text-[8px] opacity-70">ATK: {enemyStats.attackPower}</span>
-              <span className="text-xs">DUMMY</span>
-              <span className="text-[8px] opacity-70">DEF: {enemyStats.defense}</span>
-            </div>
-            <span className="bg-white border-2 border-gray-900 px-2 py-0.5 font-black text-[10px]">{enemyStats.name}</span>
-          </div>
         </main>
 
-        <div id="bottom-ui" className="space-y-4 pb-8">
+        <div id="bottom-ui" className={`space-y-4 pb-8 ${currentPhase === 'FARMING' || currentPhase === 'BATTLE' ? 'hidden' : ''}`}>
+          {/* 시너지 보드 영역 */}
+          <div id="synergy-board" className="bg-white border-4 border-gray-900 p-3 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+            <h3 className="font-black text-[10px] uppercase mb-2 italic text-gray-400">Active Synergies</h3>
+            <div className="flex flex-col gap-1.5">
+              {activeSynergies.length > 0 ? (
+                activeSynergies.map(s => (
+                  <div key={s} className="bg-purple-600 text-white px-3 py-1 rounded-lg text-[10px] font-black animate-pulse border-2 border-gray-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] w-fit">
+                    {s} 발동!
+                  </div>
+                ))
+              ) : (
+                <span className="text-gray-300 text-[10px] font-bold italic">활성화된 시너지 없음</span>
+              )}
+            </div>
+          </div>
+
           {/* 인벤토리 영역 */}
           <div className="bg-white border-4 border-gray-900 p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
             <h3 className="font-black text-sm uppercase mb-3 italic border-b-2 border-gray-100 pb-1 flex justify-between items-center">
@@ -1081,7 +1922,7 @@ export default function App() {
       } else if (session.gameType === GameType.OFFICE_LIFE) {
         await sessionService.startOfficeLifeGame(session.id, session.players, session.turnOrder, session.settings.officeLifeMode || 'INDIVIDUAL');
       } else if (session.gameType === GameType.ESCAPE_ROOM) {
-        await sessionService.startEscapeRoom(session.id, session.settings);
+        await sessionService.startEscapeRoom(session.id, session.settings.escapeRoomThemeId || 'horror', session.settings);
       } else if (session.gameType === GameType.CYBER_ARENA) {
         await sessionService.startCyberArena(session.id, session.players, session.settings);
       }
@@ -1824,15 +2665,32 @@ export default function App() {
                       {session.gameType === GameType.ESCAPE_ROOM && (
                         <div className="space-y-4">
                           <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-[#999]">난이도</label>
+                            <label className="text-[9px] font-bold text-[#999]">테마 선택</label>
                             <select 
                               className="office-input text-xs"
-                              value={session.settings.escapeRoomDifficulty}
+                              value={session.settings.escapeRoomThemeId || 'horror'}
+                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, escapeRoomThemeId: e.target.value })}
+                            >
+                              {Object.values(ESCAPE_ROOM_THEMES).map(theme => (
+                                <option key={theme.id} value={theme.id}>
+                                  [{theme.genre}] {theme.name} ({theme.difficulty})
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-[8px] text-gray-500 mt-1">
+                              {ESCAPE_ROOM_THEMES[session.settings.escapeRoomThemeId || 'horror']?.description}
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-[#999]">난이도 (시간 제한)</label>
+                            <select 
+                              className="office-input text-xs"
+                              value={session.settings.escapeRoomDifficulty || 'NORMAL'}
                               onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, escapeRoomDifficulty: e.target.value })}
                             >
-                              <option value="EASY">쉬움 (15분)</option>
-                              <option value="NORMAL">보통 (10분)</option>
-                              <option value="HARD">어려움 (5분)</option>
+                              <option value="EASY">쉬움 (30분)</option>
+                              <option value="NORMAL">보통 (20분)</option>
+                              <option value="HARD">어려움 (10분)</option>
                             </select>
                           </div>
                         </div>

@@ -213,6 +213,7 @@ export interface OfficeLifeGameState {
 }
 
 export interface EscapeRoomGameState {
+  themeId: string;
   currentRoomId: string;
   solvedPuzzles: string[];
   inventory: string[];
@@ -220,6 +221,7 @@ export interface EscapeRoomGameState {
   timeLimit: number;
   status: 'PLAYING' | 'WON' | 'LOST';
   hintsUsed: number;
+  superHintsUsed: number;
   lastClue?: string;
 }
 
@@ -372,6 +374,7 @@ export interface Session {
     sudokuDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
     officeLifeMode?: 'INDIVIDUAL' | 'TEAM';
     escapeRoomDifficulty?: 'EASY' | 'NORMAL' | 'HARD';
+    escapeRoomThemeId?: string;
     cyberArenaPvE?: boolean;
   };
   turnOrder?: string[];
