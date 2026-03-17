@@ -22,17 +22,17 @@ interface Particle {
 }
 
 const RANKS = [
-  { label: '인턴', radius: 15, color: '#e2e8f0', score: 1, next: 1 },
-  { label: '사원', radius: 22, color: '#cbd5e1', score: 3, next: 2 },
-  { label: '주임', radius: 30, color: '#94a3b8', score: 6, next: 3 },
-  { label: '대리', radius: 38, color: '#64748b', score: 10, next: 4 },
-  { label: '과장', radius: 48, color: '#475569', score: 15, next: 5 },
-  { label: '차장', radius: 58, color: '#334155', score: 21, next: 6 },
-  { label: '부장', radius: 70, color: '#1e293b', score: 28, next: 7 },
-  { label: '이사', radius: 85, color: '#0f172a', score: 36, next: 8 },
-  { label: '상무', radius: 100, color: '#1e1b4b', score: 45, next: 9 },
-  { label: '전무', radius: 120, color: '#312e81', score: 55, next: 10 },
-  { label: '사장', radius: 145, color: '#4338ca', score: 66, next: -1 },
+  { label: '인턴', radius: 15, color: '#ff4d4d', score: 1, next: 1 }, // Cherry
+  { label: '사원', radius: 22, color: '#ff8533', score: 3, next: 2 }, // Strawberry/Orange
+  { label: '주임', radius: 30, color: '#9933ff', score: 6, next: 3 }, // Grape
+  { label: '대리', radius: 38, color: '#ffcc00', score: 10, next: 4 }, // Dekopon
+  { label: '과장', radius: 48, color: '#ff6600', score: 15, next: 5 }, // Persimmon
+  { label: '차장', radius: 58, color: '#ff3300', score: 21, next: 6 }, // Apple
+  { label: '부장', radius: 70, color: '#ffff66', score: 28, next: 7 }, // Pear
+  { label: '이사', radius: 85, color: '#ff99cc', score: 36, next: 8 }, // Peach
+  { label: '상무', radius: 100, color: '#ffff00', score: 45, next: 9 }, // Pineapple
+  { label: '전무', radius: 120, color: '#99ff33', score: 55, next: 10 }, // Melon
+  { label: '사장', radius: 145, color: '#006600', score: 66, next: -1 }, // Watermelon
 ];
 
 const CANVAS_WIDTH = 400;
@@ -358,7 +358,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
   };
 
   return (
-    <div className="flex flex-col h-screen w-full bg-[#fdf6e3] font-sans text-[#586e75] overflow-hidden safe-bottom">
+    <div className="flex flex-col h-full w-full bg-[#fdf6e3] font-sans text-[#586e75] overflow-hidden safe-bottom">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
         .font-noto { font-family: 'Noto Sans KR', sans-serif; }

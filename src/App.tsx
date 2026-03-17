@@ -21,11 +21,11 @@ import { ESCAPE_ROOM_THEMES } from './data/escapeRoomData';
 import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS, SYNERGIES } from './data/cyberArenaData';
 import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, EyeOff, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2, Coffee, StickyNote, Zap, Skull, ShieldCheck, Activity, Key, DoorOpen, Sword, ZapOff, Heart, ShieldAlert, Cpu, Coins, Package, Target, ShoppingBag, ChevronRight, Star, Info, Trash2, Sparkles } from 'lucide-react';
 
-const LogTicker = ({ logs }: { logs: GameLog[] }) => {
+const LogTicker = ({ logs, isSuika }: { logs: GameLog[], isSuika?: boolean }) => {
   const latestLogs = [...Object.values(logs || {})].sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
   
   return (
-    <div className="fixed bottom-4 right-4 w-[calc(100%-2rem)] md:w-72 bg-white/90 backdrop-blur border border-gray-200 rounded-lg shadow-xl overflow-hidden z-40 pointer-events-none">
+    <div className={`fixed ${isSuika ? 'bottom-24 md:bottom-20' : 'bottom-12 md:bottom-10'} right-4 w-[calc(100%-2rem)] md:w-72 bg-white/90 backdrop-blur border border-gray-200 rounded-lg shadow-xl overflow-hidden z-40 pointer-events-none`}>
       <div className="bg-gray-100 px-3 py-1 border-b border-gray-200 flex justify-between items-center">
         <span className="text-[9px] md:text-[10px] font-bold text-gray-500 flex items-center gap-1">
           <Activity size={10} /> 실시간 시스템 로그
@@ -4929,8 +4929,9 @@ export default function App() {
         currentUser={currentUser} 
         nickname={session.players?.[currentUser?.uid]?.nickname || nickname}
         isSpectator={isSpectator}
+        isSuika={session.gameType === GameType.SUIKA}
       />
-      {session && showSystemLogs && <LogTicker logs={session.logs} />}
+      {session && showSystemLogs && <LogTicker logs={session.logs} isSuika={session.gameType === GameType.SUIKA} />}
     </div>
   );
 }

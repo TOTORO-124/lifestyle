@@ -9,9 +9,10 @@ interface ChatProps {
   currentUser: { uid: string; displayName: string } | null;
   nickname: string;
   isSpectator: boolean;
+  isSuika?: boolean;
 }
 
-export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSpectator }) => {
+export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSpectator, isSuika }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
@@ -92,7 +93,7 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSp
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className={`fixed bottom-6 right-6 z-50 ${isSpectator ? 'bg-gray-600 hover:bg-gray-700' : 'bg-[#217346] hover:bg-[#1e6b41]'} text-white p-4 rounded-full shadow-lg transition-all duration-200 flex items-center justify-center group`}
+          className={`fixed ${isSuika ? 'bottom-40 md:bottom-36' : 'bottom-24 md:bottom-20'} right-6 z-50 ${isSpectator ? 'bg-gray-600 hover:bg-gray-700' : 'bg-[#217346] hover:bg-[#1e6b41]'} text-white p-4 rounded-full shadow-lg transition-all duration-200 flex items-center justify-center group`}
         >
           <MessageCircle size={24} />
           {unreadCount > 0 && (
