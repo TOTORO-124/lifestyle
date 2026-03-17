@@ -31,6 +31,8 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
   const [showIntro, setShowIntro] = useState(true);
   const [viewingExplanation, setViewingExplanation] = useState<string | null>(null);
 
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
+
   // Puzzle specific states
   const [directionInput, setDirectionInput] = useState<string[]>([]);
   const [directionError, setDirectionError] = useState(false);
@@ -39,8 +41,13 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
   const [selectedDragItem, setSelectedDragItem] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [clickCounts, setClickCounts] = useState<Record<string, number>>({});
+  const [timeAttackLeft, setTimeAttackLeft] = useState<number | null>(null);
+  const [itemError, setItemError] = useState<string | null>(null);
 
   const styles = theme.styles;
+
+  const timeLeft = Math.max(0, Math.floor((game.startTime + game.timeLimit * 1000 - Date.now()) / 1000));
+  const isTimeLow = timeLeft < 60;
 
   useEffect(() => {
     if (game.lastSolvedPuzzleId) {
@@ -48,16 +55,115 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
     }
   }, [game.lastSolvedPuzzleId]);
 
+  useEffect(() => {
+    if (game.timeAttackEndTime) {
+      const interval = setInterval(() => {
+        const remaining = Math.max(0, Math.floor((game.timeAttackEndTime! - Date.now()) / 1000));
+        setTimeAttackLeft(remaining);
+        if (remaining === 0 && game.status === 'PLAYING' && session.hostId === auth.currentUser?.uid) {
+          sessionService.failEscapeRoomStage(session.id, session);
+        }
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setTimeAttackLeft(null);
+    }
+  }, [game.timeAttackEndTime, game.status, session.hostId, session.id, session]);
+
+  useEffect(() => {
+    if (timeLeft === 0 && game.status === 'PLAYING' && session.hostId === auth.currentUser?.uid) {
+      sessionService.failEscapeRoom(session.id, session);
+    }
+  }, [timeLeft, game.status, session.hostId, session.id, session]);
+
+  const howToPlayModal = (
+    <AnimatePresence>
+      {showHowToPlay && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          onClick={() => setShowHowToPlay(false)}
+        >
+          <motion.div 
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.9, y: 20 }}
+            className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl text-gray-900"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-8 space-y-6 text-center">
+              <div className="flex justify-center">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl bg-indigo-50 text-indigo-500">
+                  <HelpCircle size={32} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <h4 className="text-2xl font-black text-gray-900">게임 방법 및 힌트</h4>
+                <p className="text-sm text-gray-500 font-medium">방탈출 게임을 즐기는 방법을 알아보세요!</p>
+              </div>
+              
+              <div className="space-y-4 text-left">
+                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                  <h5 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
+                    <Search size={16} className="text-indigo-500" /> 퍼즐 풀기
+                  </h5>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    각 방에는 여러 개의 퍼즐이 있습니다. 순서대로 퍼즐을 풀어야 다음 퍼즐이 열립니다. 정답을 입력하거나, 다이얼을 맞추거나, 아이템을 사용해 퍼즐을 해결하세요.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                  <h5 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
+                    <Key size={16} className="text-indigo-500" /> 아이템 활용
+                  </h5>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    퍼즐을 풀면 인벤토리에 아이템이 추가될 수 있습니다. 획득한 아이템을 클릭하여 선택한 후, 아이템이 필요한 퍼즐(자물쇠 등)을 클릭하면 사용할 수 있습니다.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                  <h5 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
+                    <HelpCircle size={16} className="text-indigo-500" /> 힌트 사용
+                  </h5>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    도저히 풀리지 않을 때는 각 퍼즐 우측 하단의 <strong>'힌트'</strong> 버튼을 클릭하세요. 힌트를 사용하면 게임 로그에 힌트 내용이 출력되며, 팀원 모두가 볼 수 있습니다. 힌트 사용 횟수는 기록됩니다.
+                  </p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setShowHowToPlay(false)}
+                className="w-full py-4 rounded-2xl font-black text-white shadow-lg transition-all hover:brightness-110 active:scale-95 bg-indigo-600"
+              >
+                확인
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   if (game.currentRoomId === 'STAGE_SELECT') {
     const roomsList = Object.values(theme.rooms);
     const clearedRooms = game.clearedRooms || [];
     
     return (
       <div className="min-h-[600px] p-6 bg-slate-900 text-white" style={{ fontFamily: styles.fontFamily }}>
+        {howToPlayModal}
         <div className="max-w-4xl mx-auto space-y-8">
-          <div className="text-center space-y-4">
+          <div className="text-center space-y-4 relative">
             <h2 className="text-4xl font-black tracking-tighter" style={{ color: styles.primaryColor }}>{theme.name}</h2>
             <p className="text-gray-400">{theme.description}</p>
+            <button 
+              onClick={() => setShowHowToPlay(true)}
+              className="absolute top-0 right-0 flex items-center gap-2 px-4 py-2 rounded-full bg-gray-800 hover:bg-gray-700 text-sm font-bold transition-colors"
+            >
+              <HelpCircle size={16} />
+              게임 방법
+            </button>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -113,31 +219,6 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
   };
 
   const lastSolvedPuzzle = room.puzzles.find(p => p.id === game.lastSolvedPuzzleId);
-  const timeLeft = Math.max(0, Math.floor((game.startTime + game.timeLimit * 1000 - Date.now()) / 1000));
-  const isTimeLow = timeLeft < 60;
-
-  const [timeAttackLeft, setTimeAttackLeft] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (game.timeAttackEndTime) {
-      const interval = setInterval(() => {
-        const remaining = Math.max(0, Math.floor((game.timeAttackEndTime! - Date.now()) / 1000));
-        setTimeAttackLeft(remaining);
-        if (remaining === 0 && game.status === 'PLAYING' && session.hostId === auth.currentUser?.uid) {
-          sessionService.failEscapeRoomStage(session.id, session);
-        }
-      }, 1000);
-      return () => clearInterval(interval);
-    } else {
-      setTimeAttackLeft(null);
-    }
-  }, [game.timeAttackEndTime, game.status, session.hostId, session.id, session]);
-
-  useEffect(() => {
-    if (timeLeft === 0 && game.status === 'PLAYING' && session.hostId === auth.currentUser?.uid) {
-      sessionService.failEscapeRoom(session.id, session);
-    }
-  }, [timeLeft, game.status, session.hostId, session.id, session]);
 
   // Direction Sequence Logic
   const handleDirectionClick = (puzzle: Puzzle, dir: string) => {
@@ -191,8 +272,6 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
     }
   };
 
-  const [itemError, setItemError] = useState<string | null>(null);
-
   // Item Interaction Logic
   const handleItemInteraction = (puzzle: Puzzle) => {
     if (isSpectator) return;
@@ -238,7 +317,7 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
     }
 
     switch(room.id) {
-      case 'room_1': return game.solvedPuzzles.includes('r1_p1') ? 'bg-slate-700' : 'bg-slate-950';
+      case 'room_1': return game.solvedPuzzles?.includes('r1_p1') ? 'bg-slate-700' : 'bg-slate-950';
       case 'room_2': return 'bg-cyan-950 bg-[linear-gradient(rgba(0,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]';
       case 'room_3': return 'bg-amber-950 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-900 to-amber-950';
       default: return 'bg-gray-900';
@@ -311,6 +390,7 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
   if (showIntro) {
     return (
       <div className="min-h-[600px] flex items-center justify-center p-6 bg-black" style={{ fontFamily: styles.fontFamily }}>
+        {howToPlayModal}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -334,13 +414,21 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
               <span className="flex items-center gap-2"><Timer size={14} /> {game.timeLimit / 60} MINUTES</span>
               <span className="flex items-center gap-2"><Users size={14} /> {Object.keys(session.players).length} PLAYERS</span>
             </div>
-            <button 
-              onClick={() => setShowIntro(false)}
-              className="px-12 py-4 rounded-full font-black text-white shadow-2xl transition-all hover:scale-110 active:scale-95 group"
-              style={{ backgroundColor: styles.primaryColor }}
-            >
-              입장하기
-            </button>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setShowHowToPlay(true)}
+                className="px-8 py-4 rounded-full font-black text-white shadow-2xl transition-all hover:scale-105 active:scale-95 bg-gray-800 border border-gray-700"
+              >
+                게임 방법
+              </button>
+              <button 
+                onClick={() => setShowIntro(false)}
+                className="px-12 py-4 rounded-full font-black text-white shadow-2xl transition-all hover:scale-110 active:scale-95 group"
+                style={{ backgroundColor: styles.primaryColor }}
+              >
+                입장하기
+              </button>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -349,6 +437,7 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
 
   return (
     <div className={`min-h-[600px] p-4 transition-colors duration-1000 relative overflow-hidden ${getRoomBackground()}`} style={{ fontFamily: styles.fontFamily }}>
+      {howToPlayModal}
       <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
         <AnimatePresence mode="wait">
           <motion.div 
@@ -365,6 +454,14 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
                   <span className="text-sm font-bold uppercase tracking-widest">{theme.name} - {room.name}</span>
                 </div>
                 <div className="flex items-center gap-3 text-xs font-mono font-bold">
+                  <button 
+                    onClick={() => setShowHowToPlay(true)}
+                    className="flex items-center gap-1 hover:opacity-80 transition-opacity mr-2"
+                    title="게임 방법"
+                  >
+                    <HelpCircle size={16} />
+                    <span>방법</span>
+                  </button>
                   {timeAttackLeft !== null && (
                     <div className="flex items-center gap-1 text-red-400 bg-red-900/50 px-2 py-1 rounded animate-pulse">
                       <ShieldAlert size={14} />
@@ -870,6 +967,71 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
                     className="w-full py-4 rounded-2xl font-black text-white shadow-lg transition-all hover:brightness-110 active:scale-95 bg-blue-600"
                   >
                     계속하기
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+          {showHowToPlay && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+              onClick={() => setShowHowToPlay(false)}
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="p-8 space-y-6 text-center">
+                  <div className="flex justify-center">
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl bg-indigo-50 text-indigo-500">
+                      <HelpCircle size={32} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-2xl font-black text-gray-900">게임 방법 및 힌트</h4>
+                    <p className="text-sm text-gray-500 font-medium">방탈출 게임을 즐기는 방법을 알아보세요!</p>
+                  </div>
+                  
+                  <div className="space-y-4 text-left">
+                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                      <h5 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
+                        <Search size={16} className="text-indigo-500" /> 퍼즐 풀기
+                      </h5>
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                        각 방에는 여러 개의 퍼즐이 있습니다. 순서대로 퍼즐을 풀어야 다음 퍼즐이 열립니다. 정답을 입력하거나, 다이얼을 맞추거나, 아이템을 사용해 퍼즐을 해결하세요.
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                      <h5 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
+                        <Key size={16} className="text-indigo-500" /> 아이템 활용
+                      </h5>
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                        퍼즐을 풀면 인벤토리에 아이템이 추가될 수 있습니다. 획득한 아이템을 클릭하여 선택한 후, 아이템이 필요한 퍼즐(자물쇠 등)을 클릭하면 사용할 수 있습니다.
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                      <h5 className="font-bold text-gray-800 flex items-center gap-2 mb-2">
+                        <HelpCircle size={16} className="text-indigo-500" /> 힌트 사용
+                      </h5>
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                        도저히 풀리지 않을 때는 각 퍼즐 우측 하단의 <strong>'힌트'</strong> 버튼을 클릭하세요. 힌트를 사용하면 게임 로그에 힌트 내용이 출력되며, 팀원 모두가 볼 수 있습니다. 힌트 사용 횟수는 기록됩니다.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => setShowHowToPlay(false)}
+                    className="w-full py-4 rounded-2xl font-black text-white shadow-lg transition-all hover:brightness-110 active:scale-95 bg-indigo-600"
+                  >
+                    확인
                   </button>
                 </div>
               </motion.div>

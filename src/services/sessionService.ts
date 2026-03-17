@@ -2807,7 +2807,7 @@ export const sessionService = {
     }
     
     if (resultItem) {
-      const inventory = session.escapeRoomGame.inventory.filter(i => i !== item1 && i !== item2);
+      const inventory = (session.escapeRoomGame.inventory || []).filter(i => i !== item1 && i !== item2);
       inventory.push(resultItem);
       
       await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
