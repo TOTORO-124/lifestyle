@@ -224,6 +224,7 @@ export interface EscapeRoomGameState {
   themeId: string;
   currentRoomId: string;
   solvedPuzzles: string[];
+  clearedRooms?: string[];
   inventory: string[];
   startTime: number;
   timeLimit: number;
@@ -234,6 +235,8 @@ export interface EscapeRoomGameState {
   lastSolvedPuzzleId?: string;
   isRoomCleared?: boolean;
   activityLog?: EscapeRoomActivity[];
+  timeAttackEndTime?: number;
+  terminalRandomPassword?: string;
 }
 
 export interface ArenaItem {

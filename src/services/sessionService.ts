@@ -89,7 +89,7 @@ export const sessionService = {
         doctorCount: 1,
         policeCount: 1,
         escapeRoomDifficulty: 'NORMAL',
-        escapeRoomThemeId: 'horror',
+        escapeRoomThemeId: 'interactive_escape',
         cyberArenaPvE: true,
       },
     };
@@ -2705,7 +2705,7 @@ export const sessionService = {
   // --- Escape Room ---
   async startEscapeRoom(sessionId: string, themeId: string, settings: any) {
     if (!db) return;
-    const theme = ESCAPE_ROOM_THEMES[themeId] || ESCAPE_ROOM_THEMES['horror'];
+    const theme = ESCAPE_ROOM_THEMES[themeId] || ESCAPE_ROOM_THEMES['interactive_escape'];
     const escapeRoomGame: EscapeRoomGameState = {
       themeId: theme.id,
       currentRoomId: theme.startRoomId,
@@ -2715,7 +2715,8 @@ export const sessionService = {
       timeLimit: settings.escapeRoomDifficulty === 'EASY' ? 900 : settings.escapeRoomDifficulty === 'HARD' ? 300 : 600,
       status: 'PLAYING',
       hintsUsed: 0,
-      superHintsUsed: 0
+      superHintsUsed: 0,
+      terminalRandomPassword: Math.floor(1000 + Math.random() * 9000).toString()
     };
     await update(ref(db, `sessions/${sessionId}`), {
       status: SessionStatus.PLAYING,
@@ -2748,12 +2749,38 @@ export const sessionService = {
 
     const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
 
-    if (puzzle.answer === answer.trim()) {
+    let isCorrect = false;
+    if (puzzle.isRandomPassword) {
+      isCorrect = answer.trim() === session.escapeRoomGame.terminalRandomPassword;
+    } else {
+      isCorrect = puzzle.answer === answer.trim();
+    }
+
+    if (isCorrect) {
       const solvedPuzzles = [...(session.escapeRoomGame.solvedPuzzles || []), puzzleId];
-      const inventory = [...(session.escapeRoomGame.inventory || [])];
-      if (puzzle.rewardItem) inventory.push(puzzle.rewardItem);
+      let inventory = [...(session.escapeRoomGame.inventory || [])];
+      
+      if (puzzle.requiredItem) {
+        inventory = inventory.filter(item => item !== puzzle.requiredItem);
+      }
+      
+      if (puzzle.rewardItem) {
+        const items = puzzle.rewardItem.split(',').map(i => i.trim());
+        inventory.push(...items);
+      }
+      
+      const updates: any = {
+        solvedPuzzles,
+        inventory,
+        lastSolvedPuzzleId: puzzleId,
+      };
+      
+      if (puzzle.triggerTimer && !session.escapeRoomGame.timeAttackEndTime) {
+        updates.timeAttackEndTime = Date.now() + puzzle.triggerTimer * 1000;
+      }
 
       const allSolved = room.puzzles.every(p => solvedPuzzles.includes(p.id));
+      updates.isRoomCleared = allSolved;
       
       await this.logEscapeRoomActivity(sessionId, userName, `퍼즐을 풀었습니다: ${puzzle.question.substring(0, 15)}...`, 'SOLVE', session);
 
@@ -2763,16 +2790,59 @@ export const sessionService = {
         await this.addLog(sessionId, `정답입니다! ${puzzle.explanation || ''}`, 'success');
       }
 
-      await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
-        solvedPuzzles,
-        inventory,
-        lastSolvedPuzzleId: puzzleId,
-        isRoomCleared: allSolved
-      });
+      await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), updates);
     } else {
       await this.logEscapeRoomActivity(sessionId, userName, `오답을 입력했습니다: ${answer}`, 'FAIL', session);
       await this.addLog(sessionId, '틀렸습니다. 다시 생각해보세요.', 'warning');
     }
+  },
+
+  async combineItems(sessionId: string, item1: string, item2: string, session: Session) {
+    if (!db || !session.escapeRoomGame) return;
+    
+    // Hardcoded combination logic based on the theme
+    let resultItem = null;
+    if ((item1 === '빨간 포션' && item2 === '파란 포션') || (item1 === '파란 포션' && item2 === '빨간 포션')) {
+      resultItem = '보라색 맹독 포션';
+    }
+    
+    if (resultItem) {
+      const inventory = session.escapeRoomGame.inventory.filter(i => i !== item1 && i !== item2);
+      inventory.push(resultItem);
+      
+      await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+        inventory
+      });
+      
+      const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
+      await this.logEscapeRoomActivity(sessionId, userName, `아이템을 조합했습니다: ${item1} + ${item2} = ${resultItem}`, 'SYSTEM', session);
+      return true;
+    }
+    
+    return false;
+  },
+
+  async enterEscapeRoomStage(sessionId: string, roomId: string, session: Session) {
+    if (!db || !session.escapeRoomGame) return;
+    const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
+    
+    const theme = ESCAPE_ROOM_THEMES[session.escapeRoomGame.themeId];
+    const room = theme?.rooms[roomId];
+    
+    let timeAttackEndTime = null;
+    if (room && room.puzzles.length > 0 && room.puzzles[0].triggerTimer) {
+      timeAttackEndTime = Date.now() + room.puzzles[0].triggerTimer * 1000;
+    }
+
+    await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+      currentRoomId: roomId,
+      solvedPuzzles: [],
+      isRoomCleared: false,
+      lastSolvedPuzzleId: null,
+      timeAttackEndTime
+    });
+    
+    await this.logEscapeRoomActivity(sessionId, userName, `스테이지에 입장했습니다: ${roomId}`, 'MOVE', session);
   },
 
   async nextEscapeRoomStage(sessionId: string, session: Session) {
@@ -2783,26 +2853,50 @@ export const sessionService = {
     if (!room) return;
 
     const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
+    
+    const clearedRooms = [...(session.escapeRoomGame.clearedRooms || [])];
+    if (!clearedRooms.includes(room.id)) {
+      clearedRooms.push(room.id);
+    }
 
-    if (room.nextRoomId) {
-      await this.logEscapeRoomActivity(sessionId, userName, `다음 방으로 이동했습니다.`, 'MOVE', session);
-      const nextRoom = theme.rooms[room.nextRoomId];
-      await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
-        currentRoomId: room.nextRoomId,
-        solvedPuzzles: [],
-        isRoomCleared: false,
-        lastSolvedPuzzleId: null
-      });
-      await this.addLog(sessionId, `다음 방으로 이동했습니다: ${nextRoom.name}`, 'info');
-    } else {
-      await this.logEscapeRoomActivity(sessionId, userName, `탈출에 성공했습니다!`, 'SYSTEM', session);
+    const roomsList = Object.values(theme.rooms);
+    const isAllCleared = roomsList.every(r => clearedRooms.includes(r.id));
+
+    if (isAllCleared) {
+      await this.logEscapeRoomActivity(sessionId, userName, `모든 스테이지를 클리어했습니다!`, 'SYSTEM', session);
       await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
         status: 'WON',
-        isRoomCleared: false
+        isRoomCleared: false,
+        clearedRooms,
+        timeAttackEndTime: null
       });
       await this.addLog(sessionId, '축하합니다! 모든 방을 탈출했습니다!', 'success');
       await this.advanceStatus(sessionId, SessionStatus.SUMMARY);
+    } else {
+      await this.logEscapeRoomActivity(sessionId, userName, `스테이지 선택 화면으로 돌아갑니다.`, 'MOVE', session);
+      await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+        currentRoomId: 'STAGE_SELECT',
+        solvedPuzzles: [],
+        isRoomCleared: false,
+        lastSolvedPuzzleId: null,
+        clearedRooms,
+        timeAttackEndTime: null
+      });
+      await this.addLog(sessionId, `스테이지 클리어! 다음 스테이지를 선택하세요.`, 'info');
     }
+  },
+
+  async failEscapeRoomStage(sessionId: string, session: Session) {
+    if (!db || !session.escapeRoomGame || session.escapeRoomGame.status !== 'PLAYING') return;
+    
+    await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+      currentRoomId: 'STAGE_SELECT',
+      solvedPuzzles: [],
+      isRoomCleared: false,
+      lastSolvedPuzzleId: null,
+      timeAttackEndTime: null
+    });
+    await this.addLog(sessionId, '시간이 초과되었습니다. 스테이지 선택 화면으로 돌아갑니다.', 'error');
   },
 
   async failEscapeRoom(sessionId: string, session: Session) {

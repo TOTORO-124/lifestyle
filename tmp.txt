@@ -1,0 +1,28 @@
+25:  return (
+94:  return (
+310:    return () => {
+444:    return () => {
+547:    return () => {
+898:    return (
+959:  return (
+1288:  return (
+1406:    return () => clearInterval(interval);
+1467:      return () => {
+1525:    return () => unsubscribe();
+1545:      return () => unsubscribe();
+1565:      return () => clearInterval(timerId);
+1577:    return () => clearInterval(interval);
+1593:      return () => clearInterval(interval);
+1622:    return () => window.removeEventListener('keydown', handleKeyDown);
+1784:    return (
+1809:    return (
+2127:  return (
+2538:                                  return (
+3136:                            return (
+3298:                            return (Array.isArray(board) ? board : Object.values(board)).map((row: any, r: number) => (
+3302:                                return (
+3370:                            return (
+3551:                          return (
+3615:                          return (
+3969:                        return (
+4785:                        return (

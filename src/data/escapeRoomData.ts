@@ -1,4 +1,4 @@
-export type PuzzleType = 'TEXT' | 'DIRECTION' | 'COLOR' | 'PATTERN' | 'CHOICE' | 'HIDDEN_OBJECT' | 'SLIDE_PUZZLE' | 'CUBE_PATTERN';
+export type PuzzleType = 'TEXT' | 'DIRECTION_SEQUENCE' | 'COLOR' | 'PATTERN' | 'CHOICE' | 'HIDDEN_OBJECT' | 'DRAG_DROP' | 'PASSWORD_DIAL' | 'ITEM_INTERACTION' | 'UV_REVEAL' | 'TERMINAL' | 'FLASHLIGHT_FIND' | 'CLICK_SPAM';
 
 export interface Puzzle {
   id: string;
@@ -18,6 +18,23 @@ export interface Puzzle {
   gridSize?: number;
   initialGrid?: number[];
   targetPattern?: string[][];
+  // For DIRECTION_SEQUENCE
+  sequence?: string[]; // e.g., ['UP', 'UP', 'DOWN', 'LEFT']
+  // For DRAG_DROP
+  dragItems?: { id: string; label: string; color?: string; size?: string }[];
+  dropZones?: { id: string; label: string; accepts: string; size?: string }[];
+  // For PASSWORD_DIAL
+  dialCount?: number; // e.g., 4
+  // For ITEM_INTERACTION
+  targetObjectId?: string;
+  // For UV_REVEAL
+  hiddenMessage?: string;
+  triggerTimer?: number; // in seconds
+  // For TERMINAL
+  expectedCommand?: string;
+  isRandomPassword?: boolean;
+  // For CLICK_SPAM
+  clickTargets?: { id: string; label: string; requiredClicks: number }[];
 }
 
 export interface Room {
@@ -46,638 +63,412 @@ export interface EscapeRoomTheme {
 }
 
 export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
-  'horror': {
-    id: 'horror',
-    name: '버려진 정신병원',
-    genre: '공포',
-    description: '안개가 자욱한 밤, 당신은 소문만 무성하던 버려진 정신병원에 갇혔습니다. 복도 끝에서 들려오는 기괴한 소리를 피해 탈출해야 합니다.',
-    difficulty: 'HARD',
-    startRoomId: 'h_room_1',
-    styles: {
-      primaryColor: '#7f1d1d', // dark red
-      secondaryColor: '#450a0a',
-      bgColor: '#0a0a0a',
-      accentColor: '#ef4444',
-      fontFamily: 'serif'
-    },
-    rooms: {
-      'h_room_1': {
-        id: 'h_room_1',
-        name: '폐쇄 병동 복도',
-        description: '깜빡이는 전등 사이로 낡은 휠체어가 놓여 있습니다. 벽에는 알 수 없는 낙서들이 가득합니다.',
-        puzzles: [
-          {
-            id: 'h_p1_1',
-            type: 'TEXT',
-            question: '벽에 적힌 낙서: "12월 25일은 크리스마스, 1월 1일은 신정. 그렇다면 10월 31일은?"',
-            answer: '할로윈',
-            hint: '서양의 유령 축제입니다.',
-            superHint: 'ㅎㄹㅇ',
-            explanation: '정답은 할로윈입니다. 병원 벽에 피로 적힌 듯한 낙서는 과거 환자들이 이 날을 얼마나 두려워했는지 보여줍니다.'
-          },
-          {
-            id: 'h_p1_2',
-            type: 'PATTERN',
-            question: '바닥에 떨어진 환자 기록지: "4, 8, 12, 16, ? (다음 번호는?)"',
-            answer: '20',
-            hint: '4의 배수입니다.',
-            superHint: '16 + 4 = ?',
-            explanation: '규칙은 4씩 증가하는 수열입니다. 20번 환자의 기록지 뒤에서 진료실 열쇠를 발견했습니다.',
-            rewardItem: '진료실 열쇠',
-            rewardItemExamine: '녹슨 열쇠입니다. "진료실"이라는 태그가 붙어 있습니다.'
-          }
-        ],
-        nextRoomId: 'h_room_2'
-      },
-      'h_room_2': {
-        id: 'h_room_2',
-        name: '원장실',
-        description: '고급스러운 가구들이 부서진 채 방치되어 있습니다. 책상 위 금고가 굳게 닫혀 있습니다.',
-        puzzles: [
-          {
-            id: 'h_p2_1',
-            type: 'DIRECTION',
-            question: '금고 다이얼 방향: "해는 동쪽에서 뜨고 서쪽으로 진다. 북쪽을 향해 서서 오른쪽으로 90도 돌면?"',
-            answer: '동',
-            hint: '방위 문제입니다.',
-            superHint: '동서남북 중 하나입니다.',
-            explanation: '북쪽을 기준으로 오른쪽 90도는 동쪽입니다. 다이얼이 "딸깍" 소리를 내며 돌아갑니다.'
-          },
-          {
-            id: 'h_p2_2',
-            type: 'TEXT',
-            question: '금고 비밀번호: "병원 설립일은 1985년 03월 12일이다. 모든 숫자를 더하면?"',
-            answer: '29',
-            hint: '1+9+8+5+0+3+1+2',
-            superHint: '이십구',
-            explanation: '1+9+8+5+0+3+1+2 = 29입니다. 금고가 열리며 지하실로 통하는 카드키가 나옵니다.',
-            requiredItem: '진료실 열쇠',
-            rewardItem: '지하실 카드키'
-          }
-        ],
-        nextRoomId: 'h_room_3'
-      },
-      'h_room_3': {
-        id: 'h_room_3',
-        name: '지하 수술실',
-        description: '녹슨 수술대와 깨진 약병들이 흩어져 있습니다. 차가운 기운이 엄습합니다.',
-        puzzles: [
-          {
-            id: 'h_p3_1',
-            type: 'CHOICE',
-            question: '수술대 옆 모니터: "인간의 뼈는 총 몇 개인가?"',
-            answer: '206',
-            options: ['106', '206', '306', '406'],
-            hint: '성인 기준입니다.',
-            superHint: '200개가 조금 넘습니다.',
-            explanation: '인간의 뼈는 206개입니다. 모니터에 기괴한 엑스레이 사진이 지나가며 문이 열립니다.'
-          },
-          {
-            id: 'h_p3_2',
-            type: 'PATTERN',
-            question: '탈출구 암호: "S, M, T, W, T, F, ? (다음 알파벳은?)"',
-            answer: 'S',
-            hint: '요일의 영어 첫 글자입니다.',
-            superHint: 'Sunday의 첫 글자.',
-            explanation: 'Sunday의 S입니다. 마침내 병원의 무거운 철문이 열리고 차가운 새벽 공기가 느껴집니다.',
-            requiredItem: '지하실 카드키'
-          }
-        ]
-      }
-    }
-  },
-  'scifi': {
-    id: 'scifi',
-    name: '화성 기지 탈출',
-    genre: 'SF',
-    description: '화성 탐사 기지에 산소 공급 장치가 고장 났습니다. 구조선이 도착하기 전까지 시스템을 복구하고 탈출해야 합니다.',
+  'interactive_escape': {
+    id: 'interactive_escape',
+    name: '시즌 1: 시공간 탈출',
+    genre: '미스터리',
+    description: '알 수 없는 힘에 의해 시공간이 뒤틀린 방들에 갇혔습니다. 각 방의 퍼즐을 풀고 무사히 현실로 돌아가세요.',
     difficulty: 'NORMAL',
-    startRoomId: 's_room_1',
+    startRoomId: 'room_1',
     styles: {
-      primaryColor: '#1e3a8a', // dark blue
-      secondaryColor: '#1e40af',
-      bgColor: '#020617',
-      accentColor: '#38bdf8',
-      fontFamily: 'monospace'
-    },
-    rooms: {
-      's_room_1': {
-        id: 's_room_1',
-        name: '중앙 통제실',
-        description: '경고음이 울려 퍼지고 있습니다. 메인 컴퓨터가 잠겨 있습니다.',
-        puzzles: [
-          {
-            id: 's_p1_1',
-            type: 'TEXT',
-            question: '시스템 복구 코드: "태양계의 4번째 행성은?"',
-            answer: '화성',
-            hint: '우리가 지금 있는 곳입니다.',
-            superHint: 'Mars',
-            explanation: '정답은 화성입니다. 메인 컴퓨터가 부팅되며 기지의 산소 농도가 표시됩니다. 아직은 위험한 수준입니다.'
-          },
-          {
-            id: 's_p1_2',
-            type: 'COLOR',
-            question: '비상 전원 연결: "정지 신호는 빨강, 진행 신호는 초록. 그렇다면 주의 신호는?"',
-            answer: '노랑',
-            hint: '신호등 색깔입니다.',
-            superHint: 'Yellow',
-            explanation: '노란색 전선을 연결하자 기지에 희미한 비상등이 켜집니다. 이제 생명 유지 장치실로 갈 수 있습니다.'
-          }
-        ],
-        nextRoomId: 's_room_2'
-      },
-      's_room_2': {
-        id: 's_room_2',
-        name: '생명 유지 장치실',
-        description: '산소 탱크들이 줄지어 있습니다. 밸브 조절이 필요합니다.',
-        puzzles: [
-          {
-            id: 's_p2_1',
-            type: 'CHOICE',
-            question: '공기 성분 퀴즈: "지구 대기 중 가장 많은 비율을 차지하는 기체는?"',
-            answer: '질소',
-            options: ['산소', '이산화탄소', '질소', '아르곤'],
-            hint: '과자 봉지에도 들어있습니다.',
-            superHint: '78%를 차지합니다.',
-            explanation: '질소는 대기의 약 78%를 차지합니다. 밸브가 열리며 신선한 공기가 기지 내부로 유입되기 시작합니다.'
-          },
-          {
-            id: 's_p2_2',
-            type: 'PATTERN',
-            question: '압력 조절 암호: "1, 2, 4, 8, 16, ? (다음 숫자는?)"',
-            answer: '32',
-            hint: '2의 거듭제곱입니다.',
-            superHint: '16 * 2 = ?',
-            explanation: '2의 거듭제곱 수열입니다. 압력이 정상 수치로 돌아오며 격납고의 잠금 장치가 해제되었습니다.'
-          }
-        ],
-        nextRoomId: 's_room_3'
-      },
-      's_room_3': {
-        id: 's_room_3',
-        name: '격납고',
-        description: '탈출용 포드가 준비되어 있습니다. 연료 주입이 필요합니다.',
-        puzzles: [
-          {
-            id: 's_p3_1',
-            type: 'TEXT',
-            question: '연료 배합비: "수소 원자 2개와 산소 원자 1개가 결합하면 무엇이 되는가?"',
-            answer: '물',
-            hint: 'H2O',
-            superHint: '생명의 근원',
-            explanation: 'H2O, 즉 물입니다. 특수 처리된 물이 연료 전지에 주입되며 탈출용 포드의 엔진이 가동됩니다.'
-          },
-          {
-            id: 's_p3_2',
-            type: 'DIRECTION',
-            question: '발사 궤도 설정: "위, 위, 아래, 아래, 왼쪽, 오른쪽, 왼쪽, ? (다음 방향은?)"',
-            answer: '오른쪽',
-            hint: '유명한 커맨드 패턴입니다.',
-            superHint: '코나미 커맨드',
-            explanation: '마지막 방향은 오른쪽입니다. 궤도가 정확히 설정되었습니다. 3, 2, 1... 발사! 화성을 뒤로하고 지구로 향합니다.'
-          }
-        ]
-      }
-    }
-  },
-  'fantasy': {
-    id: 'fantasy',
-    name: '마법사의 탑',
-    genre: '판타지',
-    description: '전설적인 대마법사의 탑에 초대받았습니다. 하지만 마법사가 외출한 사이 탑의 방어 시스템이 작동해버렸습니다.',
-    difficulty: 'NORMAL',
-    startRoomId: 'f_room_1',
-    styles: {
-      primaryColor: '#4c1d95', // dark purple
-      secondaryColor: '#5b21b6',
-      bgColor: '#1e1b4b',
-      accentColor: '#fbbf24',
-      fontFamily: 'serif'
-    },
-    rooms: {
-      'f_room_1': {
-        id: 'f_room_1',
-        name: '연금술 실험실',
-        description: '보라색 연기가 피어오르는 솥과 신비로운 약초들이 가득합니다.',
-        puzzles: [
-          {
-            id: 'f_p1_1',
-            type: 'COLOR',
-            question: '마법 시약 조합: "파란색과 노란색을 섞으면 나오는 색은?"',
-            answer: '초록',
-            hint: '숲의 색깔입니다.',
-            superHint: 'Green',
-            explanation: '초록색 시약이 완성되었습니다! 솥에서 맑은 빛이 뿜어져 나오며 도서관으로 향하는 계단이 나타납니다.'
-          },
-          {
-            id: 'f_p1_2',
-            type: 'TEXT',
-            question: '수정구슬의 예언: "머리는 하나인데 발은 네 개, 낮에는 일하고 밤에는 쉬는 것은?"',
-            answer: '침대',
-            hint: '가구입니다.',
-            superHint: '잠잘 때 쓰는 것',
-            explanation: '정답은 침대입니다. 수정구슬이 환하게 빛나며 당신의 지혜를 인정합니다.'
-          }
-        ],
-        nextRoomId: 'f_room_2'
-      },
-      'f_room_2': {
-        id: 'f_room_2',
-        name: '도서관',
-        description: '스스로 날아다니는 책들이 가득한 도서관입니다. 지혜의 시험을 통과해야 합니다.',
-        puzzles: [
-          {
-            id: 'f_p2_1',
-            type: 'TEXT',
-            question: '지혜의 문구: "가장 가벼우면서도 가장 무거운 것은? (두 글자)"',
-            answer: '마음',
-            hint: '우리 몸 안에 있습니다.',
-            superHint: 'Heart',
-            explanation: '마음은 깃털처럼 가벼울 수도, 바위처럼 무거울 수도 있죠. 도서관의 책들이 길을 비켜줍니다.'
-          },
-          {
-            id: 'f_p2_2',
-            type: 'PATTERN',
-            question: '마법 서적의 암호: "3, 6, 9, 12, ? (다음 숫자는?)"',
-            answer: '15',
-            hint: '3의 배수입니다.',
-            superHint: '12 + 3 = ?',
-            explanation: '3의 배수 규칙입니다. 15페이지를 펼치자 탑의 정상으로 통하는 마법진이 활성화됩니다.'
-          }
-        ],
-        nextRoomId: 'f_room_3'
-      },
-      'f_room_3': {
-        id: 'f_room_3',
-        name: '정상 제단',
-        description: '탑의 꼭대기입니다. 하늘에는 용이 날아다니고 있습니다.',
-        puzzles: [
-          {
-            id: 'f_p3_1',
-            type: 'TEXT',
-            question: '용의 수수께끼: "나는 날개가 없어도 날고, 눈이 없어도 울며, 입이 없어도 속삭인다. 나는 누구인가?"',
-            answer: '바람',
-            hint: '공기의 흐름입니다.',
-            superHint: 'Wind',
-            explanation: '바람입니다. 거대한 용이 고개를 끄덕이며 당신을 탑 밖으로 안전하게 데려다줍니다.'
-          },
-          {
-            id: 'f_p3_2',
-            type: 'CHOICE',
-            question: '탈출 마법 주문: "무지개의 색깔은 몇 가지인가?"',
-            answer: '7',
-            options: ['5', '6', '7', '8'],
-            hint: '빨주노초파남보',
-            superHint: '행운의 숫자',
-            explanation: '7가지 색깔의 마법이 합쳐지며 눈부신 포탈이 열립니다. 당신은 무사히 탑을 탈출했습니다!'
-          }
-        ]
-      }
-    }
-  },
-  'mystery': {
-    id: 'mystery',
-    name: '탐정의 사무실',
-    genre: '추리',
-    description: '당신은 유명한 탐정의 조수입니다. 탐정이 남긴 암호를 풀어 사라진 보물을 찾아야 합니다.',
-    difficulty: 'NORMAL',
-    startRoomId: 'm_room_1',
-    styles: {
-      primaryColor: '#422006', // dark brown
-      secondaryColor: '#713f12',
-      bgColor: '#1c1917',
-      accentColor: '#f59e0b',
-      fontFamily: 'serif'
-    },
-    rooms: {
-      'm_room_1': {
-        id: 'm_room_1',
-        name: '사무실 입구',
-        description: '타자기 소리가 들리는 듯한 조용한 사무실입니다. 게시판에 단서들이 붙어 있습니다.',
-        puzzles: [
-          {
-            id: 'm_p1_1',
-            type: 'TEXT',
-            question: '게시판의 쪽지: "범인은 항상 ?장소에 다시 나타난다. (두 글자)"',
-            answer: '사건',
-            hint: '일이 일어난 곳.',
-            superHint: 'Case',
-            explanation: '사건 현장입니다. 탐정의 날카로운 통찰력이 담긴 메모군요. 이제 금고를 조사해봅시다.'
-          },
-          {
-            id: 'm_p1_2',
-            type: 'PATTERN',
-            question: '금고 비밀번호: "A=1, B=2, C=3... 그렇다면 D는?"',
-            answer: '4',
-            hint: '알파벳 순서입니다.',
-            superHint: 'D = ?',
-            explanation: 'D는 4번째 알파벳입니다. 금고가 열리며 암실로 들어가는 열쇠를 얻었습니다.'
-          }
-        ],
-        nextRoomId: 'm_room_2'
-      },
-      'm_room_2': {
-        id: 'm_room_2',
-        name: '암실',
-        description: '사진을 인화하는 붉은 조명의 방입니다. 벽에 사진들이 걸려 있습니다.',
-        puzzles: [
-          {
-            id: 'm_p2_1',
-            type: 'TEXT',
-            question: '사진 속 단서: "거꾸로 해도 똑같은 단어, 3글자, 먹는 것"',
-            answer: '토마토',
-            hint: '빨간 채소입니다.',
-            superHint: 'Tomato',
-            explanation: '토마토입니다. 사진 뒤에 숨겨진 비밀 버튼을 찾았습니다.'
-          },
-          {
-            id: 'm_p2_2',
-            type: 'PATTERN',
-            question: '인화액 배합: "1, 1, 2, 3, 5, 8, ? (다음 숫자는?)"',
-            answer: '13',
-            hint: '피보나치 수열입니다.',
-            superHint: '5 + 8 = ?',
-            explanation: '피보나치 수열에 따라 다음 숫자는 13입니다. 인화된 사진 속에서 비밀 서재의 위치가 드러납니다.'
-          }
-        ],
-        nextRoomId: 'm_room_3'
-      },
-      'm_room_3': {
-        id: 'm_room_3',
-        name: '비밀 서재',
-        description: '책장 뒤에 숨겨진 방입니다. 탐정이 찾던 보물이 여기 있을까요?',
-        puzzles: [
-          {
-            id: 'm_p3_1',
-            type: 'CHOICE',
-            question: '마지막 질문: "셜록 홈즈의 단짝 친구 이름은?"',
-            answer: '왓슨',
-            options: ['모리아티', '왓슨', '레스트레이드', '허드슨'],
-            hint: '존 왓슨',
-            superHint: 'Watson',
-            explanation: '왓슨 박사입니다. 탐정의 충실한 조력자죠. 이제 마지막 보물 상자만 남았습니다.'
-          },
-          {
-            id: 'm_p3_2',
-            type: 'TEXT',
-            question: '보물 상자 코드: "우리나라의 국보 1호는?"',
-            answer: '숭례문',
-            hint: '남대문이라고도 불립니다.',
-            superHint: 'ㅅㄹㅁ',
-            explanation: '숭례문입니다. 상자가 열리며 탐정이 숨겨둔 황금 돋보기를 발견했습니다. 사건 해결!'
-          }
-        ]
-      }
-    }
-  },
-  'historical': {
-    id: 'historical',
-    name: '조선시대 감옥 탈출',
-    genre: '역사',
-    description: '억울하게 옥살이를 하게 된 당신. 암행어사가 오기 전까지 증거를 찾아 탈출해야 합니다.',
-    difficulty: 'EASY',
-    startRoomId: 'h_room_1',
-    styles: {
-      primaryColor: '#3f2b1d', // wood brown
-      secondaryColor: '#5d4037',
-      bgColor: '#1a120b',
-      accentColor: '#d4af37',
-      fontFamily: 'serif'
-    },
-    rooms: {
-      'h_room_1': {
-        id: 'h_room_1',
-        name: '포도청 감옥',
-        description: '창살 너머로 달빛이 들어옵니다. 간수가 잠든 사이 움직여야 합니다.',
-        puzzles: [
-          {
-            id: 'h_p1_1',
-            type: 'TEXT',
-            question: '벽에 새겨진 글귀: "세종대왕이 창제한 우리 글의 이름은?"',
-            answer: '훈민정음',
-            hint: '한글의 옛 이름입니다.',
-            superHint: 'ㅎㅁㅈㅇ',
-            explanation: '백성을 가르치는 바른 소리, 훈민정음입니다. 벽의 글귀가 빛나며 옥사 문이 살짝 열립니다.'
-          },
-          {
-            id: 'h_p1_2',
-            type: 'CHOICE',
-            question: '옥사 열쇠 암호: "십이지신 중 첫 번째 동물은?"',
-            answer: '쥐',
-            options: ['쥐', '소', '호랑이', '토끼'],
-            hint: '자(子)',
-            superHint: '찍찍',
-            explanation: '자(子)는 쥐를 상징합니다. 간수의 허리춤에서 열쇠를 몰래 빼내어 탈출에 성공합니다.'
-          }
-        ],
-        nextRoomId: 'h_room_2'
-      },
-      'h_room_2': {
-        id: 'h_room_2',
-        name: '형판 사무실',
-        description: '각종 서류와 장부들이 쌓여 있습니다. 억울함을 풀 증거를 찾아야 합니다.',
-        puzzles: [
-          {
-            id: 'h_p2_1',
-            type: 'TEXT',
-            question: '장부의 퀴즈: "조선시대 왕의 이름 뒤에 붙는 글자 두 가지는?"',
-            answer: '조종',
-            hint: '조와 종',
-            superHint: 'ㅈㅈ',
-            explanation: '조(祖)와 종(宗)입니다. 장부 속에서 당신의 무죄를 증명할 결정적인 서신을 발견했습니다.'
-          },
-          {
-            id: 'h_p2_2',
-            type: 'TEXT',
-            question: '비밀 통로 암호: "임진왜란 때 거북선을 만든 장군은?"',
-            answer: '이순신',
-            hint: '성웅 이순신',
-            superHint: 'ㅇㅅㅅ',
-            explanation: '충무공 이순신 장군입니다. 책장 뒤의 비밀 통로가 열리며 밖으로 나가는 길이 보입니다.'
-          }
-        ],
-        nextRoomId: 'h_room_3'
-      },
-      'h_room_3': {
-        id: 'h_room_3',
-        name: '뒷마당 담벼락',
-        description: '이제 담장만 넘으면 자유입니다. 하지만 마지막 관문이 기다리고 있습니다.',
-        puzzles: [
-          {
-            id: 'h_p3_1',
-            type: 'TEXT',
-            question: '마지막 수수께끼: "낮에는 올라가고 밤에는 내려가는 것은?"',
-            answer: '해',
-            hint: '태양입니다.',
-            superHint: 'ㅎ',
-            explanation: '해입니다. 동이 트기 시작합니다. 서둘러야 합니다!'
-          },
-          {
-            id: 'h_p3_2',
-            type: 'TEXT',
-            question: '탈출 암호: "우리나라의 5대 궁궐 중 가장 큰 곳은?"',
-            answer: '경복궁',
-            hint: '광화문이 있는 곳입니다.',
-            superHint: 'ㄱㅂㄱ',
-            explanation: '경복궁입니다. 담장을 넘자마자 암행어사의 마패가 빛납니다. 당신은 무사히 억울함을 풀었습니다!'
-          }
-        ]
-      }
-    }
-  },
-  'museum': {
-    id: 'museum',
-    name: '박물관 괴도',
-    genre: '잠입',
-    description: '전설적인 보석 "푸른 별"이 전시된 박물관에 잠입했습니다. 보안 시스템이 가동되기 전에 보석을 훔쳐 탈출해야 합니다.',
-    difficulty: 'NORMAL',
-    startRoomId: 'm_room_1',
-    styles: {
-      primaryColor: '#0f172a',
-      secondaryColor: '#1e293b',
-      bgColor: '#020617',
-      accentColor: '#38bdf8',
+      primaryColor: '#4f46e5',
+      secondaryColor: '#312e81',
+      bgColor: '#0f172a',
+      accentColor: '#818cf8',
       fontFamily: 'sans-serif'
     },
     rooms: {
-      'm_room_1': {
-        id: 'm_room_1',
-        name: '전시실 입구',
-        description: '어두운 복도에 레이저 보안 장치가 깔려 있습니다.',
+      'room_1': {
+        id: 'room_1',
+        name: '어두운 지하실',
+        description: '눈을 떠보니 습기 찬 지하실이다. 기초적인 조작법과 아이템 사용법을 익히는 방.',
         puzzles: [
           {
-            id: 'm_p1_1',
+            id: 'r1_p1',
             type: 'HIDDEN_OBJECT',
-            question: '보안실 열쇠를 찾으세요.',
-            answer: 'key_found',
-            hint: '책상 아래나 화분 뒤를 살펴보세요.',
-            imageUrl: 'https://picsum.photos/seed/museum_lobby/800/600',
+            question: '방이 너무 어두워서 아무것도 보이지 않는다.',
+            answer: 'found_all',
+            hint: '화면 구석의 수상한 모양을 클릭해보자.',
+            imageUrl: 'https://images.unsplash.com/photo-1519068737630-e5db30e12e42?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
-              { id: 'key_found', x: 70, y: 80, width: 10, height: 10, name: '보안실 열쇠' }
+              { id: 'fusebox', x: 80, y: 20, width: 15, height: 15, name: '두꺼비집(배전반)' }
             ],
-            explanation: '보안실 열쇠를 찾았습니다! 이제 레이저를 끌 수 있습니다.'
+            explanation: '덜컥 소리와 함께 불이 켜지며 방의 모습이 드러났다!'
+          },
+          {
+            id: 'r1_p2_find',
+            type: 'HIDDEN_OBJECT',
+            question: '바닥에 먼지 쌓인 코트가 있다.',
+            answer: 'found_all',
+            hint: '코트를 클릭해보자.',
+            imageUrl: 'https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1000&auto=format&fit=crop',
+            hiddenObjects: [
+              { id: 'coat', x: 50, y: 50, width: 30, height: 40, name: '먼지 쌓인 코트' }
+            ],
+            rewardItem: '녹슨 열쇠',
+            explanation: '코트 주머니에서 녹슨 열쇠를 획득했다!'
+          },
+          {
+            id: 'r1_p2_use',
+            type: 'ITEM_INTERACTION',
+            question: '철문이 굵은 자물쇠로 잠겨 있다.',
+            answer: 'OPEN',
+            hint: '인벤토리에서 열쇠를 선택한 뒤 자물쇠를 클릭하자.',
+            targetObjectId: 'iron_door',
+            requiredItem: '녹슨 열쇠',
+            explanation: '녹슨 열쇠로 철문을 열었다!'
+          },
+          {
+            id: 'r1_p3',
+            type: 'DIRECTION_SEQUENCE',
+            question: '다음 방으로 가는 엘리베이터 전원이 꺼져 있다. 벽에 핏자국으로 [상 - 상 - 하 - 좌 - 우] 라고 적혀 있다.',
+            answer: 'UP,UP,DOWN,LEFT,RIGHT',
+            hint: '벽에 적힌 방향대로 패널에 입력하자.',
+            sequence: ['UP', 'UP', 'DOWN', 'LEFT', 'RIGHT'],
+            explanation: '엘리베이터 전원이 켜지며 다음 방으로 이동한다!'
           }
         ],
-        nextRoomId: 'm_room_2'
+        nextRoomId: 'room_2'
       },
-      'm_room_2': {
-        id: 'm_room_2',
-        name: '보안실',
-        description: '복잡한 회로가 얽힌 제어판이 보입니다.',
+      'room_2': {
+        id: 'room_2',
+        name: '버려진 비밀 연구소',
+        description: '사이버틱한 조명과 복잡한 기계들이 있는 연구소다. 텍스트 단서와 다이얼 기믹을 활용해야 한다.',
         puzzles: [
           {
-            id: 'm_p2_1',
-            type: 'SLIDE_PUZZLE',
-            question: '회로를 복구하여 보안을 해제하세요.',
-            answer: 'solved',
-            hint: '조각을 밀어서 그림을 완성하세요.',
-            gridSize: 3,
-            initialGrid: [1, 2, 3, 4, 5, 6, 7, 0, 8], // Almost solved for demo
-            explanation: '회로가 복구되었습니다! 중앙 전시실의 문이 열립니다.'
+            id: 'r2_p1',
+            type: 'PASSWORD_DIAL',
+            question: '연구소 컴퓨터가 잠겨 있다. 모니터 옆 포스트잇에 "내 생일은 광복절(8월 15일) 다음 날이야"라고 적혀 있다.',
+            answer: '0816',
+            hint: '8월 15일의 다음 날짜를 4자리로 입력하자.',
+            dialCount: 4,
+            explanation: '컴퓨터 잠금이 해제되었다!'
+          },
+          {
+            id: 'r2_p2',
+            type: 'DRAG_DROP',
+            question: '컴퓨터는 켰지만 메인 서버로 가는 문이 고장 나 있다. 끊어진 전선 3가닥(빨, 파, 초)을 알맞은 색상의 단자에 연결하자.',
+            answer: 'CONNECTED',
+            hint: '같은 색상의 단자에 전선을 드래그 앤 드롭으로 연결하자.',
+            dragItems: [
+              { id: 'wire_red', label: '빨간 선', color: '#ef4444' },
+              { id: 'wire_blue', label: '파란 선', color: '#3b82f6' },
+              { id: 'wire_green', label: '초록 선', color: '#22c55e' }
+            ],
+            dropZones: [
+              { id: 'port_red', label: '빨간 단자', accepts: 'wire_red' },
+              { id: 'port_blue', label: '파란 단자', accepts: 'wire_blue' },
+              { id: 'port_green', label: '초록 단자', accepts: 'wire_green' }
+            ],
+            explanation: '전선이 연결되며 문이 열렸다!'
+          },
+          {
+            id: 'r2_p3_quiz',
+            type: 'PATTERN',
+            question: '문 앞을 레이저가 막고 있다. 금고를 열어야 레이저를 끌 수 있다. 힌트: "첫 번째 숫자는 2, 두 번째는 4, 세 번째는 8... 그렇다면 네 번째는?"',
+            answer: '16',
+            hint: '이전 숫자에 2를 곱해보자.',
+            rewardItem: '거울',
+            explanation: '정답 16을 입력해 금고를 열고 거울을 획득했다!'
+          },
+          {
+            id: 'r2_p3_use',
+            type: 'ITEM_INTERACTION',
+            question: '레이저가 길을 막고 있다. 빛을 반사시킬 물건이 필요하다.',
+            answer: 'OPEN',
+            hint: '인벤토리에서 거울을 선택한 뒤 레이저를 클릭하자.',
+            targetObjectId: 'laser',
+            requiredItem: '거울',
+            explanation: '거울로 레이저 빛을 반사시켜 길을 열었다!'
           }
         ],
-        nextRoomId: 'm_room_3'
+        nextRoomId: 'room_3'
       },
-      'm_room_3': {
-        id: 'm_room_3',
-        name: '중앙 전시실',
-        description: '중앙에 "푸른 별" 보석이 찬란하게 빛나고 있습니다.',
+      'room_3': {
+        id: 'room_3',
+        name: '고대 유적의 심장',
+        description: '웅장한 신전이다. 앞서 배운 모든 기믹을 종합해야 탈출할 수 있다.',
         puzzles: [
           {
-            id: 'm_p3_1',
-            type: 'CUBE_PATTERN',
-            question: '보석함의 암호를 맞추세요. (3x3 패턴)',
-            answer: '101010101',
-            hint: 'X자 모양으로 버튼을 누르세요.',
-            targetPattern: [
-              ['X', 'O', 'X'],
-              ['O', 'X', 'O'],
-              ['X', 'O', 'X']
+            id: 'r3_p1_find',
+            type: 'HIDDEN_OBJECT',
+            question: '방 한가운데 제단이 있고, 주변에 빈 물통과 성스러운 샘물이 있다.',
+            answer: 'found_all',
+            hint: '빈 물통을 찾아 클릭하자.',
+            imageUrl: 'https://images.unsplash.com/photo-1599930113854-d6d7fd521f10?q=80&w=1000&auto=format&fit=crop',
+            hiddenObjects: [
+              { id: 'empty_bottle', x: 30, y: 70, width: 15, height: 20, name: '빈 물통' }
             ],
-            explanation: '보석함이 열렸습니다! 푸른 별을 획득하고 무사히 탈출했습니다.'
+            rewardItem: '빈 물통',
+            explanation: '빈 물통을 획득했다!'
+          },
+          {
+            id: 'r3_p1_use',
+            type: 'ITEM_INTERACTION',
+            question: '성스러운 샘물이 흐르고 있다. 물을 담을 그릇이 필요하다.',
+            answer: 'OPEN',
+            hint: '인벤토리에서 빈 물통을 선택한 뒤 샘물을 클릭하자.',
+            targetObjectId: 'spring',
+            requiredItem: '빈 물통',
+            rewardItem: '물이 가득 찬 물통',
+            explanation: '빈 물통에 성스러운 샘물을 가득 채웠다!'
+          },
+          {
+            id: 'r3_p2',
+            type: 'DIRECTION_SEQUENCE',
+            question: '거대한 돌문이 길을 막고 있다. 벽화에 [태양(위) -> 대지(아래) -> 바다(우) -> 숲(좌)] 순서로 제사를 지냈다고 적혀 있다.',
+            answer: 'UP,DOWN,RIGHT,LEFT',
+            hint: '벽화의 순서대로 방향키를 입력하자.',
+            sequence: ['UP', 'DOWN', 'RIGHT', 'LEFT'],
+            explanation: '돌문이 흔들리며 열렸다!'
+          },
+          {
+            id: 'r3_p3',
+            type: 'PASSWORD_DIAL',
+            question: '출구 앞 마지막 자물쇠. 벽에 4마리 동물의 석상이 있다. (독수리 날개 2개, 거미 다리 8개, 개구리 다리 4개, 뱀 다리 0개)',
+            answer: '2840',
+            hint: '동물의 다리(날개) 개수를 순서대로 4자리 숫자로 입력하자.',
+            dialCount: 4,
+            explanation: '화려한 이펙트와 함께 최종 탈출 성공!'
           }
         ]
       }
     }
   },
-  'temple': {
-    id: 'temple',
-    name: '고대 사원의 비밀',
-    genre: '어드벤처',
-    description: '정글 깊숙한 곳, 잊혀진 고대 사원을 발견했습니다. 사원의 함정을 피해 황금 우상을 찾아야 합니다.',
-    difficulty: 'HARD',
-    startRoomId: 't_room_1',
+  'universe_escape': {
+    id: 'universe_escape',
+    name: '시즌 3: 방탈출 유니버스',
+    genre: '종합 어드벤처',
+    description: '10가지 각기 다른 테마의 방을 차례대로 탈출하는 거대한 여정입니다.',
+    difficulty: 'NORMAL',
+    startRoomId: 'STAGE_SELECT',
     styles: {
-      primaryColor: '#422006',
-      secondaryColor: '#713f12',
-      bgColor: '#1c1917',
-      accentColor: '#fbbf24',
-      fontFamily: 'serif'
+      primaryColor: '#059669',
+      secondaryColor: '#064e3b',
+      bgColor: '#022c22',
+      accentColor: '#34d399',
+      fontFamily: 'sans-serif'
     },
     rooms: {
-      't_room_1': {
-        id: 't_room_1',
-        name: '사원 입구',
-        description: '거대한 돌문이 앞을 가로막고 있습니다.',
+      'stage_1': {
+        id: 'stage_1',
+        name: '버려진 지하철역',
+        description: '깜빡이는 형광등 아래, 막차를 놓치고 갇힌 지하철역.',
         puzzles: [
           {
-            id: 't_p1_1',
-            type: 'HIDDEN_OBJECT',
-            question: '돌문에 끼울 수 있는 문양 조각 3개를 찾으세요.',
-            answer: 'all_found',
-            hint: '넝쿨 사이와 돌 틈을 잘 보세요.',
-            imageUrl: 'https://picsum.photos/seed/temple_entrance/800/600',
+            id: 'u_s1_p1',
+            type: 'FLASHLIGHT_FIND',
+            question: '지하철역이 너무 어둡다. 손전등을 켜고 바닥을 살펴보자.',
+            answer: 'found_all',
+            hint: '마우스를 움직여 어두운 선로를 비춰보자.',
+            imageUrl: 'https://images.unsplash.com/photo-1517646287270-a5a9ca602e5c?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
-              { id: 'obj1', x: 20, y: 30, width: 8, height: 8, name: '태양 문양' },
-              { id: 'obj2', x: 50, y: 70, width: 8, height: 8, name: '달 문양' },
-              { id: 'obj3', x: 80, y: 40, width: 8, height: 8, name: '별 문양' }
+              { id: 'card_key', x: 70, y: 80, width: 15, height: 15, name: '직원용 카드키' }
             ],
-            explanation: '모든 문양을 찾았습니다! 돌문이 굉음을 내며 열립니다.'
+            rewardItem: '직원용 카드키',
+            explanation: '선로 구석에서 직원용 카드키를 발견했다!'
+          },
+          {
+            id: 'u_s1_p2',
+            type: 'ITEM_INTERACTION',
+            question: '개찰구가 굳게 닫혀 있다. 카드키를 찍어야 나갈 수 있을 것 같다.',
+            answer: 'OPEN',
+            hint: '인벤토리에서 직원용 카드키를 선택한 뒤 개찰구를 클릭하자.',
+            targetObjectId: 'turnstile',
+            requiredItem: '직원용 카드키',
+            explanation: '삐빅! 개찰구가 열렸다.'
+          },
+          {
+            id: 'u_s1_p3',
+            type: 'PASSWORD_DIAL',
+            question: '개찰구를 통과했지만 셔터가 내려가 있다. 노선도를 보니 [강남 -> 역삼 -> 선릉 -> 삼성] 순서로 환승 기호가 그려져 있다. (강남: 2, 역삼: 0, 선릉: 4, 삼성: 8)',
+            answer: '2048',
+            hint: '노선도에 적힌 숫자를 순서대로 입력하자.',
+            dialCount: 4,
+            explanation: '셔터가 올라가며 다음 스테이지로 가는 길이 열렸다!'
           }
         ],
-        nextRoomId: 't_room_2'
+        nextRoomId: 'stage_2'
       },
-      't_room_2': {
-        id: 't_room_2',
-        name: '미로의 방',
-        description: '벽면이 움직이며 길을 잃게 만듭니다.',
+      'stage_2': {
+        id: 'stage_2',
+        name: '장난감 장인의 공방',
+        description: '기괴한 태엽 장난감들이 가득한 나무 공방.',
         puzzles: [
           {
-            id: 't_p2_1',
-            type: 'SLIDE_PUZZLE',
-            question: '지도를 완성하여 길을 찾으세요.',
-            answer: 'solved',
-            hint: '빈 공간을 이용해 조각을 옮기세요.',
-            gridSize: 4,
-            initialGrid: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 15],
-            explanation: '지도가 완성되었습니다! 안전한 통로를 발견했습니다.'
+            id: 'u_s2_p1',
+            type: 'DRAG_DROP',
+            question: '거대한 오르골이 멈춰 있다. 크기가 다른 톱니바퀴 3개를 알맞은 슬롯에 끼워 넣자.',
+            answer: 'CONNECTED',
+            hint: '톱니바퀴의 크기에 맞는 슬롯에 드래그 앤 드롭하자.',
+            dragItems: [
+              { id: 'gear_small', label: '작은 톱니', size: 'small', color: '#b45309' },
+              { id: 'gear_medium', label: '중간 톱니', size: 'medium', color: '#d97706' },
+              { id: 'gear_large', label: '큰 톱니', size: 'large', color: '#f59e0b' }
+            ],
+            dropZones: [
+              { id: 'slot_large', label: '큰 슬롯', accepts: 'gear_large', size: 'large' },
+              { id: 'slot_small', label: '작은 슬롯', accepts: 'gear_small', size: 'small' },
+              { id: 'slot_medium', label: '중간 슬롯', accepts: 'gear_medium', size: 'medium' }
+            ],
+            explanation: '톱니바퀴가 맞물려 돌아가며 오르골에서 멜로디가 흘러나온다!'
+          },
+          {
+            id: 'u_s2_p2',
+            type: 'PATTERN',
+            question: '오르골에서 "도-미-솔-도" 멜로디가 나온다. 금고의 다이얼을 이 멜로디에 맞게 돌려야 한다. (도=1, 레=2, 미=3, 파=4, 솔=5, 라=6, 시=7)',
+            answer: '1351',
+            hint: '계이름을 숫자로 변환하여 입력하자.',
+            explanation: '금고가 열리며 다음 스테이지로 가는 열쇠를 얻었다!'
           }
         ],
-        nextRoomId: 't_room_3'
+        nextRoomId: 'stage_3'
       },
-      't_room_3': {
-        id: 't_room_3',
-        name: '황금 우상의 방',
-        description: '제단 위에 황금 우상이 놓여 있습니다. 무게를 맞춰야 합니다.',
+      'stage_3': {
+        id: 'stage_3',
+        name: '심해 6,000m 잠수함',
+        description: '물이 새어 들어오고 산소가 떨어져 가는 심해 탐사선.',
         puzzles: [
           {
-            id: 't_p3_1',
-            type: 'CUBE_PATTERN',
-            question: '제단의 무게 감지 센서를 무력화하세요.',
-            answer: '111000111',
-            hint: '위아래 줄을 모두 채우세요.',
-            targetPattern: [
-              ['X', 'X', 'X'],
-              ['O', 'O', 'O'],
-              ['X', 'X', 'X']
+            id: 'u_s3_p1',
+            type: 'CLICK_SPAM',
+            question: '파이프 3곳에서 물이 새고 있다! 빠르게 클릭해서 용접 게이지를 채워야 한다.',
+            answer: 'REPAIRED',
+            hint: '파이프를 미친 듯이 클릭하자!',
+            triggerTimer: 180, // 3 minutes
+            clickTargets: [
+              { id: 'pipe_1', label: '메인 파이프', requiredClicks: 30 },
+              { id: 'pipe_2', label: '보조 파이프', requiredClicks: 20 },
+              { id: 'pipe_3', label: '냉각 파이프', requiredClicks: 25 }
             ],
-            explanation: '센서가 무력화되었습니다! 황금 우상을 챙겨 사원을 빠져나갑니다.'
+            explanation: '모든 파이프를 수리했다! 하지만 아직 잠수함 해치가 잠겨 있다.'
+          },
+          {
+            id: 'u_s3_p2',
+            type: 'PASSWORD_DIAL',
+            question: '소나(Sonar) 레이더에 심해어 무리가 찍혔다. [상어 2마리, 오징어 5마리, 해파리 7마리]. 해치 비밀번호는 무엇일까?',
+            answer: '257',
+            hint: '심해어의 마리 수를 순서대로 입력하자.',
+            dialCount: 3,
+            explanation: '잠수함 해치가 열리며 무사히 탈출했다!'
+          }
+        ]
+      }
+    }
+  },
+  'mystery_room': {
+    id: 'mystery_room',
+    name: '시즌 2: 미스터리 룸',
+    genre: '공포/사이버펑크/판타지',
+    description: '저주받은 폐병원, 해커의 은신처, 연금술사의 공방을 넘나들며 탈출하세요.',
+    difficulty: 'HARD',
+    startRoomId: 'room_1',
+    styles: {
+      primaryColor: '#991b1b', // Red for horror
+      secondaryColor: '#450a0a',
+      bgColor: '#171717',
+      accentColor: '#f87171',
+      fontFamily: 'sans-serif'
+    },
+    rooms: {
+      'room_1': {
+        id: 'room_1',
+        name: '저주받은 폐병원',
+        description: '제한 시간 내에 탈출하지 못하면 화면이 붉어지며 게임 오버되는 긴장감 넘치는 방.',
+        puzzles: [
+          {
+            id: 's2_r1_p1',
+            type: 'HIDDEN_OBJECT',
+            question: '바닥에 손전등 같은 것이 떨어져 있다.',
+            answer: 'found_all',
+            hint: '바닥을 잘 살펴보자.',
+            imageUrl: 'https://images.unsplash.com/photo-1505686994434-e3cc5abf1330?q=80&w=1000&auto=format&fit=crop',
+            hiddenObjects: [
+              { id: 'uv_lantern', x: 20, y: 80, width: 20, height: 20, name: 'UV 랜턴' }
+            ],
+            rewardItem: 'UV 랜턴',
+            explanation: 'UV 랜턴을 획득했다! 눈에 보이지 않는 것을 볼 수 있을지도 모른다.'
+          },
+          {
+            id: 's2_r1_p2',
+            type: 'UV_REVEAL',
+            question: '방은 피투성이 벽돌로 가득하다. 평범하게 보면 아무것도 없지만...',
+            answer: 'HELP',
+            hint: '인벤토리에서 UV 랜턴을 활성화하고 벽을 살펴보자.',
+            requiredItem: 'UV 랜턴',
+            hiddenMessage: 'HELP',
+            triggerTimer: 60, // 60 seconds timer triggers when this puzzle is solved
+            explanation: '벽에 숨겨진 글씨 HELP를 발견했다! 갑자기 삐- 삐- 소리가 들린다!'
+          },
+          {
+            id: 's2_r1_p3',
+            type: 'PASSWORD_DIAL',
+            question: '시한폭탄 자물쇠가 작동하기 시작했다! 시간 내에 암호를 입력해야 한다.',
+            answer: 'HELP',
+            hint: '방금 벽에서 발견한 글씨를 입력하자.',
+            dialCount: 4,
+            explanation: '폭발을 막았다! 다음 방으로 가는 문이 열렸다.'
+          }
+        ],
+        nextRoomId: 'room_2'
+      },
+      'room_2': {
+        id: 'room_2',
+        name: '해커의 은신처',
+        description: '마우스 클릭이 아닌, 직접 키보드로 명령어를 쳐서 해킹하는 해커 컨셉의 방.',
+        puzzles: [
+          {
+            id: 's2_r2_p1',
+            type: 'TERMINAL',
+            question: '낡은 컴퓨터 모니터가 켜져 있다. 금고 열기 프로그램을 실행해야 한다.',
+            answer: 'open vault.exe',
+            hint: '파일을 열려면 open [파일명] 을 입력하자.',
+            expectedCommand: 'open vault.exe',
+            explanation: '금고 프로그램이 실행되었다!'
+          },
+          {
+            id: 's2_r2_p2',
+            type: 'TERMINAL',
+            question: '암호화된 파일이 있다. 해독해서 정답을 콘솔에 입력하자.',
+            answer: 'RANDOM', // This will be handled dynamically
+            hint: '수식을 계산해서 입력하자.',
+            isRandomPassword: true,
+            explanation: '비밀번호가 일치한다! 다음 방으로 이동한다.'
+          }
+        ],
+        nextRoomId: 'room_3'
+      },
+      'room_3': {
+        id: 'room_3',
+        name: '연금술사의 공방',
+        description: '인벤토리 창 안에서 아이템 두 개를 섞어 새로운 아이템을 창조하는 방.',
+        puzzles: [
+          {
+            id: 's2_r3_p1',
+            type: 'HIDDEN_OBJECT',
+            question: '방 곳곳에 포션들이 흩어져 있다.',
+            answer: 'found_all',
+            hint: '빨간 포션과 파란 포션을 찾아보자.',
+            imageUrl: 'https://images.unsplash.com/photo-1629196914225-eb8d35041065?q=80&w=1000&auto=format&fit=crop',
+            hiddenObjects: [
+              { id: 'red_potion', x: 30, y: 50, width: 10, height: 20, name: '빨간 포션' },
+              { id: 'blue_potion', x: 70, y: 50, width: 10, height: 20, name: '파란 포션' }
+            ],
+            rewardItem: '빨간 포션,파란 포션', // Special handling needed for multiple items
+            explanation: '빨간 포션과 파란 포션을 획득했다!'
+          },
+          {
+            id: 's2_r3_p2',
+            type: 'ITEM_INTERACTION',
+            question: '문을 거대한 덩굴이 막고 있다. 이 상태로는 덩굴을 녹일 수 없다.',
+            answer: 'OPEN',
+            hint: '인벤토리 안에서 빨간 포션과 파란 포션을 조합해 보라색 맹독 포션을 만들자.',
+            targetObjectId: 'vines',
+            requiredItem: '보라색 맹독 포션',
+            explanation: '맹독 포션으로 덩굴을 녹이고 탈출에 성공했다!'
           }
         ]
       }
     }
   }
 };
-
-export const ESCAPE_ROOM_DATA: Record<string, Room> = ESCAPE_ROOM_THEMES['horror'].rooms;
