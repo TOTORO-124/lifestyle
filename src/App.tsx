@@ -1242,6 +1242,7 @@ export default function App() {
   const [omokBlackId, setOmokBlackId] = useState<string>('');
   const [omokWhiteId, setOmokWhiteId] = useState<string>('');
   const [omokDifficulty, setOmokDifficulty] = useState<number>(1);
+  const [omokRuleType, setOmokRuleType] = useState<'RENJU' | 'FREE'>('RENJU');
   const [isOmokAIMatch, setIsOmokAIMatch] = useState<boolean>(false);
   const [bingoBoard, setBingoBoard] = useState<string[][]>(Array(5).fill(null).map(() => Array(5).fill('')));
   const [bingoSubmitted, setBingoSubmitted] = useState(false);
@@ -2484,6 +2485,24 @@ export default function App() {
                             </div>
                           )}
 
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-[#999]">대전 룰</label>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setOmokRuleType('RENJU')}
+                                className={`flex-1 py-1 rounded text-[10px] font-bold border transition-all ${omokRuleType === 'RENJU' ? 'bg-[#217346] text-white border-[#217346]' : 'bg-white text-gray-600 border-gray-300'}`}
+                              >
+                                렌주 룰 (흑 제약)
+                              </button>
+                              <button
+                                onClick={() => setOmokRuleType('FREE')}
+                                className={`flex-1 py-1 rounded text-[10px] font-bold border transition-all ${omokRuleType === 'FREE' ? 'bg-[#217346] text-white border-[#217346]' : 'bg-white text-gray-600 border-gray-300'}`}
+                              >
+                                자유 룰 (제약 없음)
+                              </button>
+                            </div>
+                          </div>
+
                           <div className="flex gap-2">
                             <div className="flex-1 space-y-1">
                               <label className="text-[9px] font-bold text-[#999]">흑돌 (선공)</label>
@@ -2526,7 +2545,7 @@ export default function App() {
                                   setError('두 플레이어 모두 AI일 수는 없습니다.');
                                   return;
                                 }
-                                sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId, isOmokAIMatch, omokDifficulty);
+                                sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId, isOmokAIMatch, omokDifficulty, omokRuleType);
                               }}
                               className="w-full office-btn-primary py-2 text-[10px] font-bold flex items-center justify-center gap-2"
                             >
@@ -2918,7 +2937,8 @@ export default function App() {
                               session.omokGame.board, 
                               isBlack ? 1 : 2, 
                               isBlack ? 2 : 1,
-                              3
+                              3,
+                              session.omokGame.ruleType || 'RENJU'
                             );
                             setOmokHint(hint);
                             setTimeout(() => setOmokHint(null), 3000);

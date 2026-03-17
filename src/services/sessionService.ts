@@ -841,7 +841,7 @@ export const sessionService = {
     });
   },
 
-  async startOmokGame(sessionId: string, blackPlayerId: string, whitePlayerId: string, isAIMatch?: boolean, difficulty?: number) {
+  async startOmokGame(sessionId: string, blackPlayerId: string, whitePlayerId: string, isAIMatch?: boolean, difficulty?: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
     if (!db) return;
     
     // Initialize 15x15 board
@@ -857,6 +857,7 @@ export const sessionService = {
       isDraw: false,
       isAIMatch: isAIMatch || false,
       difficulty: difficulty || 1,
+      ruleType,
       startTime: Date.now(),
       moveCount: 0
     };
@@ -867,7 +868,7 @@ export const sessionService = {
     };
 
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, `오목 대전이 시작되었습니다.${isAIMatch ? ` (AI 난이도: ${difficulty})` : ''}`, 'success');
+    await this.addLog(sessionId, `오목 대전이 시작되었습니다.${isAIMatch ? ` (AI 난이도: ${difficulty}, ${ruleType === 'RENJU' ? '렌주 룰' : '자유 룰'})` : ''}`, 'success');
 
     // If black is AI, trigger first move
     if (blackPlayerId === 'AI') {
@@ -1173,8 +1174,8 @@ export const sessionService = {
     
     boardMatrix[y][x] = stone;
     
-    // Check for forbidden moves (Black only)
-    if (isBlack) {
+    // Check for forbidden moves (Black only, in RENJU rules)
+    if (isBlack && game.ruleType !== 'FREE') {
       const forbidden = this.checkOmokForbiddenMove(boardMatrix, x, y, stone);
       if (forbidden) {
         await this.addLog(sessionId, `흑돌은 ${forbidden} 금지 수입니다.`, 'error');
@@ -1256,23 +1257,27 @@ export const sessionService = {
     const aiStone = isBlack ? 1 : 2;
     const playerStone = isBlack ? 2 : 1;
     const difficulty = game.difficulty || 1;
+    const ruleType = game.ruleType || 'RENJU';
 
     let bestMove = { x: 7, y: 7 };
     
     if (game.moveCount === 0) {
       bestMove = { x: 7, y: 7 };
     } else {
-      bestMove = this.getOmokBestMove(board, aiStone, playerStone, difficulty);
+      bestMove = this.getOmokBestMove(board, aiStone, playerStone, difficulty, ruleType);
     }
 
     await this.placeOmokStone(sessionId, 'AI', bestMove.x, bestMove.y);
   },
 
-  getOmokBestMove(board: number[][], aiStone: number, playerStone: number, difficulty: number) {
+  getOmokBestMove(board: number[][], aiStone: number, playerStone: number, difficulty: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
     // For high difficulty, use Minimax
-    if (difficulty >= 6) {
-      const depth = difficulty === 7 ? 4 : 2;
-      return this.omokMinimaxSearch(board, aiStone, playerStone, depth);
+    if (difficulty >= 4) {
+      let depth = 2;
+      if (difficulty === 5) depth = 3;
+      if (difficulty === 6) depth = 4;
+      if (difficulty === 7) depth = 5;
+      return this.omokMinimaxSearch(board, aiStone, playerStone, depth, ruleType);
     }
 
     let maxScore = -1;
@@ -1282,17 +1287,17 @@ export const sessionService = {
     const searchPoints = this.getOmokSearchPoints(board);
 
     for (const {x, y} of searchPoints) {
-      // For black AI, check forbidden moves
-      if (aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
+      // For black AI, check forbidden moves in RENJU
+      if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
 
       const attackScore = this.evaluateOmokPoint(board, x, y, aiStone);
       const defenseScore = this.evaluateOmokPoint(board, x, y, playerStone);
       
       // Weighting based on difficulty
       let score = 0;
-      if (difficulty >= 4) {
-        score = attackScore * 1.2 + defenseScore;
-      } else if (difficulty >= 2) {
+      if (difficulty === 3) {
+        score = attackScore * 1.5 + defenseScore * 1.2;
+      } else if (difficulty === 2) {
         score = attackScore * 1.0 + defenseScore * 0.8;
       } else {
         score = attackScore * 0.8 + defenseScore * 0.5;
@@ -1300,8 +1305,7 @@ export const sessionService = {
       
       // Add some randomness for lower levels
       if (difficulty === 1) score += Math.random() * 100;
-      else if (difficulty === 2) score += Math.random() * 50;
-      else if (difficulty === 3) score += Math.random() * 20;
+      else if (difficulty === 2) score += Math.random() * 20;
       
       if (score > maxScore) {
         maxScore = score;
@@ -1345,7 +1349,7 @@ export const sessionService = {
     return points;
   },
 
-  omokMinimaxSearch(board: number[][], aiStone: number, playerStone: number, depth: number) {
+  omokMinimaxSearch(board: number[][], aiStone: number, playerStone: number, depth: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
     let bestMove = { x: 7, y: 7 };
     let bestValue = -Infinity;
 
@@ -1358,10 +1362,10 @@ export const sessionService = {
     });
 
     for (const {x, y} of points) {
-      if (aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
+      if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
       
       board[y][x] = aiStone;
-      const val = this.minimax(board, depth - 1, -Infinity, Infinity, false, aiStone, playerStone);
+      const val = this.minimax(board, depth - 1, -Infinity, Infinity, false, aiStone, playerStone, ruleType);
       board[y][x] = 0;
 
       if (val > bestValue) {
@@ -1373,7 +1377,7 @@ export const sessionService = {
     return bestMove;
   },
 
-  minimax(board: number[][], depth: number, alpha: number, beta: number, isMaximizing: boolean, aiStone: number, playerStone: number) {
+  minimax(board: number[][], depth: number, alpha: number, beta: number, isMaximizing: boolean, aiStone: number, playerStone: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
     const score = this.evaluateOmokBoard(board, aiStone, playerStone);
     
     if (depth === 0 || Math.abs(score) > 50000) {
@@ -1381,8 +1385,8 @@ export const sessionService = {
     }
 
     const points = this.getOmokSearchPoints(board);
-    // Limit search points for performance
-    const limit = depth > 2 ? 15 : points.length;
+    // Limit search points for performance - tighter limits for higher depth
+    const limit = depth > 3 ? 8 : (depth > 2 ? 12 : 20);
     const sortedPoints = points.sort((a, b) => {
       const sA = this.evaluateOmokPoint(board, a.x, a.y, aiStone) + this.evaluateOmokPoint(board, a.x, a.y, playerStone);
       const sB = this.evaluateOmokPoint(board, b.x, b.y, aiStone) + this.evaluateOmokPoint(board, b.x, b.y, playerStone);
@@ -1392,9 +1396,9 @@ export const sessionService = {
     if (isMaximizing) {
       let maxEval = -Infinity;
       for (const {x, y} of sortedPoints) {
-        if (aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
+        if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
         board[y][x] = aiStone;
-        const ev = this.minimax(board, depth - 1, alpha, beta, false, aiStone, playerStone);
+        const ev = this.minimax(board, depth - 1, alpha, beta, false, aiStone, playerStone, ruleType);
         board[y][x] = 0;
         maxEval = Math.max(maxEval, ev);
         alpha = Math.max(alpha, ev);
@@ -1404,9 +1408,9 @@ export const sessionService = {
     } else {
       let minEval = Infinity;
       for (const {x, y} of sortedPoints) {
-        if (playerStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
+        if (ruleType !== 'FREE' && playerStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
         board[y][x] = playerStone;
-        const ev = this.minimax(board, depth - 1, alpha, beta, true, aiStone, playerStone);
+        const ev = this.minimax(board, depth - 1, alpha, beta, true, aiStone, playerStone, ruleType);
         board[y][x] = 0;
         minEval = Math.min(minEval, ev);
         beta = Math.min(beta, ev);

@@ -113,7 +113,8 @@ export interface OmokGameState {
   isDraw?: boolean;
   lastMove?: { x: number; y: number };
   isAIMatch?: boolean;
-  difficulty?: number; // 1: 인턴, 2: 사원, 3: 주임, 4: 대리, 5: 과장
+  difficulty?: number; // 1: 인턴, 2: 사원, 3: 주임, 4: 대리, 5: 과장, 6: 차장, 7: 부장
+  ruleType?: 'RENJU' | 'FREE'; // RENJU: Black restricted, FREE: No restrictions
   startTime?: number;
   moveCount?: number;
   lastScore?: number;
