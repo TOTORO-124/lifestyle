@@ -89,7 +89,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '방이 너무 어두워서 아무것도 보이지 않는다.',
             answer: 'found_all',
             hint: '화면 구석의 수상한 모양을 클릭해보자.',
-            imageUrl: 'https://image.pollinations.ai/prompt/dark%20creepy%20basement%20wall%20with%20an%20old%20electrical%20fusebox,%20dim%20lighting,%20realistic?width=1000&height=600&nologo=true',
+            imageUrl: 'https://images.unsplash.com/photo-1519068737630-e5db30e12e42?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
               { id: 'fusebox', x: 80, y: 20, width: 15, height: 15, name: '두꺼비집(배전반)' }
             ],
@@ -101,7 +101,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '바닥에 먼지 쌓인 코트가 있다.',
             answer: 'found_all',
             hint: '코트를 클릭해보자.',
-            imageUrl: 'https://image.pollinations.ai/prompt/old%20dusty%20trench%20coat%20hanging%20in%20a%20dark%20abandoned%20room,%20realistic,%20cinematic%20lighting?width=1000&height=600&nologo=true',
+            imageUrl: 'https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
               { id: 'coat', x: 50, y: 50, width: 30, height: 40, name: '먼지 쌓인 코트' }
             ],
@@ -195,7 +195,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '방 한가운데 제단이 있고, 주변에 빈 물통과 성스러운 샘물이 있다.',
             answer: 'found_all',
             hint: '빈 물통을 찾아 클릭하자.',
-            imageUrl: 'https://image.pollinations.ai/prompt/ancient%20stone%20altar%20with%20a%20sacred%20spring%20of%20water,%20mystical%20atmosphere,%20fantasy,%20realistic?width=1000&height=600&nologo=true',
+            imageUrl: 'https://images.unsplash.com/photo-1599930113854-d6d7fd521f10?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
               { id: 'empty_bottle', x: 30, y: 70, width: 15, height: 20, name: '빈 물통' }
             ],
@@ -261,7 +261,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '지하철역이 너무 어둡다. 손전등을 켜고 바닥을 살펴보자.',
             answer: 'found_all',
             hint: '마우스를 움직여 어두운 선로를 비춰보자.',
-            imageUrl: 'https://image.pollinations.ai/prompt/dark%20abandoned%20subway%20station%20platform,%20creepy,%20dim%20flashlight%20beam,%20realistic?width=1000&height=600&nologo=true',
+            imageUrl: 'https://images.unsplash.com/photo-1517646287270-a5a9ca602e5c?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
               { id: 'card_key', x: 70, y: 80, width: 15, height: 15, name: '직원용 카드키' }
             ],
@@ -382,7 +382,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '바닥에 손전등 같은 것이 떨어져 있다.',
             answer: 'found_all',
             hint: '바닥을 잘 살펴보자.',
-            imageUrl: 'https://image.pollinations.ai/prompt/creepy%20abandoned%20hospital%20corridor,%20blood%20stains,%20dark%20and%20scary,%20realistic?width=1000&height=600&nologo=true',
+            imageUrl: 'https://images.unsplash.com/photo-1505686994434-e3cc5abf1330?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
               { id: 'uv_lantern', x: 20, y: 80, width: 20, height: 20, name: 'UV 랜턴' }
             ],
@@ -449,7 +449,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '방 곳곳에 포션들이 흩어져 있다.',
             answer: 'found_all',
             hint: '빨간 포션과 파란 포션을 찾아보자.',
-            imageUrl: 'https://image.pollinations.ai/prompt/alchemist%20workshop%20table%20filled%20with%20glowing%20red%20and%20blue%20potion%20bottles,%20fantasy,%20magical?width=1000&height=600&nologo=true',
+            imageUrl: 'https://images.unsplash.com/photo-1629196914225-eb8d35041065?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
               { id: 'red_potion', x: 30, y: 50, width: 10, height: 20, name: '빨간 포션' },
               { id: 'blue_potion', x: 70, y: 50, width: 10, height: 20, name: '파란 포션' }
@@ -532,7 +532,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '어두운 연구실 바닥에 연구원의 ID 카드가 떨어져 있을 것이다.',
             answer: 'found_all',
             hint: '부서진 수조 근처 바닥을 살펴보자.',
-            imageUrl: 'https://image.pollinations.ai/prompt/flooded%20underwater%20research%20facility%20laboratory,%20broken%20glass,%20dark%20blue%20lighting,%20sci-fi,%20realistic?width=1000&height=600&nologo=true',
+            imageUrl: 'https://images.unsplash.com/photo-1582719471384-894fbb16e074?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
               { id: 'id_card', x: 45, y: 85, width: 15, height: 10, name: '연구원 ID 카드' }
             ],
@@ -608,7 +608,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '벽화 사이에 황금빛으로 빛나는 작은 물체가 숨겨져 있다.',
             answer: 'found_all',
             hint: '벽화의 태양 문양 근처를 자세히 살펴보자.',
-            imageUrl: 'https://image.pollinations.ai/prompt/ancient%20egyptian%20tomb%20wall%20with%20hieroglyphics%20and%20a%20golden%20scarab%20beetle,%20dusty,%20cinematic%20lighting?width=1000&height=600&nologo=true',
+            imageUrl: 'https://images.unsplash.com/photo-1539650116574-8efeb43e2b50?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
               { id: 'golden_scarab', x: 60, y: 30, width: 10, height: 10, name: '황금 스카라베' }
             ],

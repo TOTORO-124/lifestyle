@@ -7,7 +7,8 @@ import { auth } from '../firebase';
 import { 
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, 
   CheckCircle2, HelpCircle, Users, Timer, Trophy, Skull, 
-  DoorOpen, Key, Search, Lock, Unlock, Zap, ShieldAlert
+  DoorOpen, Key, Search, Lock, Unlock, Zap, ShieldAlert,
+  Image as ImageIcon
 } from 'lucide-react';
 import { HiddenObjectPuzzle } from './HiddenObjectPuzzle';
 
@@ -536,7 +537,23 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
                                 }}
                               />
                               {puzzle.imageUrl && (
-                                <img src={puzzle.imageUrl} alt="Background" className="absolute inset-0 w-full h-full object-cover opacity-50" referrerPolicy="no-referrer" />
+                                <img 
+                                  src={puzzle.imageUrl} 
+                                  alt="Background" 
+                                  className="absolute inset-0 w-full h-full object-cover opacity-60 transition-opacity duration-500" 
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    if (!target.src.includes('picsum.photos')) {
+                                      target.src = `https://picsum.photos/seed/${puzzle.id}/1000/600`;
+                                    }
+                                  }}
+                                />
+                              )}
+                              {!puzzle.imageUrl && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-700">
+                                  <ImageIcon size={48} />
+                                </div>
                               )}
                               {puzzle.hiddenObjects?.map((obj, idx) => (
                                 <button

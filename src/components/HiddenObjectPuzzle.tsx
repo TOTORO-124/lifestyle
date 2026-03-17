@@ -36,6 +36,12 @@ export const HiddenObjectPuzzle: React.FC<HiddenObjectPuzzleProps> = ({ puzzle, 
           alt="Hidden Object Scene" 
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            if (!target.src.includes('picsum.photos')) {
+              target.src = `https://picsum.photos/seed/${puzzle.id}/1000/600`;
+            }
+          }}
         />
         
         {/* Clickable Areas */}
