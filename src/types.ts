@@ -10,6 +10,7 @@ export enum GameType {
   OFFICE_LIFE = 'OFFICE_LIFE',
   ESCAPE_ROOM = 'ESCAPE_ROOM',
   CYBER_ARENA = 'CYBER_ARENA',
+  SUIKA = 'SUIKA',
 }
 
 export enum SessionStatus {
@@ -347,6 +348,13 @@ export interface CyberArenaGameState {
   streakCount: Record<string, number>; // For loser bonus
 }
 
+export interface SuikaGameState {
+  score: number;
+  bestScore: number;
+  status: 'PLAYING' | 'LOST';
+  startTime?: number;
+}
+
 export interface LeaderboardEntry {
   playerId: string;
   nickname: string;
@@ -384,6 +392,7 @@ export interface Session {
   officeLifeGame?: OfficeLifeGameState;
   escapeRoomGame?: EscapeRoomGameState;
   cyberArenaGame?: CyberArenaGameState;
+  suikaGame?: SuikaGameState;
   leaderboards?: Record<string, LeaderboardEntry[]>;
   settings: {
     maxPlayers: number;

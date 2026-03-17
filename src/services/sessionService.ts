@@ -1725,6 +1725,48 @@ export const sessionService = {
     return null;
   },
 
+  async startSuikaGame(sessionId: string) {
+    if (!db) return;
+    const sessionRef = ref(db, `sessions/${sessionId}`);
+    await update(sessionRef, {
+      gameType: GameType.SUIKA,
+      status: SessionStatus.PLAYING,
+      suikaGame: {
+        score: 0,
+        bestScore: 0,
+        status: 'PLAYING',
+        startTime: Date.now()
+      }
+    });
+    await this.addLog(sessionId, '수박 게임이 시작되었습니다! 가장 큰 수박을 만들어보세요.');
+  },
+
+  async updateSuikaStats(sessionId: string, playerId: string, score: number) {
+    if (!db) return;
+    const sessionRef = ref(db, `sessions/${sessionId}`);
+    const snapshot = await get(sessionRef);
+    const session = snapshot.val();
+    if (!session) return;
+
+    const currentBest = session.suikaGame?.bestScore || 0;
+    const updates: any = {
+      'suikaGame/score': score,
+      'suikaGame/status': 'LOST'
+    };
+
+    if (score > currentBest) {
+      updates['suikaGame/bestScore'] = score;
+    }
+
+    await update(sessionRef, updates);
+    
+    const player = session.players?.[playerId];
+    if (player) {
+      await this.recordLeaderboard(sessionId, 'SUIKA', playerId, player.nickname, score);
+      await this.addLog(sessionId, `${player.nickname}님이 수박 게임에서 ${score}점을 기록했습니다!`, 'success');
+    }
+  },
+
   // --- Minesweeper ---
   async startMinesweeperGame(sessionId: string, difficulty: 'EASY' | 'MEDIUM' | 'HARD') {
     if (!db) return;

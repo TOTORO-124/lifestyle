@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Session, Player, SessionStatus, GameType, LiarMode, MafiaRole, MafiaPhase, GameLog, UserProfile, Department } from './types';
+import { Session, Player, SessionStatus, GameType, LiarMode, MafiaRole, MafiaPhase, GameLog, UserProfile, Department, SuikaGameState } from './types';
+import { SuikaGame } from './components/SuikaGame';
 import { sessionService } from './services/sessionService';
 import { isConfigured, auth } from './firebase';
 import { soundManager } from './utils/sound';
@@ -1628,6 +1629,8 @@ export default function App() {
         await sessionService.startEscapeRoom(session.id, session.settings.escapeRoomThemeId || 'universe_escape', session.settings);
       } else if (session.gameType === GameType.CYBER_ARENA) {
         await sessionService.startCyberArena(session.id, session.players, session.settings);
+      } else if (session.gameType === GameType.SUIKA) {
+        await sessionService.startSuikaGame(session.id);
       }
     } catch (e: any) {
       setError(e.message || '게임을 시작하는 중 오류가 발생했습니다.');
@@ -1915,6 +1918,14 @@ export default function App() {
                         >
                           <span className="font-bold">사이버 아레나</span>
                           <span className="text-[9px] font-normal opacity-80">1:1 배틀 시뮬레이션</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.SUIKA)} 
+                          className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
+                          disabled={loading}
+                        >
+                          <span className="font-bold">초고속 승진</span>
+                          <span className="text-[9px] font-normal opacity-80">직급 쌓기 챌린지</span>
                         </button>
                       </div>
                     </div>
@@ -2599,6 +2610,18 @@ export default function App() {
                         </div>
                       )}
 
+                      {session.gameType === GameType.SUIKA && (
+                        <div className="space-y-3">
+                          <div className="p-3 bg-blue-50 rounded border border-blue-100">
+                            <p className="text-[10px] font-bold text-blue-800 mb-1 uppercase tracking-tighter">게임 안내</p>
+                            <p className="text-[11px] text-blue-700 leading-relaxed">
+                              사원들을 배치하여 같은 직급끼리 승진시키세요! 최종 목표는 '사장'이 되는 것입니다. 
+                              인원이 너무 많아져 위쪽 선을 넘지 않도록 주의하세요.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       {session.gameType === GameType.DRAW && (
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-2">
@@ -3148,6 +3171,12 @@ export default function App() {
                   </div>
                 </div>
               </div>
+            ) : session.gameType === GameType.SUIKA ? (
+              <SuikaGame 
+                bestScore={session.suikaGame?.bestScore || 0}
+                onGameOver={(score) => sessionService.updateSuikaStats(session.id, currentUser.uid, score)}
+                onBack={() => sessionService.resetSession(session.id, session.players)}
+              />
             ) : session.gameType === GameType.BINGO ? (
               !session.bingoGame ? (
                 <div className="flex flex-col items-center justify-center p-10">
@@ -4729,6 +4758,7 @@ export default function App() {
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
                   <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (부장급 AI)" sessionId="GLOBAL" gameType="OMOK_AI" />
+                  <Leaderboard entries={globalLeaderboards?.SUIKA || []} title="초고속 승진 (승진게임)" sessionId="GLOBAL" gameType="SUIKA" />
                 </div>
               </div>
             </div>
