@@ -89,7 +89,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '방이 너무 어두워서 아무것도 보이지 않는다.',
             answer: 'found_all',
             hint: '화면 구석의 수상한 모양을 클릭해보자.',
-            imageUrl: 'https://images.unsplash.com/photo-1519068737630-e5db30e12e42?q=80&w=1000&auto=format&fit=crop',
+            imageUrl: 'https://image.pollinations.ai/prompt/dark%20creepy%20basement%20wall%20with%20an%20old%20electrical%20fusebox,%20dim%20lighting,%20realistic?width=1000&height=600&nologo=true',
             hiddenObjects: [
               { id: 'fusebox', x: 80, y: 20, width: 15, height: 15, name: '두꺼비집(배전반)' }
             ],
@@ -101,7 +101,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '바닥에 먼지 쌓인 코트가 있다.',
             answer: 'found_all',
             hint: '코트를 클릭해보자.',
-            imageUrl: 'https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1000&auto=format&fit=crop',
+            imageUrl: 'https://image.pollinations.ai/prompt/old%20dusty%20trench%20coat%20hanging%20in%20a%20dark%20abandoned%20room,%20realistic,%20cinematic%20lighting?width=1000&height=600&nologo=true',
             hiddenObjects: [
               { id: 'coat', x: 50, y: 50, width: 30, height: 40, name: '먼지 쌓인 코트' }
             ],
@@ -195,7 +195,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '방 한가운데 제단이 있고, 주변에 빈 물통과 성스러운 샘물이 있다.',
             answer: 'found_all',
             hint: '빈 물통을 찾아 클릭하자.',
-            imageUrl: 'https://images.unsplash.com/photo-1599930113854-d6d7fd521f10?q=80&w=1000&auto=format&fit=crop',
+            imageUrl: 'https://image.pollinations.ai/prompt/ancient%20stone%20altar%20with%20a%20sacred%20spring%20of%20water,%20mystical%20atmosphere,%20fantasy,%20realistic?width=1000&height=600&nologo=true',
             hiddenObjects: [
               { id: 'empty_bottle', x: 30, y: 70, width: 15, height: 20, name: '빈 물통' }
             ],
@@ -261,7 +261,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '지하철역이 너무 어둡다. 손전등을 켜고 바닥을 살펴보자.',
             answer: 'found_all',
             hint: '마우스를 움직여 어두운 선로를 비춰보자.',
-            imageUrl: 'https://images.unsplash.com/photo-1517646287270-a5a9ca602e5c?q=80&w=1000&auto=format&fit=crop',
+            imageUrl: 'https://image.pollinations.ai/prompt/dark%20abandoned%20subway%20station%20platform,%20creepy,%20dim%20flashlight%20beam,%20realistic?width=1000&height=600&nologo=true',
             hiddenObjects: [
               { id: 'card_key', x: 70, y: 80, width: 15, height: 15, name: '직원용 카드키' }
             ],
@@ -382,7 +382,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '바닥에 손전등 같은 것이 떨어져 있다.',
             answer: 'found_all',
             hint: '바닥을 잘 살펴보자.',
-            imageUrl: 'https://images.unsplash.com/photo-1505686994434-e3cc5abf1330?q=80&w=1000&auto=format&fit=crop',
+            imageUrl: 'https://image.pollinations.ai/prompt/creepy%20abandoned%20hospital%20corridor,%20blood%20stains,%20dark%20and%20scary,%20realistic?width=1000&height=600&nologo=true',
             hiddenObjects: [
               { id: 'uv_lantern', x: 20, y: 80, width: 20, height: 20, name: 'UV 랜턴' }
             ],
@@ -449,7 +449,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '방 곳곳에 포션들이 흩어져 있다.',
             answer: 'found_all',
             hint: '빨간 포션과 파란 포션을 찾아보자.',
-            imageUrl: 'https://images.unsplash.com/photo-1629196914225-eb8d35041065?q=80&w=1000&auto=format&fit=crop',
+            imageUrl: 'https://image.pollinations.ai/prompt/alchemist%20workshop%20table%20filled%20with%20glowing%20red%20and%20blue%20potion%20bottles,%20fantasy,%20magical?width=1000&height=600&nologo=true',
             hiddenObjects: [
               { id: 'red_potion', x: 30, y: 50, width: 10, height: 20, name: '빨간 포션' },
               { id: 'blue_potion', x: 70, y: 50, width: 10, height: 20, name: '파란 포션' }
@@ -466,6 +466,221 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             targetObjectId: 'vines',
             requiredItem: '보라색 맹독 포션',
             explanation: '맹독 포션으로 덩굴을 녹이고 탈출에 성공했다!'
+          }
+        ]
+      }
+    }
+  },
+  'deep_sea_facility': {
+    id: 'deep_sea_facility',
+    name: '시즌 3: 심해 연구소 아틀란티스',
+    genre: 'SF/스릴러',
+    description: '수심 10,000m 아래의 심해 연구소. 알 수 없는 이유로 시스템이 다운되고 물이 차오르기 시작했습니다. 산소가 떨어지기 전에 탈출하세요.',
+    difficulty: 'HARD',
+    startRoomId: 'room_1',
+    styles: {
+      primaryColor: '#0369a1',
+      secondaryColor: '#0c4a6e',
+      bgColor: '#082f49',
+      accentColor: '#38bdf8',
+      fontFamily: 'sans-serif'
+    },
+    rooms: {
+      'room_1': {
+        id: 'room_1',
+        name: '침수된 에어록',
+        description: '발목까지 물이 차올랐다. 메인 연구실로 가는 문을 수동으로 열어야 한다.',
+        puzzles: [
+          {
+            id: 's3_r1_p1',
+            type: 'DIRECTION_SEQUENCE',
+            question: '수동 밸브의 비상 조작 매뉴얼이 보인다: "수압을 낮추려면 밸브를 위, 아래, 왼쪽, 오른쪽, 위 순서로 돌리시오."',
+            answer: 'UP,DOWN,LEFT,RIGHT,UP',
+            hint: '매뉴얼에 적힌 방향대로 방향키를 누르자.',
+            sequence: ['UP', 'DOWN', 'LEFT', 'RIGHT', 'UP'],
+            explanation: '수압이 낮아지며 밸브가 돌아가기 시작했다.'
+          },
+          {
+            id: 's3_r1_p2',
+            type: 'DRAG_DROP',
+            question: '문이 열리지 않는다. 배전반의 전선이 끊어져 있다. 색깔에 맞게 전선을 연결하자.',
+            answer: 'CONNECTED',
+            hint: '같은 색상의 전선을 슬롯에 드래그하자.',
+            dragItems: [
+              { id: 'wire_red', label: '빨간 전선', size: 'medium', color: '#ef4444' },
+              { id: 'wire_blue', label: '파란 전선', size: 'medium', color: '#3b82f6' },
+              { id: 'wire_yellow', label: '노란 전선', size: 'medium', color: '#eab308' }
+            ],
+            dropZones: [
+              { id: 'slot_red', label: '빨간 슬롯', accepts: 'wire_red', size: 'medium' },
+              { id: 'slot_blue', label: '파란 슬롯', accepts: 'wire_blue', size: 'medium' },
+              { id: 'slot_yellow', label: '노란 슬롯', accepts: 'wire_yellow', size: 'medium' }
+            ],
+            explanation: '전력이 복구되며 메인 연구실 문이 열렸다!'
+          }
+        ],
+        nextRoomId: 'room_2'
+      },
+      'room_2': {
+        id: 'room_2',
+        name: '메인 연구실',
+        description: '심해 생물들을 연구하던 곳. 곳곳에 부서진 수조와 흩어진 자료들이 있다.',
+        puzzles: [
+          {
+            id: 's3_r2_p1',
+            type: 'HIDDEN_OBJECT',
+            question: '어두운 연구실 바닥에 연구원의 ID 카드가 떨어져 있을 것이다.',
+            answer: 'found_all',
+            hint: '부서진 수조 근처 바닥을 살펴보자.',
+            imageUrl: 'https://image.pollinations.ai/prompt/flooded%20underwater%20research%20facility%20laboratory,%20broken%20glass,%20dark%20blue%20lighting,%20sci-fi,%20realistic?width=1000&height=600&nologo=true',
+            hiddenObjects: [
+              { id: 'id_card', x: 45, y: 85, width: 15, height: 10, name: '연구원 ID 카드' }
+            ],
+            rewardItem: '연구원 ID 카드',
+            explanation: 'ID 카드를 주웠다! 보안 시스템에 접근할 수 있을 것 같다.'
+          },
+          {
+            id: 's3_r2_p2',
+            type: 'ITEM_INTERACTION',
+            question: '탈출정으로 가는 보안 문이 굳게 닫혀 있다. 카드 리더기가 붉은 빛을 내고 있다.',
+            answer: 'OPEN',
+            hint: '인벤토리에서 ID 카드를 선택한 후 문을 클릭하자.',
+            targetObjectId: 'security_door',
+            requiredItem: '연구원 ID 카드',
+            explanation: '보안이 해제되며 탈출정으로 가는 길이 열렸다!'
+          }
+        ],
+        nextRoomId: 'room_3'
+      },
+      'room_3': {
+        id: 'room_3',
+        name: '심해 탈출정',
+        description: '유일하게 남은 탈출정. 하지만 외부 해치에 녹이 슬어 닫히지 않고, 발사 시스템은 잠겨 있다.',
+        puzzles: [
+          {
+            id: 's3_r3_p1',
+            type: 'CLICK_SPAM',
+            question: '물이 쏟아져 들어온다! 외부 해치의 수동 레버를 미친 듯이 당겨서 닫아야 한다!',
+            answer: 'CLOSED',
+            hint: '해치 레버를 빠르게 여러 번 클릭하자!',
+            triggerTimer: 60,
+            clickTargets: [
+              { id: 'hatch_lever', label: '해치 수동 레버', requiredClicks: 40 }
+            ],
+            explanation: '가까스로 해치를 닫고 물을 막아냈다!'
+          },
+          {
+            id: 's3_r3_p2',
+            type: 'TERMINAL',
+            question: '탈출정 발사 터미널이 켜졌다. 시스템을 재부팅하고 발사 시퀀스를 시작해야 한다.',
+            answer: 'launch escape_pod',
+            hint: '명령어: launch [대상] 을 입력하자. 대상은 escape_pod 이다.',
+            expectedCommand: 'launch escape_pod',
+            explanation: '발사 시퀀스 가동! 탈출정이 엄청난 속도로 수면을 향해 솟구친다. 탈출 성공!'
+          }
+        ]
+      }
+    }
+  },
+  'ancient_tomb': {
+    id: 'ancient_tomb',
+    name: '시즌 4: 파라오의 저주',
+    genre: '어드벤처/판타지',
+    description: '수천 년간 잠들어 있던 고대 이집트의 무덤. 함정을 피하고 파라오의 보물을 찾아 무사히 빠져나오세요.',
+    difficulty: 'NORMAL',
+    startRoomId: 'room_1',
+    styles: {
+      primaryColor: '#b45309',
+      secondaryColor: '#78350f',
+      bgColor: '#292524',
+      accentColor: '#f59e0b',
+      fontFamily: 'serif'
+    },
+    rooms: {
+      'room_1': {
+        id: 'room_1',
+        name: '왕의 전실',
+        description: '모래 먼지가 가득한 방. 거대한 아누비스 석상이 입구를 지키고 있다.',
+        puzzles: [
+          {
+            id: 's4_r1_p1',
+            type: 'HIDDEN_OBJECT',
+            question: '벽화 사이에 황금빛으로 빛나는 작은 물체가 숨겨져 있다.',
+            answer: 'found_all',
+            hint: '벽화의 태양 문양 근처를 자세히 살펴보자.',
+            imageUrl: 'https://image.pollinations.ai/prompt/ancient%20egyptian%20tomb%20wall%20with%20hieroglyphics%20and%20a%20golden%20scarab%20beetle,%20dusty,%20cinematic%20lighting?width=1000&height=600&nologo=true',
+            hiddenObjects: [
+              { id: 'golden_scarab', x: 60, y: 30, width: 10, height: 10, name: '황금 스카라베' }
+            ],
+            rewardItem: '황금 스카라베',
+            explanation: '고대 이집트의 부적인 황금 스카라베를 얻었다.'
+          },
+          {
+            id: 's4_r1_p2',
+            type: 'ITEM_INTERACTION',
+            question: '아누비스 석상 앞의 제단에 곤충 모양의 홈이 파여 있다.',
+            answer: 'OPEN',
+            hint: '인벤토리에서 황금 스카라베를 선택하고 제단을 클릭하자.',
+            targetObjectId: 'altar',
+            requiredItem: '황금 스카라베',
+            explanation: '스카라베를 끼워넣자 덜컹거리며 비밀 문이 열렸다!'
+          }
+        ],
+        nextRoomId: 'room_2'
+      },
+      'room_2': {
+        id: 'room_2',
+        name: '벽화의 방',
+        description: '사방이 고대 이집트 상형문자와 그림으로 가득 찬 방.',
+        puzzles: [
+          {
+            id: 's4_r2_p1',
+            type: 'TEXT',
+            question: '벽화에 그려진 동물들의 눈이 특정 방향을 향하고 있다. 독수리(위), 뱀(아래), 사자(오른쪽), 자칼(왼쪽). 제어판에 이 동물들의 첫 글자를 순서대로 입력해야 한다.',
+            answer: 'ESLJ',
+            hint: 'Eagle, Snake, Lion, Jackal 의 첫 글자를 영어 대문자로 입력하자.',
+            explanation: '제어판이 작동하며 다음 퍼즐이 나타났다.'
+          },
+          {
+            id: 's4_r2_p2',
+            type: 'PASSWORD_DIAL',
+            question: '벽화에 적힌 수수께끼: "아침에는 네 발, 점심에는 두 발, 저녁에는 세 발로 걷는 것은?" 이 동물의 다리 수의 합을 다이얼에 맞추시오.',
+            answer: '9',
+            hint: '스핑크스의 수수께끼 정답은 사람이다. (4 + 2 + 3)',
+            dialCount: 1,
+            explanation: '정답이다! 파라오의 관이 있는 마지막 방으로 들어갈 수 있게 되었다.'
+          }
+        ],
+        nextRoomId: 'room_3'
+      },
+      'room_3': {
+        id: 'room_3',
+        name: '파라오의 관',
+        description: '거대한 황금 관이 방 한가운데 놓여 있다. 하지만 관 주변에 함정이 설치되어 있다.',
+        puzzles: [
+          {
+            id: 's4_r3_p1',
+            type: 'DRAG_DROP',
+            question: '아누비스의 저울이 있다. 한쪽에는 마트(진실)의 깃털이 있다. 다른 쪽에 심장을 올려 무게를 맞춰야 한다.',
+            answer: 'CONNECTED',
+            hint: '심장을 저울의 빈 접시에 드래그하자.',
+            dragItems: [
+              { id: 'pharaoh_heart', label: '파라오의 심장', size: 'medium', color: '#991b1b' },
+              { id: 'gold_coin', label: '금화', size: 'small', color: '#f59e0b' }
+            ],
+            dropZones: [
+              { id: 'scale_plate', label: '저울 접시', accepts: 'pharaoh_heart', size: 'medium' }
+            ],
+            explanation: '저울이 수평을 이루며 함정이 해제되었다!'
+          },
+          {
+            id: 's4_r3_p2',
+            type: 'PASSWORD_DIAL',
+            question: '황금 관을 열기 위한 마지막 자물쇠. 관에 새겨진 연도는 기원전 1332년이다.',
+            answer: '1332',
+            hint: '관에 새겨진 연도를 그대로 입력하자.',
+            dialCount: 4,
+            explanation: '황금 관이 열리며 눈부신 보물이 드러났다. 탈출 성공!'
           }
         ]
       }
