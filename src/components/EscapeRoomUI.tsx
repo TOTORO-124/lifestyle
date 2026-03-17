@@ -915,44 +915,44 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
             className="lg:col-span-2 space-y-6"
           >
             <div className="bg-white/95 backdrop-blur-xl rounded-[2.5rem] shadow-2xl overflow-hidden border border-white/20 flex flex-col h-full ring-1 ring-black/5">
-              <div className="px-8 py-6 flex justify-between items-center border-b border-gray-100/50" style={{ backgroundColor: styles.primaryColor }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center rotate-3 shadow-inner">
-                    <DoorOpen size={24} className="text-white" />
+              <div className="px-4 py-4 md:px-8 md:py-6 flex justify-between items-center border-b border-gray-100/50" style={{ backgroundColor: styles.primaryColor }}>
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/20 flex items-center justify-center rotate-3 shadow-inner">
+                    <DoorOpen size={20} className="md:w-6 md:h-6 text-white" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-white/60 uppercase tracking-[0.3em] mb-0.5">Current Phase</span>
-                    <h3 className="text-xl font-black text-white tracking-tight">{room.name}</h3>
+                    <span className="text-[8px] md:text-[10px] font-black text-white/60 uppercase tracking-[0.3em] mb-0.5">Current Phase</span>
+                    <h3 className="text-lg md:text-xl font-black text-white tracking-tight">{room.name}</h3>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 text-xs font-mono font-bold">
+                <div className="flex items-center gap-2 md:gap-4 text-xs font-mono font-bold">
                   <button 
                     onClick={() => setShowHowToPlay(true)}
-                    className="flex items-center gap-2 hover:opacity-80 transition-opacity mr-4 bg-white/10 px-3 py-1.5 rounded-full text-white"
+                    className="flex items-center gap-1.5 md:gap-2 hover:opacity-80 transition-opacity mr-2 md:mr-4 bg-white/10 px-2 py-1 md:px-3 md:py-1.5 rounded-full text-white"
                     title="게임 방법"
                   >
-                    <HelpCircle size={16} />
-                    <span>방법</span>
+                    <HelpCircle size={14} className="md:w-4 md:h-4" />
+                    <span className="hidden xs:inline">방법</span>
                   </button>
                   <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-0.5">Time Limit</span>
-                    <div className={`flex items-center gap-2 font-black text-2xl tabular-nums ${timeLeft < 60 ? 'text-red-300 animate-pulse' : 'text-white'}`}>
-                      <Timer size={20} />
+                    <span className="text-[8px] md:text-[10px] font-black text-white/60 uppercase tracking-widest mb-0.5">Time Limit</span>
+                    <div className={`flex items-center gap-1 md:gap-2 font-black text-xl md:text-2xl tabular-nums ${timeLeft < 60 ? 'text-red-300 animate-pulse' : 'text-white'}`}>
+                      <Timer size={16} className="md:w-5 md:h-5" />
                       <span style={{ color: isTimeLow ? '#ef4444' : styles.accentColor }}>{timeLeft}s</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="p-10 space-y-10 bg-gradient-to-b from-white to-gray-50/50">
-                <div className="relative p-6 bg-blue-50/30 rounded-3xl border border-blue-100/50">
-                  <div className="absolute -left-1 top-6 bottom-6 w-1.5 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
-                  <p className="text-lg text-gray-700 leading-relaxed font-bold italic pl-4">
+              <div className="p-5 md:p-10 space-y-6 md:space-y-10 bg-gradient-to-b from-white to-gray-50/50">
+                <div className="relative p-4 md:p-6 bg-blue-50/30 rounded-2xl md:rounded-3xl border border-blue-100/50">
+                  <div className="absolute -left-1 top-4 bottom-4 w-1 md:w-1.5 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                  <p className="text-base md:text-lg text-gray-700 leading-relaxed font-bold italic pl-3 md:pl-4">
                     "{room.description}"
                   </p>
                 </div>
 
-                <div className="space-y-8">
+                <div className="space-y-6 md:space-y-8">
                   {room.puzzles.map((puzzle, index) => {
                     // Only show the puzzle if all previous puzzles in the room are solved
                     const previousPuzzlesSolved = room.puzzles.slice(0, index).every(p => game.solvedPuzzles?.includes(p.id));
@@ -961,48 +961,48 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
                     return (
                     <div 
                       key={puzzle.id} 
-                      className={`p-8 rounded-[2rem] border-2 transition-all relative overflow-hidden ${
+                      className={`p-4 md:p-8 rounded-2xl md:rounded-[2rem] border-2 transition-all relative overflow-hidden ${
                         game.solvedPuzzles?.includes(puzzle.id) 
                           ? 'bg-gray-50/50 border-gray-100 opacity-60 grayscale-[0.5]' 
                           : 'bg-white border-blue-100 shadow-xl shadow-blue-500/5 ring-1 ring-blue-50'
                       }`}
                     >
-                      <div className="flex items-start gap-6">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform ${
+                      <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
+                        <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform ${
                           game.solvedPuzzles?.includes(puzzle.id) ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600 scale-110'
                         }`}>
-                          {game.solvedPuzzles?.includes(puzzle.id) ? <CheckCircle2 size={24} /> : <Hash size={24} />}
+                          {game.solvedPuzzles?.includes(puzzle.id) ? <CheckCircle2 size={20} className="md:w-6 md:h-6" /> : <Hash size={20} className="md:w-6 md:h-6" />}
                         </div>
-                        <div className="space-y-6 flex-1">
+                        <div className="space-y-4 md:space-y-6 flex-1 w-full">
                           <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <span className="text-[10px] font-black text-blue-500 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-[0.2em]">
+                            <div className="flex items-center gap-2 md:gap-3">
+                              <span className="text-[8px] md:text-[10px] font-black text-blue-500 bg-blue-50 px-2 md:px-3 py-0.5 md:py-1 rounded-full uppercase tracking-[0.2em]">
                                 {puzzle.type.replace('_', ' ')}
                               </span>
-                              {game.solvedPuzzles?.includes(puzzle.id) && <span className="text-[10px] font-black text-green-600 bg-green-50 px-3 py-1 rounded-full uppercase tracking-widest">Completed</span>}
+                              {game.solvedPuzzles?.includes(puzzle.id) && <span className="text-[8px] md:text-[10px] font-black text-green-600 bg-green-50 px-2 md:px-3 py-0.5 md:py-1 rounded-full uppercase tracking-widest">Completed</span>}
                             </div>
-                            <h4 className="text-2xl font-black text-gray-900 leading-tight tracking-tight">{puzzle.question}</h4>
+                            <h4 className="text-xl md:text-2xl font-black text-gray-900 leading-tight tracking-tight">{puzzle.question}</h4>
                           </div>
 
                           {!game.solvedPuzzles?.includes(puzzle.id) ? (
-                            <div className="space-y-8 pt-2">
-                              <div className="p-2 bg-gray-50/50 rounded-[1.5rem] border border-gray-100">
+                            <div className="space-y-6 md:space-y-8 pt-2">
+                              <div className="p-1.5 md:p-2 bg-gray-50/50 rounded-xl md:rounded-[1.5rem] border border-gray-100">
                                 {renderPuzzleInput(puzzle)}
                               </div>
                               
-                              <div className="flex gap-4 justify-end pt-4 border-t border-gray-50">
+                              <div className="flex gap-3 md:gap-4 justify-end pt-3 md:pt-4 border-t border-gray-50">
                                 <button 
                                   onClick={() => !isSpectator && handleHint(puzzle.id)}
                                   disabled={isSpectator}
-                                  className="flex items-center gap-3 px-8 py-4 rounded-2xl text-sm font-black transition-all shadow-md hover:shadow-xl active:scale-95 bg-yellow-400 text-yellow-950 hover:bg-yellow-300 border-b-4 border-yellow-600"
+                                  className="flex items-center gap-2 md:gap-3 px-4 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-black transition-all shadow-md hover:shadow-xl active:scale-95 bg-yellow-400 text-yellow-950 hover:bg-yellow-300 border-b-4 border-yellow-600"
                                 >
-                                  <HelpCircle size={20} /> 힌트 보기 ({game.hintsUsed || 0})
+                                  <HelpCircle size={16} className="md:w-5 md:h-5" /> 힌트 보기 ({game.hintsUsed || 0})
                                 </button>
                               </div>
                             </div>
                           ) : (
-                            <div className="px-6 py-4 bg-green-50/50 rounded-2xl border border-green-100 text-green-800 text-sm font-bold flex items-center gap-2">
-                              <CheckCircle2 size={16} /> 해결됨! {puzzle.rewardItem && `(획득: ${puzzle.rewardItem})`}
+                            <div className="px-4 md:px-6 py-3 md:py-4 bg-green-50/50 rounded-xl md:rounded-2xl border border-green-100 text-green-800 text-xs md:text-sm font-bold flex items-center gap-2">
+                              <CheckCircle2 size={14} className="md:w-4 md:h-4" /> 해결됨! {puzzle.rewardItem && `(획득: ${puzzle.rewardItem})`}
                             </div>
                           )}
                         </div>
@@ -1040,39 +1040,39 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
               </div>
 
               {/* Inventory UI */}
-              <div className="px-8 py-6 border-t border-gray-100 bg-gray-950 text-white flex flex-col gap-4">
+              <div className="px-4 py-4 md:px-8 md:py-6 border-t border-gray-100 bg-gray-950 text-white flex flex-col gap-3 md:gap-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-gray-400">
-                    <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center">
-                      <Briefcase size={16} className="text-white/60" />
+                  <div className="flex items-center gap-2 md:gap-3 text-gray-400">
+                    <div className="w-7 h-7 md:w-8 md:h-8 rounded-lg md:rounded-xl bg-white/10 flex items-center justify-center">
+                      <Briefcase size={14} className="md:w-4 md:h-4 text-white/60" />
                     </div>
-                    <span className="text-[11px] font-black uppercase tracking-[0.3em]">Quick Access Inventory</span>
+                    <span className="text-[9px] md:text-[11px] font-black uppercase tracking-[0.3em]">Quick Access Inventory</span>
                   </div>
-                  <span className="text-[10px] font-black text-white/40">{game.inventory?.length || 0} / 10</span>
+                  <span className="text-[9px] md:text-[10px] font-black text-white/40">{game.inventory?.length || 0} / 10</span>
                 </div>
-                <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
+                <div className="flex gap-3 md:gap-4 overflow-x-auto pb-2 custom-scrollbar">
                   {game.inventory?.map((item, i) => (
                     <motion.button 
                       key={`${item}-${i}`} 
                       whileHover={{ y: -4 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleInventoryItemClick(item)}
-                      className={`px-6 py-3 rounded-2xl text-sm font-black shadow-xl transition-all whitespace-nowrap border-2 flex items-center gap-3 ${
+                      className={`px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl text-xs md:text-sm font-black shadow-xl transition-all whitespace-nowrap border-2 flex items-center gap-2 md:gap-3 ${
                         selectedInventoryItem === item 
                           ? 'bg-blue-600 border-blue-400 text-white ring-4 ring-blue-500/20' 
                           : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-700 hover:text-white'
                       }`}
                     >
-                      <Package size={16} className={selectedInventoryItem === item ? 'text-blue-200' : 'text-gray-600'} />
+                      <Package size={14} className={selectedInventoryItem === item ? 'text-blue-200' : 'text-gray-600'} />
                       {item}
                     </motion.button>
                   ))}
                   {(!game.inventory || game.inventory.length === 0) && (
-                    <div className="flex items-center gap-3 py-2 opacity-30">
-                      <div className="w-8 h-8 rounded-lg border border-dashed border-gray-600 flex items-center justify-center text-gray-400">
-                        <Package size={14} />
+                    <div className="flex items-center gap-2 md:gap-3 py-1 md:py-2 opacity-30">
+                      <div className="w-7 h-7 md:w-8 md:h-8 rounded-lg border border-dashed border-gray-600 flex items-center justify-center text-gray-400">
+                        <Package size={12} className="md:w-3.5 md:h-3.5" />
                       </div>
-                      <span className="text-xs font-bold italic text-gray-400">인벤토리가 비어 있습니다.</span>
+                      <span className="text-[10px] md:text-xs font-bold italic text-gray-400">인벤토리가 비어 있습니다.</span>
                     </div>
                   )}
                 </div>

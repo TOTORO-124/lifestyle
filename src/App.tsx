@@ -24,7 +24,7 @@ const LogTicker = ({ logs }: { logs: GameLog[] }) => {
   const latestLogs = [...Object.values(logs || {})].sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
   
   return (
-    <div className="fixed top-20 right-4 md:top-auto md:bottom-4 md:right-4 w-[calc(100%-2rem)] md:w-72 bg-white/90 backdrop-blur border border-gray-200 rounded-lg shadow-xl overflow-hidden z-40 pointer-events-none">
+    <div className="fixed bottom-4 right-4 w-[calc(100%-2rem)] md:w-72 bg-white/90 backdrop-blur border border-gray-200 rounded-lg shadow-xl overflow-hidden z-40 pointer-events-none">
       <div className="bg-gray-100 px-3 py-1 border-b border-gray-200 flex justify-between items-center">
         <span className="text-[9px] md:text-[10px] font-bold text-gray-500 flex items-center gap-1">
           <Activity size={10} /> 실시간 시스템 로그

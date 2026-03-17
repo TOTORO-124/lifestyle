@@ -86,20 +86,20 @@ export const HiddenObjectPuzzle: React.FC<HiddenObjectPuzzleProps> = ({ puzzle, 
       </div>
 
       {/* Checklist */}
-      <div className="bg-gray-50 p-4 rounded-xl border-2 border-dashed border-gray-300">
-        <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">찾아야 할 물건들</p>
-        <div className="flex flex-wrap gap-2">
+      <div className="bg-gray-50 p-3 md:p-4 rounded-xl border-2 border-dashed border-gray-300">
+        <p className="text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest mb-2 md:mb-3">찾아야 할 물건들</p>
+        <div className="flex flex-wrap gap-1.5 md:gap-2">
           {puzzle.hiddenObjects?.map((obj) => (
             <div 
               key={obj.id}
-              className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${
+              className={`px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-[10px] md:text-sm font-bold flex items-center gap-1.5 md:gap-2 transition-all shrink-0 ${
                 foundObjects.includes(obj.id)
                   ? 'bg-green-100 text-green-700 border-green-200'
                   : 'bg-white text-gray-500 border-gray-200'
               } border`}
             >
-              {foundObjects.includes(obj.id) ? <CheckCircle2 size={14} /> : <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300" />}
-              {obj.name}
+              {foundObjects.includes(obj.id) ? <CheckCircle2 size={12} className="md:w-3.5 md:h-3.5" /> : <div className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 rounded-full border-2 border-gray-300" />}
+              <span className="truncate max-w-[80px] md:max-w-none">{obj.name}</span>
             </div>
           ))}
         </div>
