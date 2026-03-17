@@ -1274,9 +1274,9 @@ export const sessionService = {
     // For high difficulty, use Minimax
     if (difficulty >= 4) {
       let depth = 2;
-      if (difficulty === 5) depth = 3;
-      if (difficulty === 6) depth = 4;
-      if (difficulty === 7) depth = 5;
+      if (difficulty === 5) depth = 4;
+      if (difficulty === 6) depth = 6;
+      if (difficulty === 7) depth = 8;
       return this.omokMinimaxSearch(board, aiStone, playerStone, depth, ruleType);
     }
 
@@ -1386,7 +1386,7 @@ export const sessionService = {
 
     const points = this.getOmokSearchPoints(board);
     // Limit search points for performance - tighter limits for higher depth
-    const limit = depth > 3 ? 8 : (depth > 2 ? 12 : 20);
+    const limit = depth > 6 ? 8 : (depth > 4 ? 12 : (depth > 2 ? 20 : 30));
     const sortedPoints = points.sort((a, b) => {
       const sA = this.evaluateOmokPoint(board, a.x, a.y, aiStone) + this.evaluateOmokPoint(board, a.x, a.y, playerStone);
       const sB = this.evaluateOmokPoint(board, b.x, b.y, aiStone) + this.evaluateOmokPoint(board, b.x, b.y, playerStone);
@@ -1426,61 +1426,74 @@ export const sessionService = {
 
     for (let y = 0; y < 15; y++) {
       for (let x = 0; x < 15; x++) {
-        if (board[y][x] === aiStone) {
-          aiScore += this.evaluateOmokPoint(board, x, y, aiStone);
-        } else if (board[y][x] === playerStone) {
-          playerScore += this.evaluateOmokPoint(board, x, y, playerStone);
-        }
+        const stone = board[y][x];
+        if (stone === 0) continue;
+        
+        const score = this.evaluateOmokPoint(board, x, y, stone);
+        if (stone === aiStone) aiScore += score;
+        else playerScore += score;
       }
     }
 
-    return aiScore - playerScore * 1.2; // Favor defense slightly more for "really difficult" feel
+    return aiScore - playerScore * 1.5; // Favor defense more for "really difficult" feel
   },
 
   evaluateOmokPoint(board: number[][], x: number, y: number, stone: number) {
     const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
     let totalScore = 0;
+    const opponent = stone === 1 ? 2 : 1;
 
     for (const [dx, dy] of directions) {
-      let leftBlock = false;
-      let rightBlock = false;
-      let leftCount = 0;
-      let rightCount = 0;
-
-      // Forward
-      for (let i = 1; i < 5; i++) {
-        const nx = x + dx * i, ny = y + dy * i;
+      let line = "";
+      // Get 9 cells around (x,y) in this direction
+      for (let i = -4; i <= 4; i++) {
+        const nx = x + dx * i;
+        const ny = y + dy * i;
         if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
-          rightBlock = true;
-          break;
-        }
-        if (board[ny][nx] === stone) rightCount++;
-        else if (board[ny][nx] === 0) break;
-        else {
-          rightBlock = true;
-          break;
+          line += "X"; // Blocked
+        } else if (board[ny][nx] === stone) {
+          line += "S"; // Self
+        } else if (board[ny][nx] === opponent) {
+          line += "O"; // Opponent
+        } else {
+          line += "."; // Empty
         }
       }
       
-      // Backward
-      for (let i = 1; i < 5; i++) {
-        const nx = x - dx * i, ny = y - dy * i;
-        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
-          leftBlock = true;
-          break;
-        }
-        if (board[ny][nx] === stone) leftCount++;
-        else if (board[ny][nx] === 0) break;
-        else {
-          leftBlock = true;
-          break;
-        }
+      // Patterns (S is self, . is empty, X/O is block)
+      // 5 in a row
+      if (line.includes("SSSSS")) {
+        totalScore += 10000000;
+        continue;
       }
-
-      const count = leftCount + rightCount + 1;
-      const block = (leftBlock ? 1 : 0) + (rightBlock ? 1 : 0);
-
-      totalScore += this.getOmokPatternScore(count, block);
+      
+      // Live 4: .SSSS.
+      if (line.includes(".SSSS.")) {
+        totalScore += 1000000;
+        continue;
+      }
+      
+      // Dead 4: [XO]SSSS. or .SSSS[XO] or jump 4s
+      if (line.includes("SSSS.") || line.includes(".SSSS") || 
+          line.includes("S.SSS") || line.includes("SS.SS") || line.includes("SSS.S")) {
+        totalScore += 100000;
+      }
+      
+      // Live 3: ..SSS.. or .S.SS. or .SS.S.
+      if (line.includes(".SSS..") || line.includes("..SSS.") || 
+          line.includes(".S.SS.") || line.includes(".SS.S.") || line.includes(".S.S.S.")) {
+        totalScore += 10000;
+      }
+      
+      // Dead 3
+      if (line.includes("SSS..") || line.includes("..SSS") || line.includes("S.SS") || line.includes("SS.S")) {
+        totalScore += 1000;
+      }
+      
+      // 2s
+      if (line.includes(".SS..") || line.includes("..SS.") || line.includes(".S.S.")) {
+        totalScore += 100;
+      }
     }
 
     return totalScore;
