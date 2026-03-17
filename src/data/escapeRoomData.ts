@@ -63,6 +63,114 @@ export interface EscapeRoomTheme {
 }
 
 export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
+  'alchemist_mystery': {
+    id: 'alchemist_mystery',
+    name: '연금술사의 사라진 유산',
+    genre: '판타지/미스터리',
+    description: '전설적인 연금술사 니콜라스의 서재에서 시작되는 모험. 그가 남긴 현자의 돌을 찾아야 합니다.',
+    difficulty: 'HARD',
+    startRoomId: 'alc_room_1',
+    styles: {
+      primaryColor: '#78350f',
+      secondaryColor: '#451a03',
+      bgColor: '#1c1917',
+      accentColor: '#fbbf24',
+      fontFamily: 'serif'
+    },
+    rooms: {
+      'alc_room_1': {
+        id: 'alc_room_1',
+        name: '연금술사의 서재',
+        description: '오래된 책 냄새와 먼지가 가득한 방입니다. 책상 위에는 읽다 만 일기장이 놓여 있습니다.',
+        puzzles: [
+          {
+            id: 'alc_p1',
+            type: 'HIDDEN_OBJECT',
+            question: '방 안에서 연금술사의 일기장을 찾아야 합니다. 어딘가에 숨겨져 있을 것입니다.',
+            answer: 'found_all',
+            hint: '책장 사이나 책상 서랍 근처를 잘 살펴보세요.',
+            imageUrl: 'https://images.unsplash.com/photo-1585829365234-781fcd50c819?q=80&w=1000&auto=format&fit=crop',
+            hiddenObjects: [
+              { id: 'diary', x: 45, y: 60, width: 10, height: 15, name: '낡은 일기장' }
+            ],
+            rewardItem: '연금술사의 일기장',
+            rewardItemExamine: '일기장 첫 페이지에 "진리는 4가지 원소의 조화 속에 있다. 불, 물, 공기, 흙..."이라고 적혀 있습니다.',
+            explanation: '일기장을 찾았습니다! 일기장에는 비밀 실험실로 가는 힌트가 적혀 있습니다.'
+          },
+          {
+            id: 'alc_p2',
+            type: 'DIRECTION_SEQUENCE',
+            question: '벽면에 4개의 원소 문양(불, 물, 공기, 흙)이 새겨진 버튼이 있습니다. 일기장의 힌트대로 순서대로 눌러야 합니다.',
+            answer: 'UP,DOWN,RIGHT,LEFT',
+            hint: '일기장에 적힌 원소의 순서를 방향으로 치환해보세요. (불=UP, 물=DOWN, 공기=RIGHT, 흙=LEFT)',
+            sequence: ['UP', 'DOWN', 'RIGHT', 'LEFT'],
+            explanation: '쿠르릉 소리와 함께 책장이 옆으로 밀려나며 비밀 통로가 나타납니다!'
+          }
+        ],
+        nextRoomId: 'alc_room_2'
+      },
+      'alc_room_2': {
+        id: 'alc_room_2',
+        name: '비밀 실험실',
+        description: '보글보글 끓는 플라스크와 알 수 없는 약초들이 가득합니다. 공기 중에 기묘한 향기가 감돕니다.',
+        puzzles: [
+          {
+            id: 'alc_p3',
+            type: 'DRAG_DROP',
+            question: '황금 시약을 만들기 위해 3가지 재료를 알맞은 비율로 배합해야 합니다. [붉은 가루, 푸른 액체, 노란 결정]',
+            answer: 'CONNECTED',
+            hint: '실험대 옆 메모에 "큰 병에는 붉은 가루, 중간 병에는 노란 결정, 작은 병에는 푸른 액체"라고 적혀 있습니다.',
+            dragItems: [
+              { id: 'red_dust', label: '붉은 가루', color: '#ef4444', size: 'large' },
+              { id: 'blue_liquid', label: '푸른 액체', color: '#3b82f6', size: 'small' },
+              { id: 'yellow_crystal', label: '노란 결정', color: '#eab308', size: 'medium' }
+            ],
+            dropZones: [
+              { id: 'flask_large', label: '큰 플라스크', accepts: 'red_dust', size: 'large' },
+              { id: 'flask_medium', label: '중간 플라스크', accepts: 'yellow_crystal', size: 'medium' },
+              { id: 'flask_small', label: '작은 플라스크', accepts: 'blue_liquid', size: 'small' }
+            ],
+            rewardItem: '완성된 황금 시약',
+            explanation: '시약들이 섞이며 눈부신 황금빛을 내뿜습니다! 시약을 획득했습니다.'
+          },
+          {
+            id: 'alc_p4',
+            type: 'PASSWORD_DIAL',
+            question: '금고가 나타났습니다. 금고 위에는 "태양(3), 달(7), 별(9)의 기운을 모두 곱하여 하나로 만드느니라"는 문구가 적혀 있습니다.',
+            answer: '189',
+            hint: '세 숫자를 모두 곱해보세요. (3 * 7 * 9)',
+            dialCount: 3,
+            explanation: '철컥! 금고가 열리며 마지막 방으로 가는 열쇠가 나옵니다.'
+          }
+        ],
+        nextRoomId: 'alc_room_3'
+      },
+      'alc_room_3': {
+        id: 'alc_room_3',
+        name: '현자의 방',
+        description: '방 한가운데 거대한 황금관이 놓여 있고, 그 위로 현자의 돌이 떠 있습니다. 하지만 강력한 결계가 쳐져 있습니다.',
+        puzzles: [
+          {
+            id: 'alc_p5',
+            type: 'ITEM_INTERACTION',
+            question: '결계를 해제하려면 아까 만든 "황금 시약"을 중앙 제단에 부어야 합니다.',
+            answer: 'USED_ITEM',
+            hint: '인벤토리에서 황금 시약을 선택한 후 제단을 클릭하세요.',
+            requiredItem: '완성된 황금 시약',
+            explanation: '시약을 붓자 결계가 사라지며 현자의 돌에 손을 뻗을 수 있게 되었습니다!'
+          },
+          {
+            id: 'alc_p6',
+            type: 'TERMINAL',
+            question: '현자의 돌을 만지자 머릿속에 목소리가 들립니다. "진정한 연금술의 목적은 무엇인가?" (힌트: 일기장 마지막 장에 적힌 단어)',
+            answer: 'TRANSMUTATION',
+            hint: '영문 대문자로 입력하세요. 일기장에는 "변환(TRANSMUTATION)은 곧 창조다"라고 적혀 있었습니다.',
+            explanation: '정답입니다! 당신은 연금술사의 진정한 후계자가 되었습니다. 탈출 성공!'
+          }
+        ]
+      }
+    }
+  },
   'interactive_escape': {
     id: 'interactive_escape',
     name: '시즌 1: 시공간 탈출',
@@ -402,11 +510,10 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
           },
           {
             id: 's2_r1_p3',
-            type: 'PASSWORD_DIAL',
+            type: 'PATTERN',
             question: '시한폭탄 자물쇠가 작동하기 시작했다! 시간 내에 암호를 입력해야 한다.',
             answer: 'HELP',
             hint: '방금 벽에서 발견한 글씨를 입력하자.',
-            dialCount: 4,
             explanation: '폭발을 막았다! 다음 방으로 가는 문이 열렸다.'
           }
         ],
