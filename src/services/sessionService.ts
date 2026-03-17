@@ -1271,12 +1271,12 @@ export const sessionService = {
   },
 
   getOmokBestMove(board: number[][], aiStone: number, playerStone: number, difficulty: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
-    // For high difficulty, use Minimax
+    // For high difficulty, use Minimax with optimized depth
     if (difficulty >= 4) {
       let depth = 2;
       if (difficulty === 5) depth = 4;
       if (difficulty === 6) depth = 6;
-      if (difficulty === 7) depth = 8;
+      if (difficulty === 7) depth = 6; // Depth 6 is serious enough if evaluation is good
       return this.omokMinimaxSearch(board, aiStone, playerStone, depth, ruleType);
     }
 
@@ -1380,13 +1380,19 @@ export const sessionService = {
   minimax(board: number[][], depth: number, alpha: number, beta: number, isMaximizing: boolean, aiStone: number, playerStone: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
     const score = this.evaluateOmokBoard(board, aiStone, playerStone);
     
-    if (depth === 0 || Math.abs(score) > 50000) {
+    // Immediate win/loss detection
+    if (Math.abs(score) > 5000000) {
+      return isMaximizing ? score + depth : score - depth; // Prioritize faster wins
+    }
+    
+    if (depth === 0) {
       return score;
     }
 
     const points = this.getOmokSearchPoints(board);
-    // Limit search points for performance - tighter limits for higher depth
-    const limit = depth > 6 ? 8 : (depth > 4 ? 12 : (depth > 2 ? 20 : 30));
+    // Limit search points for performance - balanced for speed and strength
+    // Level 7 (depth 6) now considers more candidates for higher intelligence
+    const limit = depth > 4 ? 16 : (depth > 2 ? 20 : 32);
     const sortedPoints = points.sort((a, b) => {
       const sA = this.evaluateOmokPoint(board, a.x, a.y, aiStone) + this.evaluateOmokPoint(board, a.x, a.y, playerStone);
       const sB = this.evaluateOmokPoint(board, b.x, b.y, aiStone) + this.evaluateOmokPoint(board, b.x, b.y, playerStone);
@@ -1435,7 +1441,9 @@ export const sessionService = {
       }
     }
 
-    return aiScore - playerScore * 1.5; // Favor defense more for "really difficult" feel
+    // Defensive bias: prioritize blocking player's critical threats
+    // But don't ignore AI's own winning opportunities
+    return aiScore - playerScore * 2.0; 
   },
 
   evaluateOmokPoint(board: number[][], x: number, y: number, stone: number) {
@@ -1443,14 +1451,22 @@ export const sessionService = {
     let totalScore = 0;
     const opponent = stone === 1 ? 2 : 1;
 
+    // Center bias - encourages playing towards the middle in early game
+    const distToCenter = Math.abs(x - 7) + Math.abs(y - 7);
+    totalScore += (14 - distToCenter);
+
     for (const [dx, dy] of directions) {
       let line = "";
-      // Get 9 cells around (x,y) in this direction
-      for (let i = -4; i <= 4; i++) {
+      // Get 11 cells around (x,y) for better pattern matching
+      for (let i = -5; i <= 5; i++) {
         const nx = x + dx * i;
         const ny = y + dy * i;
+        if (nx === x && ny === y) {
+          line += "S"; // Treat the target point as the stone being evaluated
+          continue;
+        }
         if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
-          line += "X"; // Blocked
+          line += "X"; // Blocked by wall
         } else if (board[ny][nx] === stone) {
           line += "S"; // Self
         } else if (board[ny][nx] === opponent) {
@@ -1461,38 +1477,38 @@ export const sessionService = {
       }
       
       // Patterns (S is self, . is empty, X/O is block)
-      // 5 in a row
+      // 5 in a row - Immediate Win
       if (line.includes("SSSSS")) {
+        totalScore += 100000000;
+        continue;
+      }
+      
+      // Live 4: .SSSS. - Guaranteed Win
+      if (line.includes(".SSSS.")) {
         totalScore += 10000000;
         continue;
       }
       
-      // Live 4: .SSSS.
-      if (line.includes(".SSSS.")) {
-        totalScore += 1000000;
-        continue;
-      }
-      
-      // Dead 4: [XO]SSSS. or .SSSS[XO] or jump 4s
+      // Dead 4 or Jump 4: SSSS. or .SSSS or S.SSS etc.
       if (line.includes("SSSS.") || line.includes(".SSSS") || 
           line.includes("S.SSS") || line.includes("SS.SS") || line.includes("SSS.S")) {
-        totalScore += 100000;
+        totalScore += 1000000;
       }
       
       // Live 3: ..SSS.. or .S.SS. or .SS.S.
       if (line.includes(".SSS..") || line.includes("..SSS.") || 
-          line.includes(".S.SS.") || line.includes(".SS.S.") || line.includes(".S.S.S.")) {
-        totalScore += 10000;
+          line.includes(".S.SS.") || line.includes(".SS.S.")) {
+        totalScore += 100000;
       }
       
-      // Dead 3
+      // Dead 3: SSS.. or ..SSS or S.SS or SS.S
       if (line.includes("SSS..") || line.includes("..SSS") || line.includes("S.SS") || line.includes("SS.S")) {
-        totalScore += 1000;
+        totalScore += 10000;
       }
       
       // 2s
       if (line.includes(".SS..") || line.includes("..SS.") || line.includes(".S.S.")) {
-        totalScore += 100;
+        totalScore += 1000;
       }
     }
 
