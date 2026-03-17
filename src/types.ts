@@ -353,6 +353,17 @@ export interface LeaderboardEntry {
   timestamp: number;
 }
 
+export interface HallOfFameEntry {
+  id: string;
+  themeId: string;
+  themeName: string;
+  playerNicknames: string[];
+  completionTime: number; // in seconds
+  hintsUsed: number;
+  difficulty: string;
+  timestamp: number;
+}
+
 export interface Session {
   id: string;
   gameType: GameType;

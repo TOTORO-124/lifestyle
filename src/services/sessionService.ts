@@ -1,7 +1,7 @@
 import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
-import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, EscapeRoomGameState, EscapeRoomActivity, CyberArenaGameState, ArenaProjectile, ArenaCharacter, ArenaItem } from '../types';
+import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, EscapeRoomGameState, EscapeRoomActivity, CyberArenaGameState, ArenaProjectile, ArenaCharacter, ArenaItem, HallOfFameEntry } from '../types';
 import { LIAR_TOPICS } from '../data/topics';
 import { DRAW_TOPICS } from '../data/drawTopics';
 import { BINGO_TOPICS } from '../data/bingoTopics';
@@ -2797,6 +2797,66 @@ export const sessionService = {
     }
   },
 
+  async registerHallOfFame(sessionId: string, session: Session) {
+    if (!db || !session.escapeRoomGame || session.escapeRoomGame.status !== 'WON') return;
+
+    const theme = ESCAPE_ROOM_THEMES[session.escapeRoomGame.themeId];
+    if (!theme) return;
+
+    const completionTime = Math.floor((Date.now() - session.escapeRoomGame.startTime) / 1000);
+    const hintsUsed = (session.escapeRoomGame.hintsUsed || 0) + (session.escapeRoomGame.superHintsUsed || 0);
+    const playerNicknames = Object.values(session.players || {}).map(p => p.nickname);
+
+    const entryRef = push(ref(db, 'hallOfFame'));
+    const entry: HallOfFameEntry = {
+      id: entryRef.key!,
+      themeId: theme.id,
+      themeName: theme.name,
+      playerNicknames,
+      completionTime,
+      hintsUsed,
+      difficulty: session.settings.escapeRoomDifficulty || 'NORMAL',
+      timestamp: Date.now()
+    };
+
+    await set(entryRef, entry);
+
+    // Also record to global leaderboards for the unified view
+    const difficultyMultiplier = entry.difficulty === 'HARD' ? 1.5 : entry.difficulty === 'EASY' ? 0.7 : 1.0;
+    const baseScore = 10000;
+    const timePenalty = entry.completionTime;
+    const hintPenalty = entry.hintsUsed * 200;
+    const finalScore = Math.max(0, Math.floor((baseScore - timePenalty - hintPenalty) * difficultyMultiplier));
+
+    const hostNickname = session.players[session.hostId]?.nickname || playerNicknames[0] || '익명';
+    await this.recordLeaderboard(sessionId, 'ESCAPE_ROOM', session.hostId, hostNickname, finalScore, {
+      completionTime: entry.completionTime,
+      hintsUsed: entry.hintsUsed,
+      themeName: entry.themeName
+    });
+  },
+
+  async getHallOfFame(themeId?: string): Promise<HallOfFameEntry[]> {
+    if (!db) return [];
+    const snapshot = await get(ref(db, 'hallOfFame'));
+    if (!snapshot.exists()) return [];
+
+    const data = snapshot.val();
+    let entries = Object.values(data) as HallOfFameEntry[];
+
+    if (themeId) {
+      entries = entries.filter(e => e.themeId === themeId);
+    }
+
+    // Sort by completion time (ascending), then hints used (ascending)
+    return entries.sort((a, b) => {
+      if (a.completionTime !== b.completionTime) {
+        return a.completionTime - b.completionTime;
+      }
+      return a.hintsUsed - b.hintsUsed;
+    });
+  },
+
   async combineItems(sessionId: string, item1: string, item2: string, session: Session) {
     if (!db || !session.escapeRoomGame) return;
     
@@ -2864,13 +2924,18 @@ export const sessionService = {
 
     if (isAllCleared) {
       await this.logEscapeRoomActivity(sessionId, userName, `모든 스테이지를 클리어했습니다!`, 'SYSTEM', session);
-      await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
-        status: 'WON',
+      const wonGame = {
+        ...session.escapeRoomGame,
+        status: 'WON' as SessionStatus,
         isRoomCleared: false,
         clearedRooms,
         timeAttackEndTime: null
-      });
+      };
+      await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), wonGame);
       await this.addLog(sessionId, '축하합니다! 모든 방을 탈출했습니다!', 'success');
+      
+      const wonSession = { ...session, escapeRoomGame: wonGame };
+      await this.registerHallOfFame(sessionId, wonSession);
       await this.advanceStatus(sessionId, SessionStatus.SUMMARY);
     } else {
       await this.logEscapeRoomActivity(sessionId, userName, `스테이지 선택 화면으로 돌아갑니다.`, 'MOVE', session);

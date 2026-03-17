@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Session, SessionStatus } from '../types';
+import { Session, SessionStatus, HallOfFameEntry } from '../types';
 import { ESCAPE_ROOM_THEMES, Puzzle } from '../data/escapeRoomData';
 import { sessionService } from '../services/sessionService';
 import { auth } from '../firebase';
@@ -8,8 +8,9 @@ import {
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, 
   CheckCircle2, HelpCircle, Users, Timer, Trophy, Skull, 
   DoorOpen, Key, Search, Lock, Unlock, Zap, ShieldAlert,
-  Image as ImageIcon, Hash, Briefcase, Package
+  Image as ImageIcon, Hash, Briefcase, Package, X, Award
 } from 'lucide-react';
+import Leaderboard from './Leaderboard';
 import { HiddenObjectPuzzle } from './HiddenObjectPuzzle';
 
 interface EscapeRoomUIProps {
@@ -35,6 +36,18 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
   const [showRoomTitle, setShowRoomTitle] = useState(false);
 
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showHallOfFame, setShowHallOfFame] = useState(false);
+  const [hallOfFameEntries, setHallOfFameEntries] = useState<HallOfFameEntry[]>([]);
+
+  useEffect(() => {
+    if (showHallOfFame) {
+      // Subscribe to global leaderboards for Escape Room
+      const unsubscribe = sessionService.subscribeToGlobalLeaderboards((allLeaderboards) => {
+        setHallOfFameEntries(allLeaderboards.ESCAPE_ROOM || []);
+      });
+      return () => unsubscribe();
+    }
+  }, [showHallOfFame]);
 
   // Puzzle specific states
   const [directionInput, setDirectionInput] = useState<string[]>([]);
@@ -90,6 +103,56 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
       sessionService.failEscapeRoom(session.id, session);
     }
   }, [timeLeft, game.status, session.hostId, session.id, session]);
+
+  const hallOfFameModal = (
+    <AnimatePresence>
+      {showHallOfFame && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        >
+          <motion.div 
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            className="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          >
+            <div className="bg-[#217346] px-4 py-3 flex items-center justify-between text-white">
+              <div className="flex items-center gap-2">
+                <Award size={20} />
+                <h3 className="text-sm font-bold tracking-tight">방탈출 명예의 전당 (글로벌)</h3>
+              </div>
+              <button onClick={() => setShowHallOfFame(false)} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+              <Leaderboard 
+                entries={hallOfFameEntries} 
+                title="방탈출" 
+                sessionId="GLOBAL" 
+                gameType="ESCAPE_ROOM" 
+              />
+              <p className="text-[10px] text-gray-400 mt-4 text-center italic">
+                * 점수는 (10,000 - 탈출시간 - 힌트페널티) x 난이도 가중치로 계산됩니다.
+              </p>
+            </div>
+            
+            <div className="p-4 border-t border-gray-100 bg-white flex justify-end">
+              <button 
+                onClick={() => setShowHallOfFame(false)}
+                className="px-6 py-2 bg-[#217346] text-white text-xs font-bold rounded-lg shadow-md hover:bg-[#1a5c38] transition-all"
+              >
+                닫기
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 
   const howToPlayModal = (
     <AnimatePresence>
@@ -168,17 +231,27 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
     return (
       <div className="min-h-[600px] p-6 bg-slate-900 text-white" style={{ fontFamily: styles.fontFamily }}>
         {howToPlayModal}
+        {hallOfFameModal}
         <div className="max-w-4xl mx-auto space-y-8">
           <div className="text-center space-y-4 relative">
             <h2 className="text-4xl font-black tracking-tighter" style={{ color: styles.primaryColor }}>{theme.name}</h2>
             <p className="text-gray-400">{theme.description}</p>
-            <button 
-              onClick={() => setShowHowToPlay(true)}
-              className="absolute top-0 right-0 flex items-center gap-2 px-4 py-2 rounded-full bg-gray-800 hover:bg-gray-700 text-sm font-bold transition-colors"
-            >
-              <HelpCircle size={16} />
-              게임 방법
-            </button>
+            <div className="absolute top-0 right-0 flex items-center gap-2">
+              <button 
+                onClick={() => setShowHallOfFame(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 text-sm font-bold transition-colors border border-amber-500/30"
+              >
+                <Trophy size={16} />
+                명예의 전당
+              </button>
+              <button 
+                onClick={() => setShowHowToPlay(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-800 hover:bg-gray-700 text-sm font-bold transition-colors"
+              >
+                <HelpCircle size={16} />
+                게임 방법
+              </button>
+            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

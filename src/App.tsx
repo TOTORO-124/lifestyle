@@ -15,6 +15,7 @@ import { HiddenObjectPuzzle } from './components/HiddenObjectPuzzle';
 import { SlidePuzzle } from './components/SlidePuzzle';
 import { CubePuzzle } from './components/CubePuzzle';
 import EscapeRoomUI from './components/EscapeRoomUI';
+import Leaderboard from './components/Leaderboard';
 import { ESCAPE_ROOM_THEMES } from './data/escapeRoomData';
 import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS, SYNERGIES } from './data/cyberArenaData';
 import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, EyeOff, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2, Coffee, StickyNote, Zap, Skull, ShieldCheck, Activity, Key, DoorOpen, Sword, ZapOff, Heart, ShieldAlert, Cpu, Coins, Package, Target, ShoppingBag, ChevronRight, Star, Info, Trash2, Sparkles } from 'lucide-react';
@@ -48,151 +49,6 @@ const LogTicker = ({ logs }: { logs: GameLog[] }) => {
         {latestLogs.length === 0 && (
           <p className="text-[9px] text-gray-400 italic text-center py-1">대기 중...</p>
         )}
-      </div>
-    </div>
-  );
-};
-
-const Leaderboard = ({ entries, title, sessionId, gameType }: { entries: any[], title: string, sessionId?: string | null, gameType?: string }) => {
-  const rankNames = ['사장', '부사장', '전무', '상무', '이사', '부장', '차장', '과장', '대리', '사원'];
-  const [deleteTarget, setDeleteTarget] = useState<{index: number, nickname: string} | null>(null);
-  const [password, setPassword] = useState('');
-  const [deleteError, setDeleteError] = useState(false);
-  
-  // Ensure entries is an array
-  const safeEntries = Array.isArray(entries) ? entries : (entries ? Object.values(entries) : []);
-  
-  // Fill up to 10 entries for a consistent "Top 10" look
-  const displayEntries = [...safeEntries];
-  while (displayEntries.length < 10) {
-    displayEntries.push(null);
-  }
-
-  const handleDeleteClick = (e: React.MouseEvent, index: number, nickname: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!sessionId || !gameType) return;
-    setDeleteTarget({ index, nickname });
-    setPassword('');
-    setDeleteError(false);
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteTarget || !sessionId || !gameType) return;
-    
-    if (password === 'ad0419**') {
-      await sessionService.removeLeaderboardEntry(sessionId, gameType, deleteTarget.index);
-      setDeleteTarget(null);
-      setPassword('');
-      // We don't use alert here as it might also be blocked, but it's usually less problematic than prompt.
-      // Still, let's just close the modal.
-    } else {
-      setDeleteError(true);
-    }
-  };
-  
-  return (
-    <div className="w-full bg-white border border-[#d1d1d1] rounded shadow-sm overflow-hidden mt-6 relative">
-      <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Trophy size={14} className="text-yellow-500" />
-          <span className="text-[10px] font-bold text-[#666] uppercase tracking-wider truncate">{title} 명예의 전당</span>
-        </div>
-        {sessionId && <span className="text-[8px] text-[#999] italic">Moderation Active</span>}
-      </div>
-
-      {/* Custom Delete Modal Overlay */}
-      {deleteTarget && (
-        <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center">
-          <div className="mb-3">
-            <AlertTriangle size={24} className="text-red-500 mx-auto mb-2" />
-            <p className="text-xs font-bold text-gray-800">'{deleteTarget.nickname}'님의 기록 삭제</p>
-            <p className="text-[10px] text-gray-500">관리자 비밀번호를 입력하세요.</p>
-          </div>
-          <input
-            type="password"
-            autoFocus
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setDeleteError(false);
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && confirmDelete()}
-            placeholder="비밀번호 입력"
-            className={`w-full max-w-[160px] px-3 py-1.5 text-xs border rounded mb-2 text-center outline-none transition-all ${
-              deleteError ? 'border-red-500 bg-red-50 animate-shake' : 'border-gray-300 focus:border-[#217346]'
-            }`}
-          />
-          {deleteError && <p className="text-[9px] text-red-500 mb-2 font-bold">비밀번호가 일치하지 않습니다.</p>}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setDeleteTarget(null)}
-              className="px-3 py-1 text-[10px] font-bold text-gray-500 hover:bg-gray-100 rounded transition-colors"
-            >
-              취소
-            </button>
-            <button
-              onClick={confirmDelete}
-              className="px-3 py-1 text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 rounded shadow-sm transition-colors"
-            >
-              삭제 확인
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="divide-y divide-[#f1f1f1]">
-        {displayEntries.map((entry: any, i: number) => (
-          <div key={entry?.playerId || i} className="group px-4 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors min-h-[45px]">
-            {entry ? (
-              <>
-                <div className="flex items-center gap-3">
-                  <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold ${
-                    i === 0 ? 'bg-yellow-400 text-white' : 
-                    i === 1 ? 'bg-gray-300 text-white' : 
-                    i === 2 ? 'bg-orange-400 text-white' : 'text-[#999] bg-gray-100'
-                  }`}>
-                    {i + 1}
-                  </span>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-gray-800">{entry.nickname}</span>
-                    <span className="text-[9px] text-[#217346] font-bold">{rankNames[i] || '인턴'}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <span className="text-xs font-mono font-bold text-[#217346]">{entry.score.toLocaleString()}</span>
-                    <div className="flex flex-col items-end">
-                      <p className="text-[8px] text-gray-400">{new Date(entry.timestamp).toLocaleDateString()}</p>
-                      {entry.timeTaken && (
-                        <p className="text-[7px] text-gray-400 italic">
-                          {Math.floor(entry.timeTaken / 60)}분 {Math.floor(entry.timeTaken % 60)}초 / {entry.moveCount}수
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {sessionId && gameType && (
-                    <button 
-                      type="button"
-                      onClick={(e) => handleDeleteClick(e, i, entry.nickname)}
-                      className="p-1.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
-                      title="기록 삭제"
-                    >
-                      <AlertTriangle size={14} />
-                    </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-3 opacity-30">
-                <span className="w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold text-[#999] bg-gray-50">
-                  {i + 1}
-                </span>
-                <span className="text-[10px] text-gray-400 italic">{rankNames[i] || '인턴'} 대기 중...</span>
-              </div>
-            )}
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -2088,7 +1944,7 @@ export default function App() {
               </div>
             </div>
           ) : activeSheet === 'LEADERBOARD' ? (
-            <div className="max-w-4xl w-full bg-white border border-[#d1d1d1] shadow-md rounded overflow-hidden">
+            <div className="max-w-6xl w-full bg-white border border-[#d1d1d1] shadow-md rounded overflow-hidden">
               <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
                 프로젝트_시트 (글로벌)
               </div>
@@ -2099,6 +1955,7 @@ export default function App() {
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
                   <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (부장급 AI)" sessionId="GLOBAL" gameType="OMOK_AI" />
+                  <Leaderboard entries={globalLeaderboards?.ESCAPE_ROOM || []} title="방탈출 마스터" sessionId="GLOBAL" gameType="ESCAPE_ROOM" />
                 </div>
               </div>
             </div>
