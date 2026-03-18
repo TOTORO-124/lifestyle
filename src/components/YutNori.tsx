@@ -9,6 +9,9 @@ type YutResult = '도' | '개' | '걸' | '윷' | '모' | '빽도';
 interface Stick {
   isFlat: boolean;
   isMarked: boolean;
+  rotation: number;
+  offsetX: number;
+  offsetY: number;
 }
 
 interface YutNoriProps {
@@ -36,6 +39,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
   const [isThrowing, setIsThrowing] = useState(false);
   const [message, setMessage] = useState<string>('');
   const [selectedResultIndex, setSelectedResultIndex] = useState<number | null>(null);
+  const [isShaking, setIsShaking] = useState(false);
 
   if (!gameState) return null;
 
@@ -53,10 +57,10 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
 
   const throwYut = (): { result: YutResult, sticks: Stick[] } => {
     const sticks: Stick[] = [
-      { isFlat: Math.random() < 0.4, isMarked: true },
-      { isFlat: Math.random() < 0.4, isMarked: false },
-      { isFlat: Math.random() < 0.4, isMarked: false },
-      { isFlat: Math.random() < 0.4, isMarked: false },
+      { isFlat: Math.random() < 0.4, isMarked: true, rotation: Math.random() * 60 - 30, offsetX: Math.random() * 40 - 20, offsetY: Math.random() * 40 - 20 },
+      { isFlat: Math.random() < 0.4, isMarked: false, rotation: Math.random() * 60 - 30, offsetX: Math.random() * 40 - 20, offsetY: Math.random() * 40 - 20 },
+      { isFlat: Math.random() < 0.4, isMarked: false, rotation: Math.random() * 60 - 30, offsetX: Math.random() * 40 - 20, offsetY: Math.random() * 40 - 20 },
+      { isFlat: Math.random() < 0.4, isMarked: false, rotation: Math.random() * 60 - 30, offsetX: Math.random() * 40 - 20, offsetY: Math.random() * 40 - 20 },
     ];
 
     const flatCount = sticks.filter(s => s.isFlat).length;
@@ -81,6 +85,8 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     setTimeout(() => {
       const { result, sticks } = throwYut();
       setCurrentSticks(sticks);
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 200);
       
       const newResults = [...throwResults, result];
       let canThrow = false;
@@ -109,11 +115,40 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     
     if (steps === -1) {
       if (newPath.length === 0) return newPath; // Cannot go back from waiting
-      if (newPath.length === 1 && newPath[0] === 0) {
-        newPath.push(19);
-        return newPath;
+      
+      const current = newPath[newPath.length - 1];
+      let backNode = 0;
+      
+      if (current === 0) {
+        if (newPath.length > 1) {
+          const prev = newPath[newPath.length - 2];
+          if (prev === 28) backNode = 28;
+          else if (prev === 19) backNode = 19;
+          else backNode = 19; // Default fallback
+        } else {
+          backNode = 19;
+        }
       }
-      newPath.pop();
+      else if (current >= 1 && current <= 19) backNode = current - 1;
+      else if (current === 20) backNode = 5;
+      else if (current === 21) backNode = 20;
+      else if (current === 23) backNode = 22;
+      else if (current === 24) backNode = 23;
+      else if (current === 25) backNode = 10;
+      else if (current === 26) backNode = 25;
+      else if (current === 27) backNode = 22;
+      else if (current === 28) backNode = 27;
+      else if (current === 22) {
+        // Find where we came from
+        let cameFrom26 = false;
+        for (let i = newPath.length - 1; i >= 0; i--) {
+          if (newPath[i] === 26) { cameFrom26 = true; break; }
+          if (newPath[i] === 21) { cameFrom26 = false; break; }
+        }
+        backNode = cameFrom26 ? 26 : 21;
+      }
+      
+      newPath.push(backNode);
       return newPath;
     }
     
@@ -124,16 +159,27 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       
       let nextNode = -1;
       if (current === -1) {
-        nextNode = 0;
+        nextNode = 1;
+      } else if (current === 0) {
+        if (newPath.length > 1) {
+          const prev = newPath[newPath.length - 2];
+          if (prev === 1) {
+            nextNode = 1;
+          } else {
+            nextNode = 30;
+          }
+        } else {
+          nextNode = 30;
+        }
       } else if (current === 19 || current === 28) {
-        nextNode = 30;
+        nextNode = 0;
       } else if (current === 5 && i === 0) {
         nextNode = 20;
       } else if (current === 10 && i === 0) {
         nextNode = 25;
       } else if (current === 22 && i === 0) {
         nextNode = 27;
-      } else if (current >= 0 && current < 19) {
+      } else if (current >= 1 && current < 19) {
         nextNode = current + 1;
       } else if (current === 20) {
         nextNode = 21;
@@ -168,6 +214,11 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
 
   const handlePieceClick = (pieceId: string) => {
     if (!isMyTurn || isSpectator || throwResults.length === 0) return;
+
+    if (gameState.canThrow) {
+      setMessage('윷을 먼저 다 던져주세요!');
+      return;
+    }
 
     let resultIndex = selectedResultIndex;
     if (resultIndex === null) {
@@ -258,14 +309,18 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       status = 'FINISHED';
     }
 
-    update(ref(db, `sessions/${session.id}/yutNoriGame`), {
+    const updateData: any = {
       pieces: newPieces,
       throwResults: newResults,
       canThrow,
-      winner,
       status,
       lastUpdate: Date.now()
-    });
+    };
+    if (winner !== undefined) {
+      updateData.winner = winner;
+    }
+
+    update(ref(db, `sessions/${session.id}/yutNoriGame`), updateData);
 
     setSelectedResultIndex(null);
   };
@@ -322,17 +377,29 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
               top: `${node.y}%`,
               transform: 'translate(-50%, -50%)'
             }}
+            onClick={() => handlePieceClick(mainPiece.id)}
           >
-            <motion.div
-              layoutId={`piece-group-${teamId}-${mainPiece.id}`}
-              onClick={() => handlePieceClick(mainPiece.id)}
-              className={`w-8 h-8 rounded-full ${colorClass} text-white flex items-center justify-center text-sm font-bold shadow-lg cursor-pointer border-2 border-white hover:scale-110 transition-transform`}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            >
-              {piecesAtPos.length > 1 ? piecesAtPos.length : ''}
-            </motion.div>
+            <div className="relative w-8 h-8 cursor-pointer hover:scale-110 transition-transform">
+              {piecesAtPos.map((p, idx) => (
+                <motion.div
+                  key={p.id}
+                  layoutId={`piece-${teamId}-${p.id}`}
+                  className={`absolute w-8 h-8 rounded-full ${colorClass} shadow-md border-2 border-white flex items-center justify-center`}
+                  style={{
+                    top: -idx * 5,
+                    left: -idx * 5,
+                    zIndex: 10 + idx
+                  }}
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                >
+                  {idx === piecesAtPos.length - 1 && piecesAtPos.length > 1 && (
+                    <span className="text-white text-xs font-bold drop-shadow-md">{piecesAtPos.length}</span>
+                  )}
+                </motion.div>
+              ))}
+            </div>
           </div>
         );
       });
@@ -352,7 +419,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
         <div className="flex gap-2 p-2 bg-white/50 rounded-lg border border-black/10 min-h-[40px]">
           {waitingPieces.map(piece => (
             <motion.div
-              layoutId={`piece-group-${teamId}-${piece.id}`}
+              layoutId={`piece-${teamId}-${piece.id}`}
               key={piece.id}
               onClick={() => handlePieceClick(piece.id)}
               className={`w-6 h-6 rounded-full ${colorClass} text-white flex items-center justify-center text-xs font-bold shadow-sm cursor-pointer border-2 border-white hover:scale-110 transition-transform`}
@@ -375,9 +442,9 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       <div className="flex flex-col gap-1">
         <span className="text-[10px] font-bold text-gray-500">{label} 완주</span>
         <div className="flex gap-1 p-2 bg-white/50 rounded-lg border border-black/10 min-h-[40px] items-center">
-          {finishedPieces.map((piece, i) => (
+          {finishedPieces.map((piece) => (
             <motion.div
-              layoutId={`piece-group-${teamId}-${piece.id}`}
+              layoutId={`piece-${teamId}-${piece.id}`}
               key={piece.id}
               className={`w-4 h-4 rounded-full ${colorClass} border border-white shadow-sm`}
               initial={{ scale: 0 }}
@@ -479,19 +546,27 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
               </div>
             </div>
 
-            <div className="h-40 flex items-center justify-center bg-[#eee8d5] rounded-xl mb-6 border border-black/10 relative overflow-hidden perspective-1000">
+            <motion.div 
+              className="h-40 flex items-center justify-center bg-[#eee8d5] rounded-xl mb-6 border border-black/10 relative overflow-hidden perspective-1000"
+              animate={isShaking ? { x: [-5, 5, -5, 5, 0], y: [-5, 5, -5, 5, 0] } : {}}
+              transition={{ duration: 0.2 }}
+            >
               {isThrowing ? (
                 <div className="flex gap-4">
                   {[0, 1, 2, 3].map((i) => (
                     <motion.div
                       key={i}
                       animate={{
-                        rotateX: [0, 180, 360, 540, 720],
-                        y: [0, -60, -80, -60, 0],
+                        rotateX: [0, 360, 720, 1080],
+                        rotateY: [0, 180, 360, 540],
+                        rotateZ: [0, 90, 180, 270],
+                        y: [0, -100, -150, -80, 0],
+                        x: [0, i % 2 === 0 ? -40 : 40, i % 2 === 0 ? -60 : 60, 0],
+                        scale: [1, 1.2, 1.5, 1.2, 1]
                       }}
                       transition={{
                         duration: 0.6,
-                        ease: "easeInOut",
+                        ease: "easeIn",
                         delay: i * 0.05,
                       }}
                       className="w-8 h-32 rounded-full border-2 border-[#8b4513] shadow-lg bg-[#8b4513]"
@@ -499,16 +574,28 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
                   ))}
                 </div>
               ) : currentSticks ? (
-                <div className="flex gap-4">
+                <div className="flex items-center justify-center relative w-full h-full">
                   {currentSticks.map((stick, i) => (
                     <motion.div
                       key={i}
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 20, delay: i * 0.05 }}
-                      className="flex flex-col items-center gap-1"
+                      initial={{ scale: 1.5, opacity: 0, y: -100, rotateX: 720, rotateY: 360 }}
+                      animate={{ 
+                        scale: 1, 
+                        opacity: 1, 
+                        y: stick.offsetY,
+                        x: stick.offsetX + (i - 1.5) * 40, // Spread them out horizontally
+                        rotateZ: stick.rotation
+                      }}
+                      transition={{ 
+                        type: "spring", 
+                        stiffness: 400, 
+                        damping: 15, 
+                        mass: 1,
+                        delay: i * 0.02 
+                      }}
+                      className="absolute flex flex-col items-center gap-1"
                     >
-                      <div className={`w-8 h-32 rounded-full border-2 border-[#8b4513] shadow-md flex items-center justify-center relative overflow-hidden
+                      <div className={`w-8 h-32 rounded-full border-2 border-[#8b4513] shadow-xl flex items-center justify-center relative overflow-hidden
                         ${stick.isFlat ? 'bg-[#fdf6e3]' : 'bg-[#8b4513]'}`}
                       >
                         {!stick.isFlat && (
@@ -524,15 +611,22 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
               ) : (
                 <span className="text-gray-400 font-medium">윷을 던져주세요</span>
               )}
-            </div>
+            </motion.div>
 
-            <AnimatePresence>
+            <AnimatePresence mode="wait">
               {message && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="text-center font-bold text-[#d33682] mb-6"
+                  key={message}
+                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className={`text-center font-bold mb-6 p-3 rounded-lg shadow-sm border ${
+                    message.includes('잡았습니다') 
+                      ? 'bg-red-100 text-red-600 border-red-200 text-lg animate-pulse' 
+                      : message.includes('한 번 더') 
+                        ? 'bg-blue-100 text-blue-600 border-blue-200 text-lg'
+                        : 'bg-white/50 text-[#d33682] border-black/5'
+                  }`}
                 >
                   {message}
                 </motion.div>
@@ -550,10 +644,10 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
               
               <button
                 onClick={handleNextTurn}
-                disabled={isThrowing || !isMyTurn || gameState.canThrow}
+                disabled={isThrowing || !isMyTurn}
                 className="flex-1 py-3 bg-[#2aa198] hover:bg-[#258a82] text-white rounded-xl font-bold shadow-md disabled:opacity-50 transition-colors"
               >
-                {throwResults.length > 0 ? '이동 포기 및 턴 넘기기' : '턴 넘기기'}
+                {(throwResults.length > 0 || gameState.canThrow) ? '턴 포기하고 넘기기' : '턴 넘기기'}
               </button>
             </div>
           </div>
