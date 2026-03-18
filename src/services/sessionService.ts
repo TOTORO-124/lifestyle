@@ -118,30 +118,36 @@ export const sessionService = {
     if (!sessionSnap.exists()) throw new Error('Session not found');
 
     const sessionData = sessionSnap.val();
-    if (sessionData.players) {
-      const existingPlayer = Object.values(sessionData.players).find(
+    const existingPlayer = sessionData.players?.[user.uid];
+
+    if (sessionData.players && !existingPlayer) {
+      const existingNickname = Object.values(sessionData.players).find(
         (p: any) => p.nickname === nickname && p.id !== user.uid
       );
-      if (existingPlayer) throw new Error('이미 사용 중인 닉네임입니다.');
+      if (existingNickname) throw new Error('이미 사용 중인 닉네임입니다.');
     }
 
     const isGameInProgress = sessionData.status !== SessionStatus.LOBBY;
+    
+    // If the player already exists (e.g., rejoining), preserve their spectator status
+    // Otherwise, they are a spectator only if the game is already in progress
+    const isSpectator = existingPlayer ? existingPlayer.isSpectator : isGameInProgress;
 
     const player: Player = {
       id: user.uid,
-      nickname,
-      isHost: false,
-      isAlive: true,
-      isReady: false,
+      nickname: existingPlayer ? existingPlayer.nickname : nickname, // Preserve existing nickname
+      isHost: existingPlayer ? existingPlayer.isHost : false,
+      isAlive: existingPlayer ? existingPlayer.isAlive : true,
+      isReady: existingPlayer ? existingPlayer.isReady : false,
       isConnected: true,
       lastActive: Date.now(),
-      isSpectator: isGameInProgress, // Set spectator if game is running
+      isSpectator,
     };
 
     await set(ref(db, `sessions/${sessionId}/players/${user.uid}`), player);
     
-    if (isGameInProgress) {
-      // Add log for spectator join
+    if (isGameInProgress && !existingPlayer) {
+      // Add log for new spectator join
       const logRef = push(ref(db, `sessions/${sessionId}/logs`));
       await set(logRef, {
         id: logRef.key,
