@@ -90,6 +90,50 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     return () => clearInterval(interval);
   }, [isCharging]);
 
+  // Auto-play logic
+  useEffect(() => {
+    if (!isMyTurn || gameState.status !== 'PLAYING' || isSpectator) return;
+    
+    // If 1 minute has passed (timeLeft <= 60), trigger auto-play
+    if (timeLeft <= 60 && timeLeft > 0) {
+      const autoPlayAction = () => {
+        if (gameState.canThrow && !isShaking && !isCharging) {
+          executeThrow(Math.random() * 100);
+        } else if (!gameState.canThrow && throwResults.length > 0) {
+          const resultIndex = 0;
+          const result = throwResults[resultIndex];
+          const steps = STEPS[result];
+          
+          const myPieces = gameState.pieces[currentTurnId] || [];
+          const validPieces = myPieces.filter(p => {
+            if (p.position === 30) return false;
+            if (p.position === -1 && steps === -1) return false;
+            return true;
+          });
+          
+          if (validPieces.length > 0) {
+            const randomPiece = validPieces[Math.floor(Math.random() * validPieces.length)];
+            handlePieceClick(randomPiece.id, resultIndex);
+          } else {
+            // No valid moves, consume the result and skip
+            const newResults = [...throwResults];
+            newResults.splice(resultIndex, 1);
+            update(ref(db, `sessions/${session.id}/yutNoriGame`), {
+              throwResults: newResults,
+              lastUpdate: Date.now()
+            });
+          }
+        } else if (!gameState.canThrow && throwResults.length === 0) {
+          handleNextTurn();
+        }
+      };
+
+      // Add a small delay so it doesn't instantly execute multiple actions in the same second
+      const timer = setTimeout(autoPlayAction, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [timeLeft, isMyTurn, gameState.status, gameState.canThrow, throwResults, isShaking, isCharging, currentTurnId, session.id]);
+
   const currentTurnId = gameState.turnOrder[gameState.currentTurnIndex];
   const myTeamId = session.players[currentUser.uid]?.teamId || 'TEAM_A';
   const isMyTurn = !isSpectator && (gameState.mode === 'TEAM' ? currentTurnId === myTeamId : currentTurnId === currentUser.uid);
@@ -332,7 +376,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     return newPath;
   };
 
-  const handlePieceClick = (pieceId: string) => {
+  const handlePieceClick = (pieceId: string, overrideResultIndex?: number) => {
     if (!isMyTurn || isSpectator || throwResults.length === 0) return;
 
     if (gameState.canThrow) {
@@ -340,7 +384,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       return;
     }
 
-    let resultIndex = selectedResultIndex;
+    let resultIndex = overrideResultIndex !== undefined ? overrideResultIndex : selectedResultIndex;
     if (resultIndex === null) {
       if (throwResults.length === 1) {
         resultIndex = 0;

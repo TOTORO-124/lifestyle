@@ -1240,7 +1240,7 @@ export const sessionService = {
     }
 
     await update(sessionRef, updates);
-    const playerName = playerId === 'AI' ? 'AI 봇' : (session.players?.[playerId]?.nickname || '알 수 없는 플레이어');
+    const playerName = playerId === 'AI' ? '컴퓨터' : (session.players?.[playerId]?.nickname || '알 수 없는 플레이어');
     await this.addLog(sessionId, `${playerName}님이 (${x}, ${y}) 위치에 돌을 놓았습니다.`);
     
     if (updates['omokGame/winner']) {
@@ -1277,55 +1277,51 @@ export const sessionService = {
   },
 
   getOmokBestMove(board: number[][], aiStone: number, playerStone: number, difficulty: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
-    // For high difficulty, use Minimax with optimized depth
-    if (difficulty >= 4) {
-      let depth = 2;
-      if (difficulty === 5) depth = 4;
-      if (difficulty === 6) depth = 6;
-      if (difficulty === 7) depth = 6; // Depth 6 is serious enough if evaluation is good
-      return this.omokMinimaxSearch(board, aiStone, playerStone, depth, ruleType);
-    }
-
-    let maxScore = -1;
-    let candidates: {x: number, y: number}[] = [];
-
-    // Optimization: only check points near existing stones
     const searchPoints = this.getOmokSearchPoints(board);
-
-    for (const {x, y} of searchPoints) {
-      // For black AI, check forbidden moves in RENJU
-      if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
-
-      const attackScore = this.evaluateOmokPoint(board, x, y, aiStone);
-      const defenseScore = this.evaluateOmokPoint(board, x, y, playerStone);
-      
-      // Weighting based on difficulty
-      let score = 0;
-      if (difficulty === 3) {
-        score = attackScore * 1.5 + defenseScore * 1.2;
-      } else if (difficulty === 2) {
-        score = attackScore * 1.0 + defenseScore * 0.8;
-      } else {
-        score = attackScore * 0.8 + defenseScore * 0.5;
+    
+    const evaluatedPoints = searchPoints.map(p => {
+      if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, p.x, p.y, 1)) {
+        return { ...p, score: -1 };
       }
+      const attackScore = this.evaluateOmokPoint(board, p.x, p.y, aiStone);
+      const defenseScore = this.evaluateOmokPoint(board, p.x, p.y, playerStone);
       
-      // Add some randomness for lower levels
-      if (difficulty === 1) score += Math.random() * 100;
-      else if (difficulty === 2) score += Math.random() * 20;
+      let score = attackScore + defenseScore * 1.2;
       
-      if (score > maxScore) {
-        maxScore = score;
-        candidates = [{ x, y }];
-      } else if (score === maxScore) {
-        candidates.push({ x, y });
+      if (attackScore >= 10000000) score += 100000000;
+      if (defenseScore >= 10000000) score += 50000000;
+      
+      return { ...p, score };
+    }).filter(p => p.score >= 0);
+
+    if (evaluatedPoints.length === 0) return { x: 7, y: 7 };
+
+    evaluatedPoints.sort((a, b) => b.score - a.score);
+
+    let poolSize = 1;
+    let probabilities = [1];
+
+    switch (difficulty) {
+      case 1: poolSize = Math.min(20, evaluatedPoints.length); probabilities = Array(poolSize).fill(1/poolSize); break;
+      case 2: poolSize = Math.min(10, evaluatedPoints.length); probabilities = Array(poolSize).fill(1/poolSize); break;
+      case 3: poolSize = Math.min(5, evaluatedPoints.length); probabilities = Array(poolSize).fill(1/poolSize); break;
+      case 4: poolSize = Math.min(2, evaluatedPoints.length); probabilities = [0.8, 0.2]; break;
+      case 5: poolSize = Math.min(2, evaluatedPoints.length); probabilities = [0.9, 0.1]; break;
+      case 6: poolSize = Math.min(2, evaluatedPoints.length); probabilities = [0.95, 0.05]; break;
+      case 7: poolSize = 1; probabilities = [1]; break;
+      default: poolSize = 1; probabilities = [1]; break;
+    }
+
+    const rand = Math.random();
+    let cumulative = 0;
+    for (let i = 0; i < poolSize; i++) {
+      cumulative += probabilities[i] || 0;
+      if (rand <= cumulative) {
+        return { x: evaluatedPoints[i].x, y: evaluatedPoints[i].y };
       }
     }
 
-    if (candidates.length === 0) {
-       return { x: 7, y: 7 };
-    }
-
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    return { x: evaluatedPoints[0].x, y: evaluatedPoints[0].y };
   },
 
   getOmokSearchPoints(board: number[][]) {
@@ -1355,165 +1351,68 @@ export const sessionService = {
     return points;
   },
 
-  omokMinimaxSearch(board: number[][], aiStone: number, playerStone: number, depth: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
-    let bestMove = { x: 7, y: 7 };
-    let bestValue = -Infinity;
-
-    const points = this.getOmokSearchPoints(board);
-    // Sort points by heuristic to improve pruning
-    points.sort((a, b) => {
-      const scoreA = this.evaluateOmokPoint(board, a.x, a.y, aiStone) + this.evaluateOmokPoint(board, a.x, a.y, playerStone);
-      const scoreB = this.evaluateOmokPoint(board, b.x, b.y, aiStone) + this.evaluateOmokPoint(board, b.x, b.y, playerStone);
-      return scoreB - scoreA;
-    });
-
-    for (const {x, y} of points) {
-      if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
-      
-      board[y][x] = aiStone;
-      const val = this.minimax(board, depth - 1, -Infinity, Infinity, false, aiStone, playerStone, ruleType);
-      board[y][x] = 0;
-
-      if (val > bestValue) {
-        bestValue = val;
-        bestMove = { x, y };
-      }
-    }
-
-    return bestMove;
-  },
-
-  minimax(board: number[][], depth: number, alpha: number, beta: number, isMaximizing: boolean, aiStone: number, playerStone: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
-    const score = this.evaluateOmokBoard(board, aiStone, playerStone);
-    
-    // Immediate win/loss detection
-    if (Math.abs(score) > 5000000) {
-      return isMaximizing ? score + depth : score - depth; // Prioritize faster wins
-    }
-    
-    if (depth === 0) {
-      return score;
-    }
-
-    const points = this.getOmokSearchPoints(board);
-    // Limit search points for performance - balanced for speed and strength
-    // Level 7 (depth 6) now considers more candidates for higher intelligence
-    const limit = depth > 4 ? 16 : (depth > 2 ? 20 : 32);
-    const sortedPoints = points.sort((a, b) => {
-      const sA = this.evaluateOmokPoint(board, a.x, a.y, aiStone) + this.evaluateOmokPoint(board, a.x, a.y, playerStone);
-      const sB = this.evaluateOmokPoint(board, b.x, b.y, aiStone) + this.evaluateOmokPoint(board, b.x, b.y, playerStone);
-      return sB - sA;
-    }).slice(0, limit);
-
-    if (isMaximizing) {
-      let maxEval = -Infinity;
-      for (const {x, y} of sortedPoints) {
-        if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
-        board[y][x] = aiStone;
-        const ev = this.minimax(board, depth - 1, alpha, beta, false, aiStone, playerStone, ruleType);
-        board[y][x] = 0;
-        maxEval = Math.max(maxEval, ev);
-        alpha = Math.max(alpha, ev);
-        if (beta <= alpha) break;
-      }
-      return maxEval;
-    } else {
-      let minEval = Infinity;
-      for (const {x, y} of sortedPoints) {
-        if (ruleType !== 'FREE' && playerStone === 1 && this.checkOmokForbiddenMove(board, x, y, 1)) continue;
-        board[y][x] = playerStone;
-        const ev = this.minimax(board, depth - 1, alpha, beta, true, aiStone, playerStone, ruleType);
-        board[y][x] = 0;
-        minEval = Math.min(minEval, ev);
-        beta = Math.min(beta, ev);
-        if (beta <= alpha) break;
-      }
-      return minEval;
-    }
-  },
-
-  evaluateOmokBoard(board: number[][], aiStone: number, playerStone: number) {
-    let aiScore = 0;
-    let playerScore = 0;
-
-    for (let y = 0; y < 15; y++) {
-      for (let x = 0; x < 15; x++) {
-        const stone = board[y][x];
-        if (stone === 0) continue;
-        
-        const score = this.evaluateOmokPoint(board, x, y, stone);
-        if (stone === aiStone) aiScore += score;
-        else playerScore += score;
-      }
-    }
-
-    // Defensive bias: prioritize blocking player's critical threats
-    // But don't ignore AI's own winning opportunities
-    return aiScore - playerScore * 2.0; 
-  },
-
   evaluateOmokPoint(board: number[][], x: number, y: number, stone: number) {
     const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
     let totalScore = 0;
     const opponent = stone === 1 ? 2 : 1;
 
-    // Center bias - encourages playing towards the middle in early game
     const distToCenter = Math.abs(x - 7) + Math.abs(y - 7);
     totalScore += (14 - distToCenter);
 
+    const checkPattern = (line: string, pattern: string) => {
+      let idx = line.indexOf(pattern);
+      while (idx !== -1) {
+        if (idx <= 5 && idx + pattern.length > 5) return true;
+        idx = line.indexOf(pattern, idx + 1);
+      }
+      return false;
+    };
+
     for (const [dx, dy] of directions) {
       let line = "";
-      // Get 11 cells around (x,y) for better pattern matching
       for (let i = -5; i <= 5; i++) {
         const nx = x + dx * i;
         const ny = y + dy * i;
         if (nx === x && ny === y) {
-          line += "S"; // Treat the target point as the stone being evaluated
+          line += "S";
           continue;
         }
         if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
-          line += "X"; // Blocked by wall
+          line += "X";
         } else if (board[ny][nx] === stone) {
-          line += "S"; // Self
+          line += "S";
         } else if (board[ny][nx] === opponent) {
-          line += "O"; // Opponent
+          line += "O";
         } else {
-          line += "."; // Empty
+          line += ".";
         }
       }
       
-      // Patterns (S is self, . is empty, X/O is block)
-      // 5 in a row - Immediate Win
-      if (line.includes("SSSSS")) {
+      if (checkPattern(line, "SSSSS")) {
         totalScore += 100000000;
         continue;
       }
       
-      // Live 4: .SSSS. - Guaranteed Win
-      if (line.includes(".SSSS.")) {
+      if (checkPattern(line, ".SSSS.")) {
         totalScore += 10000000;
         continue;
       }
       
-      // Dead 4 or Jump 4: SSSS. or .SSSS or S.SSS etc.
-      if (line.includes("SSSS.") || line.includes(".SSSS") || 
-          line.includes("S.SSS") || line.includes("SS.SS") || line.includes("SSS.S")) {
+      if (checkPattern(line, "SSSS.") || checkPattern(line, ".SSSS") || 
+          checkPattern(line, "S.SSS") || checkPattern(line, "SS.SS") || checkPattern(line, "SSS.S")) {
         totalScore += 1000000;
       }
       
-      // Live 3: ..SSS.. or .S.SS. or .SS.S.
-      if (line.includes(".SSS..") || line.includes("..SSS.") || 
-          line.includes(".S.SS.") || line.includes(".SS.S.")) {
+      if (checkPattern(line, ".SSS..") || checkPattern(line, "..SSS.") || 
+          checkPattern(line, ".S.SS.") || checkPattern(line, ".SS.S.")) {
         totalScore += 100000;
       }
       
-      // Dead 3: SSS.. or ..SSS or S.SS or SS.S
-      if (line.includes("SSS..") || line.includes("..SSS") || line.includes("S.SS") || line.includes("SS.S")) {
+      if (checkPattern(line, "SSS..") || checkPattern(line, "..SSS") || checkPattern(line, "S.SS") || checkPattern(line, "SS.S")) {
         totalScore += 10000;
       }
       
-      // 2s
-      if (line.includes(".SS..") || line.includes("..SS.") || line.includes(".S.S.")) {
+      if (checkPattern(line, ".SS..") || checkPattern(line, "..SS.") || checkPattern(line, ".S.S.")) {
         totalScore += 1000;
       }
     }

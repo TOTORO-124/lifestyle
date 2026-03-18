@@ -132,7 +132,7 @@ export default function App() {
   const [selectedNightTarget, setSelectedNightTarget] = useState<string | null>(null);
   const [omokBlackId, setOmokBlackId] = useState<string>('');
   const [omokWhiteId, setOmokWhiteId] = useState<string>('');
-  const [omokDifficulty, setOmokDifficulty] = useState<number>(1);
+  const [omokDifficulty, setOmokDifficulty] = useState<number>(5);
   const [omokRuleType, setOmokRuleType] = useState<'RENJU' | 'FREE'>('RENJU');
   const [isOmokAIMatch, setIsOmokAIMatch] = useState<boolean>(false);
   const [bingoBoard, setBingoBoard] = useState<string[][]>(Array(5).fill(null).map(() => Array(5).fill('')));
@@ -647,7 +647,7 @@ export default function App() {
             <div className="post-it hidden lg:block">
               <h4 className="text-[10px] font-black text-[#f57f17] uppercase mb-2">업무 지시 사항</h4>
               <ul className="text-[11px] text-[#795548] space-y-1 list-disc pl-4 font-medium">
-                <li>오목 AI를 이기고 승진하세요.</li>
+                <li>오목 컴퓨터를 이기고 승진하세요.</li>
                 <li>마피아 게임에서 스파이를 찾으세요.</li>
                 <li>오피스 라이프에서 자산을 늘리세요.</li>
               </ul>
@@ -837,7 +837,7 @@ export default function App() {
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
-                  <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (부장급 AI)" sessionId="GLOBAL" gameType="OMOK_AI" />
+                  <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (부장급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
                   <Leaderboard entries={globalLeaderboards?.ESCAPE_ROOM || []} title="방탈출 마스터" sessionId="GLOBAL" gameType="ESCAPE_ROOM" />
                 </div>
               </div>
@@ -1360,7 +1360,7 @@ export default function App() {
                           <div className="flex items-center justify-between p-2 bg-gray-50 rounded border border-[#d1d1d1]">
                             <div className="flex items-center gap-2">
                               <div className={`w-2 h-2 rounded-full ${isOmokAIMatch ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                              <span className="text-[10px] font-bold text-[#666]">AI 대전 모드</span>
+                              <span className="text-[10px] font-bold text-[#666]">컴퓨터(확률 연산) 대전 모드</span>
                             </div>
                             <button 
                               onClick={() => setIsOmokAIMatch(!isOmokAIMatch)}
@@ -1372,19 +1372,19 @@ export default function App() {
 
                           {isOmokAIMatch && (
                             <div className="space-y-1">
-                              <label className="text-[9px] font-bold text-[#999]">AI 난이도 (직급)</label>
+                              <label className="text-[9px] font-bold text-[#999]">컴퓨터 연산 수준 (직급)</label>
                               <select 
                                 className="office-input text-xs"
                                 value={omokDifficulty}
                                 onChange={(e) => setOmokDifficulty(parseInt(e.target.value))}
                               >
-                                <option value={1}>Lv.1 인턴 (랜덤)</option>
-                                <option value={2}>Lv.2 사원 (기초)</option>
-                                <option value={3}>Lv.3 주임 (보통)</option>
-                                <option value={4}>Lv.4 대리 (숙련)</option>
-                                <option value={5}>Lv.5 과장 (전문)</option>
-                                <option value={6}>Lv.6 차장 (고수)</option>
-                                <option value={7}>Lv.7 부장 (마스터)</option>
+                                <option value={1}>Lv.1 인턴 (단순 확률)</option>
+                                <option value={2}>Lv.2 사원 (기초 연산)</option>
+                                <option value={3}>Lv.3 주임 (패턴 분석)</option>
+                                <option value={4}>Lv.4 대리 (수읽기 2수)</option>
+                                <option value={5}>Lv.5 과장 (수읽기 4수)</option>
+                                <option value={6}>Lv.6 차장 (수읽기 6수)</option>
+                                <option value={7}>Lv.7 부장 (최적 확률 계산)</option>
                               </select>
                             </div>
                           )}
@@ -1416,7 +1416,7 @@ export default function App() {
                                 onChange={(e) => setOmokBlackId(e.target.value)}
                               >
                                 <option value="">선택하세요</option>
-                                {isOmokAIMatch && <option value="AI">AI 봇</option>}
+                                {isOmokAIMatch && <option value="AI">컴퓨터</option>}
                                 {getSortedPlayers().map(p => (
                                   <option key={p.id} value={p.id} disabled={p.id === omokWhiteId}>{p.nickname}</option>
                                 ))}
@@ -1430,7 +1430,7 @@ export default function App() {
                                 onChange={(e) => setOmokWhiteId(e.target.value)}
                               >
                                 <option value="">선택하세요</option>
-                                {isOmokAIMatch && <option value="AI">AI 봇</option>}
+                                {isOmokAIMatch && <option value="AI">컴퓨터</option>}
                                 {getSortedPlayers().map(p => (
                                   <option key={p.id} value={p.id} disabled={p.id === omokBlackId}>{p.nickname}</option>
                                 ))}
@@ -1446,7 +1446,7 @@ export default function App() {
                                   return;
                                 }
                                 if (omokBlackId === 'AI' && omokWhiteId === 'AI') {
-                                  setError('두 플레이어 모두 AI일 수는 없습니다.');
+                                  setError('두 플레이어 모두 컴퓨터일 수는 없습니다.');
                                   return;
                                 }
                                 sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId, isOmokAIMatch, omokDifficulty, omokRuleType);
@@ -1861,7 +1861,7 @@ export default function App() {
                           }}
                           className="text-[10px] bg-[#217346] text-white px-2 py-1 rounded hover:bg-[#1a5c38] transition-colors flex items-center gap-1"
                         >
-                          <HelpCircle size={10} /> AI 힌트
+                          <HelpCircle size={10} /> 힌트
                         </button>
                       )}
                       {/* Black Player Indicator */}
@@ -1876,7 +1876,7 @@ export default function App() {
                       >
                         <div className="w-3 h-3 rounded-full bg-black border border-white/40 shadow-inner" style={{ filter: 'none' }}></div>
                         <span className="font-bold whitespace-nowrap">
-                          {session.omokGame!.blackPlayerId === 'AI' ? 'AI 봇' : session.players?.[session.omokGame!.blackPlayerId]?.nickname}
+                          {session.omokGame!.blackPlayerId === 'AI' ? '컴퓨터' : session.players?.[session.omokGame!.blackPlayerId]?.nickname}
                         </span>
                         {String(session.omokGame!.blackPlayerId) === String(currentUser.uid) && <span className="text-[8px] opacity-70">(나)</span>}
                         {String(session.omokGame?.currentPlayerId) === String(session.omokGame?.blackPlayerId) && (
@@ -1898,7 +1898,7 @@ export default function App() {
                       >
                         <div className="w-3 h-3 rounded-full bg-white border border-gray-300 shadow-sm" style={{ filter: 'none' }}></div>
                         <span className="font-bold whitespace-nowrap">
-                          {session.omokGame!.whitePlayerId === 'AI' ? 'AI 봇' : session.players?.[session.omokGame!.whitePlayerId]?.nickname}
+                          {session.omokGame!.whitePlayerId === 'AI' ? '컴퓨터' : session.players?.[session.omokGame!.whitePlayerId]?.nickname}
                         </span>
                         {String(session.omokGame!.whitePlayerId) === String(currentUser.uid) && <span className="text-[8px] opacity-70">(나)</span>}
                         {String(session.omokGame?.currentPlayerId) === String(session.omokGame?.whitePlayerId) && (
@@ -3315,7 +3315,7 @@ export default function App() {
                             <div className="text-3xl font-black text-[#666]">무승부</div>
                           ) : (
                             <div className="text-3xl font-black text-[#217346] truncate px-4">
-                              {session.omokGame!.winner === 'AI' ? 'AI 봇' : session.players?.[session.omokGame!.winner!]?.nickname} 승리!
+                              {session.omokGame!.winner === 'AI' ? '컴퓨터' : session.players?.[session.omokGame!.winner!]?.nickname} 승리!
                             </div>
                           )}
                           
@@ -3334,7 +3334,7 @@ export default function App() {
                                   <text x="24" y="28" textAnchor="middle" fill="#ffffff" fontSize="12" fontWeight="bold">흑</text>
                                 </svg>
                               </div>
-                              <div className="text-sm font-bold">{session.omokGame!.blackPlayerId === 'AI' ? 'AI 봇' : session.players?.[session.omokGame!.blackPlayerId]?.nickname}</div>
+                              <div className="text-sm font-bold">{session.omokGame!.blackPlayerId === 'AI' ? '컴퓨터' : session.players?.[session.omokGame!.blackPlayerId]?.nickname}</div>
                               {session.omokGame?.winner === session.omokGame?.blackPlayerId && <div className="text-[10px] text-[#217346] font-bold mt-1">WINNER</div>}
                             </div>
                             <div className={`text-center p-4 rounded border ${session.omokGame?.winner === session.omokGame?.whitePlayerId ? 'bg-gray-100 border-gray-400' : 'border-transparent'}`}>
@@ -3344,7 +3344,7 @@ export default function App() {
                                   <text x="24" y="28" textAnchor="middle" fill="#000000" fontSize="12" fontWeight="bold">백</text>
                                 </svg>
                               </div>
-                              <div className="text-sm font-bold">{session.omokGame!.whitePlayerId === 'AI' ? 'AI 봇' : session.players?.[session.omokGame!.whitePlayerId]?.nickname}</div>
+                              <div className="text-sm font-bold">{session.omokGame!.whitePlayerId === 'AI' ? '컴퓨터' : session.players?.[session.omokGame!.whitePlayerId]?.nickname}</div>
                               {session.omokGame?.winner === session.omokGame?.whitePlayerId && <div className="text-[10px] text-[#217346] font-bold mt-1">WINNER</div>}
                             </div>
                           </div>
@@ -3656,7 +3656,7 @@ export default function App() {
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
-                  <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (부장급 AI)" sessionId="GLOBAL" gameType="OMOK_AI" />
+                  <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (부장급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
                   <Leaderboard entries={globalLeaderboards?.SUIKA || []} title="초고속 승진 (승진게임)" sessionId="GLOBAL" gameType="SUIKA" />
                 </div>
               </div>
