@@ -4,7 +4,7 @@ import { ref, update } from 'firebase/database';
 import { db } from '../firebase';
 import { Session, YutNoriGameState } from '../types';
 
-type YutResult = '도' | '개' | '걸' | '윷' | '모' | '빽도';
+type YutResult = '도' | '개' | '걸' | '윷' | '모' | '빽도' | '낙';
 
 interface Stick {
   isFlat: boolean;
@@ -30,13 +30,11 @@ const BOARD_NODES = [
 ];
 
 const STEPS: Record<string, number> = {
-  '도': 1, '개': 2, '걸': 3, '윷': 4, '모': 5, '빽도': -1
+  '도': 1, '개': 2, '걸': 3, '윷': 4, '모': 5, '빽도': -1, '낙': 0
 };
 
 export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpectator }) => {
   const gameState = session.yutNoriGame as YutNoriGameState;
-  const [currentSticks, setCurrentSticks] = useState<Stick[] | null>(null);
-  const [isThrowing, setIsThrowing] = useState(false);
   const [message, setMessage] = useState<string>('');
   const [selectedResultIndex, setSelectedResultIndex] = useState<number | null>(null);
   const [isShaking, setIsShaking] = useState(false);
@@ -63,32 +61,46 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       { isFlat: Math.random() < 0.4, isMarked: false, rotation: Math.random() * 60 - 30, offsetX: Math.random() * 40 - 20, offsetY: Math.random() * 40 - 20 },
     ];
 
-    const flatCount = sticks.filter(s => s.isFlat).length;
     let result: YutResult;
 
-    if (flatCount === 0) result = '모';
-    else if (flatCount === 1 && sticks[0].isFlat) result = '빽도';
-    else if (flatCount === 1) result = '도';
-    else if (flatCount === 2) result = '개';
-    else if (flatCount === 3) result = '걸';
-    else result = '윷';
+    // 5% chance of Nak
+    if (Math.random() < 0.05) {
+      result = '낙';
+      // Scatter sticks far away to simulate falling off the board
+      sticks.forEach(s => {
+        s.offsetX = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 40 + 60);
+        s.offsetY = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 40 + 60);
+      });
+    } else {
+      const flatCount = sticks.filter(s => s.isFlat).length;
+      if (flatCount === 0) result = '모';
+      else if (flatCount === 1 && sticks[0].isFlat) result = '빽도';
+      else if (flatCount === 1) result = '도';
+      else if (flatCount === 2) result = '개';
+      else if (flatCount === 3) result = '걸';
+      else result = '윷';
+    }
 
     return { result, sticks };
   };
 
   const handleThrow = () => {
-    if (isThrowing || !isMyTurn || !gameState.canThrow) return;
-    setIsThrowing(true);
+    if (gameState.isThrowing || !isMyTurn || !gameState.canThrow) return;
     setMessage('');
-    setCurrentSticks(null);
+
+    // Sync throwing state to Firebase so opponents can see
+    update(ref(db, `sessions/${session.id}/yutNoriGame`), {
+      isThrowing: true,
+      currentSticks: null,
+      lastUpdate: Date.now()
+    });
 
     setTimeout(() => {
       const { result, sticks } = throwYut();
-      setCurrentSticks(sticks);
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 200);
       
-      const newResults = [...throwResults, result];
+      const newResults = result === '낙' ? [...throwResults] : [...throwResults, result];
       let canThrow = false;
       if (result === '윷' || result === '모') {
         canThrow = true;
@@ -97,15 +109,18 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       update(ref(db, `sessions/${session.id}/yutNoriGame`), {
         throwResults: newResults,
         canThrow,
+        isThrowing: false,
+        currentSticks: sticks,
         lastUpdate: Date.now()
       });
 
-      if (result === '윷' || result === '모') {
+      if (result === '낙') {
+        setMessage(`'낙'입니다! 윷이 판 밖으로 나갔습니다.`);
+      } else if (result === '윷' || result === '모') {
         setMessage(`'${result}'! 한 번 더 던지세요!`);
       } else {
         setMessage(`'${result}'이(가) 나왔습니다. 말을 이동하세요.`);
       }
-      setIsThrowing(false);
       setSelectedResultIndex(null);
     }, 600);
   };
@@ -332,9 +347,9 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       currentTurnIndex: nextIndex,
       throwResults: [],
       canThrow: true,
+      currentSticks: null,
       lastUpdate: Date.now()
     });
-    setCurrentSticks(null);
     setMessage('');
     setSelectedResultIndex(null);
   };
@@ -367,6 +382,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
         if (!node) return;
 
         const mainPiece = piecesAtPos[0];
+        const isMovable = isMyTurn && throwResults.length > 0 && !gameState.canThrow && teamId === currentTurnId && (throwResults.length === 1 || selectedResultIndex !== null);
 
         piecesElements.push(
           <div
@@ -379,7 +395,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
             }}
             onClick={() => handlePieceClick(mainPiece.id)}
           >
-            <div className="relative w-8 h-8 cursor-pointer hover:scale-110 transition-transform">
+            <div className={`relative w-8 h-8 cursor-pointer hover:scale-110 transition-transform ${isMovable ? 'animate-pulse ring-4 ring-yellow-400 rounded-full' : ''}`}>
               {piecesAtPos.map((p, idx) => (
                 <motion.div
                   key={p.id}
@@ -412,6 +428,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     const teamPieces = gameState.pieces[teamId] || [];
     const waitingPieces = teamPieces.filter(p => p.position === -1);
     const colorClass = getColorClass(teamId);
+    const isMovable = isMyTurn && throwResults.length > 0 && !gameState.canThrow && teamId === currentTurnId && (throwResults.length === 1 || selectedResultIndex !== null);
 
     return (
       <div className="flex flex-col gap-1">
@@ -422,7 +439,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
               layoutId={`piece-${teamId}-${piece.id}`}
               key={piece.id}
               onClick={() => handlePieceClick(piece.id)}
-              className={`w-6 h-6 rounded-full ${colorClass} text-white flex items-center justify-center text-xs font-bold shadow-sm cursor-pointer border-2 border-white hover:scale-110 transition-transform`}
+              className={`w-6 h-6 rounded-full ${colorClass} text-white flex items-center justify-center text-xs font-bold shadow-sm cursor-pointer border-2 border-white hover:scale-110 transition-transform ${isMovable ? 'animate-pulse ring-4 ring-yellow-400' : ''}`}
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
@@ -496,14 +513,16 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
                   return (
                     <div
                       key={node.id}
-                      className={`absolute rounded-full bg-white border-2 border-[#8b4513] shadow-sm flex items-center justify-center text-[8px] text-gray-400
+                      className={`absolute rounded-full bg-white border-2 border-[#8b4513] shadow-sm flex items-center justify-center text-[8px] font-bold text-[#8b4513]
                         ${isCorner || isCenter ? 'w-8 h-8 z-10' : 'w-5 h-5 z-0'}`}
                       style={{
                         left: `${node.x}%`,
                         top: `${node.y}%`,
                         transform: 'translate(-50%, -50%)'
                       }}
-                    />
+                    >
+                      {node.id === 0 && <span className="absolute top-8 whitespace-nowrap text-xs bg-white/80 px-1 rounded">출발/도착</span>}
+                    </div>
                   );
                 })}
                 {renderPieces()}
@@ -547,11 +566,14 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
             </div>
 
             <motion.div 
-              className="h-40 flex items-center justify-center bg-[#eee8d5] rounded-xl mb-6 border border-black/10 relative overflow-hidden perspective-1000"
+              className="h-40 flex items-center justify-center bg-[#d4b886] rounded-xl mb-6 border-4 border-[#8b4513] relative overflow-hidden perspective-1000 shadow-inner"
+              style={{
+                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(139, 69, 19, 0.1) 10px, rgba(139, 69, 19, 0.1) 20px)'
+              }}
               animate={isShaking ? { x: [-5, 5, -5, 5, 0], y: [-5, 5, -5, 5, 0] } : {}}
               transition={{ duration: 0.2 }}
             >
-              {isThrowing ? (
+              {gameState.isThrowing ? (
                 <div className="flex gap-4">
                   {[0, 1, 2, 3].map((i) => (
                     <motion.div
@@ -573,9 +595,9 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
                     />
                   ))}
                 </div>
-              ) : currentSticks ? (
+              ) : gameState.currentSticks ? (
                 <div className="flex items-center justify-center relative w-full h-full">
-                  {currentSticks.map((stick, i) => (
+                  {gameState.currentSticks.map((stick, i) => (
                     <motion.div
                       key={i}
                       initial={{ scale: 1.5, opacity: 0, y: -100, rotateX: 720, rotateY: 360 }}
@@ -636,7 +658,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
             <div className="flex gap-4">
               <button
                 onClick={handleThrow}
-                disabled={isThrowing || !isMyTurn || !gameState.canThrow}
+                disabled={gameState.isThrowing || !isMyTurn || !gameState.canThrow}
                 className="flex-1 py-3 bg-[#859900] hover:bg-[#738a00] text-white rounded-xl font-bold shadow-md disabled:opacity-50 transition-colors"
               >
                 윷 던지기
@@ -644,7 +666,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
               
               <button
                 onClick={handleNextTurn}
-                disabled={isThrowing || !isMyTurn}
+                disabled={gameState.isThrowing || !isMyTurn}
                 className="flex-1 py-3 bg-[#2aa198] hover:bg-[#258a82] text-white rounded-xl font-bold shadow-md disabled:opacity-50 transition-colors"
               >
                 {(throwResults.length > 0 || gameState.canThrow) ? '턴 포기하고 넘기기' : '턴 넘기기'}

@@ -365,6 +365,8 @@ export interface YutNoriGameState {
   canThrow: boolean;
   winner?: string;
   lastUpdate: number;
+  currentSticks?: { isFlat: boolean, isMarked: boolean, rotation: number, offsetX: number, offsetY: number }[];
+  isThrowing?: boolean;
 }
 
 export interface LeaderboardEntry {
