@@ -2307,6 +2307,7 @@ export const sessionService = {
       pieces,
       throwResults: [],
       canThrow: true,
+      rankings: [],
       lastUpdate: Date.now(),
       turnStartTime: Date.now()
     };

@@ -44,6 +44,16 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
 
   if (!gameState) return null;
 
+  const getNextTurnIndex = (currentIndex: number, rankings: string[] = []) => {
+    let next = (currentIndex + 1) % gameState.turnOrder.length;
+    let loopCount = 0;
+    while (rankings.includes(gameState.turnOrder[next]) && loopCount < gameState.turnOrder.length) {
+      next = (next + 1) % gameState.turnOrder.length;
+      loopCount++;
+    }
+    return next;
+  };
+
   useEffect(() => {
     if (gameState.status !== 'PLAYING' || !gameState.turnStartTime) return;
     const interval = setInterval(() => {
@@ -56,7 +66,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
         const isMyTurn = gameState.mode === 'TEAM' ? gameState.turnOrder[gameState.currentTurnIndex] === myTeamId : gameState.turnOrder[gameState.currentTurnIndex] === currentUser.uid;
         
         if (session.hostId === currentUser.uid || isMyTurn) {
-          const nextIndex = (gameState.currentTurnIndex + 1) % gameState.turnOrder.length;
+          const nextIndex = getNextTurnIndex(gameState.currentTurnIndex, gameState.rankings || []);
           update(ref(db, `sessions/${session.id}/yutNoriGame`), {
             currentTurnIndex: nextIndex,
             throwResults: [],
@@ -69,7 +79,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [gameState.turnStartTime, gameState.status, session.hostId, currentUser.uid, session.id, gameState.currentTurnIndex, gameState.turnOrder.length]);
+  }, [gameState.turnStartTime, gameState.status, session.hostId, currentUser.uid, session.id, gameState.currentTurnIndex, gameState.turnOrder.length, gameState.rankings, gameState.turnOrder]);
 
   useEffect(() => {
     if (!isCharging) return;
@@ -412,11 +422,27 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     }
 
     const finishedCount = newPieces[currentTurnId].filter(p => p.position === 30).length;
-    let winner = gameState.winner;
+    let rankings = gameState.rankings || [];
     let status = gameState.status;
-    if (finishedCount === newPieces[currentTurnId].length) {
-      winner = currentTurnId;
-      status = 'FINISHED';
+    let nextIndex = gameState.currentTurnIndex;
+
+    if (finishedCount === newPieces[currentTurnId].length && !rankings.includes(currentTurnId)) {
+      rankings = [...rankings, currentTurnId];
+      if (rankings.length >= gameState.turnOrder.length - 1) {
+        status = 'FINISHED';
+        const lastPlayer = gameState.turnOrder.find(id => !rankings.includes(id));
+        if (lastPlayer && !rankings.includes(lastPlayer)) {
+          rankings.push(lastPlayer);
+        }
+      }
+    }
+
+    if (rankings.includes(currentTurnId)) {
+      canThrow = false;
+      newResults = [];
+      if (status !== 'FINISHED') {
+        nextIndex = getNextTurnIndex(gameState.currentTurnIndex, rankings);
+      }
     }
 
     const updateData: any = {
@@ -424,11 +450,12 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       throwResults: newResults,
       canThrow,
       status,
+      rankings,
       lastUpdate: Date.now(),
       turnStartTime: Date.now()
     };
-    if (winner !== undefined) {
-      updateData.winner = winner;
+    if (nextIndex !== gameState.currentTurnIndex) {
+      updateData.currentTurnIndex = nextIndex;
     }
 
     update(ref(db, `sessions/${session.id}/yutNoriGame`), updateData);
@@ -438,7 +465,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
 
   const handleNextTurn = () => {
     if (!isMyTurn) return;
-    const nextIndex = (gameState.currentTurnIndex + 1) % gameState.turnOrder.length;
+    const nextIndex = getNextTurnIndex(gameState.currentTurnIndex, gameState.rankings || []);
     update(ref(db, `sessions/${session.id}/yutNoriGame`), {
       currentTurnIndex: nextIndex,
       throwResults: [],
@@ -572,11 +599,56 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
   };
 
   if (gameState.status === 'FINISHED') {
+    const rankings = gameState.rankings || [];
     return (
       <div className="flex items-center justify-center h-full w-full bg-[#fdf6e3]">
-        <div className="text-center p-8 bg-white rounded-2xl shadow-xl">
-          <h2 className="text-4xl font-bold text-[#859900] mb-4">🎉 게임 종료! 🎉</h2>
-          <p className="text-2xl text-[#073642] mb-8">{getPlayerName(gameState.winner!)} 승리!</p>
+        <div className="text-center p-8 bg-white rounded-2xl shadow-xl max-w-md w-full">
+          <h2 className="text-4xl font-bold text-[#859900] mb-6">🎉 게임 종료! 🎉</h2>
+          
+          <div className="flex flex-col gap-4 mb-8">
+            {rankings.map((id, index) => (
+              <div key={id} className={`p-4 rounded-xl font-bold text-lg flex items-center justify-between ${index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-400' : index === 1 ? 'bg-gray-100 text-gray-700 border border-gray-300' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>
+                <span>{index + 1}등</span>
+                <span>{getPlayerName(id)}</span>
+              </div>
+            ))}
+          </div>
+
+          {session.hostId === currentUser.uid ? (
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  const pieceCount = gameState.pieces[gameState.turnOrder[0]].length;
+                  update(ref(db, `sessions/${session.id}/yutNoriGame`), {
+                    status: 'PLAYING',
+                    currentTurnIndex: 0,
+                    throwResults: [],
+                    canThrow: true,
+                    rankings: [],
+                    lastUpdate: Date.now(),
+                    turnStartTime: Date.now(),
+                    pieces: Object.keys(gameState.pieces).reduce((acc, key) => {
+                      acc[key] = Array.from({ length: pieceCount }).map((_, i) => ({ id: `${key}_${i+1}`, position: -1, count: 1, path: [] }));
+                      return acc;
+                    }, {} as any)
+                  });
+                }}
+                className="flex-1 py-3 bg-[#859900] hover:bg-[#738a00] text-white rounded-xl font-bold shadow-md transition-colors"
+              >
+                다시 시작
+              </button>
+              <button
+                onClick={() => {
+                  update(ref(db, `sessions/${session.id}`), { yutNoriGame: null });
+                }}
+                className="flex-1 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-xl font-bold shadow-md transition-colors"
+              >
+                대기실로
+              </button>
+            </div>
+          ) : (
+            <p className="text-gray-500 font-medium">방장이 다음 게임을 준비 중입니다...</p>
+          )}
         </div>
       </div>
     );

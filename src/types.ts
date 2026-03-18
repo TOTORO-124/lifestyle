@@ -364,6 +364,7 @@ export interface YutNoriGameState {
   throwResults: string[];
   canThrow: boolean;
   winner?: string;
+  rankings?: string[]; // Array of player/team IDs in finishing order
   lastUpdate: number;
   currentSticks?: { isFlat: boolean, isMarked: boolean, rotation: number, offsetX: number, offsetY: number }[];
   isThrowing?: boolean;
