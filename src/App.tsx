@@ -499,7 +499,7 @@ export default function App() {
       } else if (session.gameType === GameType.ESCAPE_ROOM) {
         await sessionService.startEscapeRoom(session.id, session.settings.escapeRoomThemeId || 'universe_escape', session.settings);
       } else if (session.gameType === GameType.YUT_NORI) {
-        await sessionService.startYutNori(session.id, session.players, session.turnOrder, session.settings.yutNoriMode || 'INDIVIDUAL');
+        await sessionService.startYutNori(session.id, session.players, session.turnOrder, session.settings.yutNoriMode || 'INDIVIDUAL', session.settings.yutNoriPieceCount || 4);
       } else if (session.gameType === GameType.SUIKA) {
         await sessionService.startSuikaGame(session.id);
       }
@@ -1287,7 +1287,7 @@ export default function App() {
                           <div className="flex items-center justify-between p-3 bg-gray-50 rounded border border-[#d1d1d1]">
                             <div className="flex items-center gap-2">
                               <Users size={16} className="text-[#217346]" />
-                              <span className="text-xs font-bold">전통 윷놀이</span>
+                              <span className="text-xs font-bold">전통 윷놀이 모드</span>
                             </div>
                             <div className="flex gap-2">
                               <button
@@ -1304,11 +1304,26 @@ export default function App() {
                               </button>
                             </div>
                           </div>
+                          <div className="flex items-center justify-between p-3 bg-gray-50 rounded border border-[#d1d1d1]">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold">말 개수 (1~5개)</span>
+                            </div>
+                            <select
+                              value={session.settings.yutNoriPieceCount || 4}
+                              onChange={(e) => sessionService.updateSettings(session.id, { yutNoriPieceCount: parseInt(e.target.value) })}
+                              className="px-2 py-1 border border-gray-300 rounded text-xs"
+                            >
+                              {[1, 2, 3, 4, 5].map(num => (
+                                <option key={num} value={num}>{num}개</option>
+                              ))}
+                            </select>
+                          </div>
                           <div className="p-3 bg-[#e8f5e9] border border-[#c8e6c9] rounded text-xs text-[#2e7d32]">
                             <p className="font-bold mb-1">윷놀이 규칙</p>
                             <ul className="list-disc list-inside space-y-1">
                               <li>윷을 던져 도, 개, 걸, 윷, 모, 빽도 결과를 얻습니다.</li>
                               <li>윷이나 모가 나오면 한 번 더 던질 수 있습니다.</li>
+                              <li>1분 동안 행동이 없으면 턴이 넘어갑니다.</li>
                             </ul>
                           </div>
                         </div>

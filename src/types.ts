@@ -367,6 +367,7 @@ export interface YutNoriGameState {
   lastUpdate: number;
   currentSticks?: { isFlat: boolean, isMarked: boolean, rotation: number, offsetX: number, offsetY: number }[];
   isThrowing?: boolean;
+  turnStartTime?: number;
 }
 
 export interface LeaderboardEntry {
@@ -424,6 +425,7 @@ export interface Session {
     sudokuDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
     officeLifeMode?: 'INDIVIDUAL' | 'TEAM';
     yutNoriMode?: 'INDIVIDUAL' | 'TEAM';
+    yutNoriPieceCount?: number;
     escapeRoomDifficulty?: 'EASY' | 'NORMAL' | 'HARD';
     escapeRoomThemeId?: string;
     cyberArenaPvE?: boolean;

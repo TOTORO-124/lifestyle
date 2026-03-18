@@ -38,8 +38,47 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
   const [message, setMessage] = useState<string>('');
   const [selectedResultIndex, setSelectedResultIndex] = useState<number | null>(null);
   const [isShaking, setIsShaking] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number>(120);
+  const [power, setPower] = useState(0);
+  const [isCharging, setIsCharging] = useState(false);
 
   if (!gameState) return null;
+
+  useEffect(() => {
+    if (gameState.status !== 'PLAYING' || !gameState.turnStartTime) return;
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, 120 - Math.floor((Date.now() - gameState.turnStartTime!) / 1000));
+      setTimeLeft(remaining);
+      
+      if (remaining === 0) {
+        clearInterval(interval);
+        const myTeamId = session.players[currentUser.uid]?.teamId || 'TEAM_A';
+        const isMyTurn = gameState.mode === 'TEAM' ? gameState.turnOrder[gameState.currentTurnIndex] === myTeamId : gameState.turnOrder[gameState.currentTurnIndex] === currentUser.uid;
+        
+        if (session.hostId === currentUser.uid || isMyTurn) {
+          const nextIndex = (gameState.currentTurnIndex + 1) % gameState.turnOrder.length;
+          update(ref(db, `sessions/${session.id}/yutNoriGame`), {
+            currentTurnIndex: nextIndex,
+            throwResults: [],
+            canThrow: true,
+            currentSticks: null,
+            lastUpdate: Date.now(),
+            turnStartTime: Date.now()
+          });
+        }
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [gameState.turnStartTime, gameState.status, session.hostId, currentUser.uid, session.id, gameState.currentTurnIndex, gameState.turnOrder.length]);
+
+  useEffect(() => {
+    if (!isCharging) return;
+    const interval = setInterval(() => {
+      // Triangle wave: 0 to 100 and back, cycle takes 1.6 seconds (800ms per direction)
+      setPower(Math.abs(((Date.now() / 8) % 200) - 100));
+    }, 16);
+    return () => clearInterval(interval);
+  }, [isCharging]);
 
   const currentTurnId = gameState.turnOrder[gameState.currentTurnIndex];
   const myTeamId = session.players[currentUser.uid]?.teamId || 'TEAM_A';
@@ -53,40 +92,95 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     return session.players[id]?.nickname || 'Unknown';
   };
 
-  const throwYut = (): { result: YutResult, sticks: Stick[] } => {
-    const sticks: Stick[] = [
-      { isFlat: Math.random() < 0.4, isMarked: true, rotation: Math.random() * 60 - 30, offsetX: Math.random() * 40 - 20, offsetY: Math.random() * 40 - 20 },
-      { isFlat: Math.random() < 0.4, isMarked: false, rotation: Math.random() * 60 - 30, offsetX: Math.random() * 40 - 20, offsetY: Math.random() * 40 - 20 },
-      { isFlat: Math.random() < 0.4, isMarked: false, rotation: Math.random() * 60 - 30, offsetX: Math.random() * 40 - 20, offsetY: Math.random() * 40 - 20 },
-      { isFlat: Math.random() < 0.4, isMarked: false, rotation: Math.random() * 60 - 30, offsetX: Math.random() * 40 - 20, offsetY: Math.random() * 40 - 20 },
-    ];
+  const throwYut = (finalPower: number): { result: YutResult, sticks: Stick[] } => {
+    let result: YutResult = '도';
+    const rand = Math.random();
 
-    let result: YutResult;
-
-    // 5% chance of Nak
-    if (Math.random() < 0.05) {
-      result = '낙';
-      // Scatter sticks far away to simulate falling off the board
-      sticks.forEach(s => {
-        s.offsetX = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 40 + 60);
-        s.offsetY = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 40 + 60);
-      });
+    if (finalPower < 20) {
+      if (rand < 0.3) result = '빽도';
+      else if (rand < 0.7) result = '도';
+      else result = '개';
+    } else if (finalPower > 85) {
+      if (rand < 0.4) result = '낙';
+      else if (rand < 0.6) result = '도';
+      else if (rand < 0.8) result = '개';
+      else if (rand < 0.9) result = '걸';
+      else if (rand < 0.95) result = '윷';
+      else result = '모';
+    } else if (finalPower >= 45 && finalPower <= 55) {
+      if (rand < 0.1) result = '도';
+      else if (rand < 0.35) result = '개';
+      else if (rand < 0.65) result = '걸';
+      else if (rand < 0.85) result = '윷';
+      else result = '모';
     } else {
-      const flatCount = sticks.filter(s => s.isFlat).length;
-      if (flatCount === 0) result = '모';
-      else if (flatCount === 1 && sticks[0].isFlat) result = '빽도';
-      else if (flatCount === 1) result = '도';
-      else if (flatCount === 2) result = '개';
-      else if (flatCount === 3) result = '걸';
-      else result = '윷';
+      if (rand < 0.05) result = '빽도';
+      else if (rand < 0.25) result = '도';
+      else if (rand < 0.60) result = '개';
+      else if (rand < 0.85) result = '걸';
+      else if (rand < 0.95) result = '윷';
+      else result = '모';
+    }
+
+    let flatCount = 0;
+    let markedFlat = false;
+    if (result === '도') { flatCount = 1; markedFlat = false; }
+    else if (result === '빽도') { flatCount = 1; markedFlat = true; }
+    else if (result === '개') { flatCount = 2; }
+    else if (result === '걸') { flatCount = 3; }
+    else if (result === '윷') { flatCount = 4; }
+    else if (result === '모') { flatCount = 0; }
+    else if (result === '낙') { flatCount = Math.floor(Math.random() * 5); }
+
+    const sticks: Stick[] = Array(4).fill(null).map((_, i) => ({
+      isFlat: false,
+      isMarked: i === 0,
+      rotation: Math.random() * 60 - 30,
+      offsetX: Math.random() * 40 - 20,
+      offsetY: Math.random() * 40 - 20
+    }));
+
+    let flatsToAssign = flatCount;
+    if (markedFlat) {
+      sticks[0].isFlat = true;
+      flatsToAssign--;
+    } else if (flatCount > 0 && result !== '낙') {
+      sticks[0].isFlat = false;
+    }
+
+    const unmarkedIndices = [1, 2, 3].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < flatsToAssign; i++) {
+      if (unmarkedIndices[i] !== undefined && sticks[unmarkedIndices[i]]) {
+        sticks[unmarkedIndices[i]].isFlat = true;
+      }
+    }
+
+    if (result === '낙') {
+      sticks.forEach(s => {
+        s.offsetX = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 80 + 80);
+        s.offsetY = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 80 + 80);
+      });
     }
 
     return { result, sticks };
   };
 
-  const handleThrow = () => {
+  const handleChargeStart = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
     if (gameState.isThrowing || !isMyTurn || !gameState.canThrow) return;
+    setIsCharging(true);
+    setPower(0);
     setMessage('');
+  };
+
+  const handleChargeEnd = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    if (!isCharging) return;
+    setIsCharging(false);
+    executeThrow(power);
+  };
+
+  const executeThrow = (finalPower: number) => {
 
     // Sync throwing state to Firebase so opponents can see
     update(ref(db, `sessions/${session.id}/yutNoriGame`), {
@@ -96,7 +190,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     });
 
     setTimeout(() => {
-      const { result, sticks } = throwYut();
+      const { result, sticks } = throwYut(finalPower);
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 200);
       
@@ -111,7 +205,8 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
         canThrow,
         isThrowing: false,
         currentSticks: sticks,
-        lastUpdate: Date.now()
+        lastUpdate: Date.now(),
+        turnStartTime: Date.now()
       });
 
       if (result === '낙') {
@@ -319,7 +414,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     const finishedCount = newPieces[currentTurnId].filter(p => p.position === 30).length;
     let winner = gameState.winner;
     let status = gameState.status;
-    if (finishedCount === 4) {
+    if (finishedCount === newPieces[currentTurnId].length) {
       winner = currentTurnId;
       status = 'FINISHED';
     }
@@ -329,7 +424,8 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       throwResults: newResults,
       canThrow,
       status,
-      lastUpdate: Date.now()
+      lastUpdate: Date.now(),
+      turnStartTime: Date.now()
     };
     if (winner !== undefined) {
       updateData.winner = winner;
@@ -348,7 +444,8 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       throwResults: [],
       canThrow: true,
       currentSticks: null,
-      lastUpdate: Date.now()
+      lastUpdate: Date.now(),
+      turnStartTime: Date.now()
     });
     setMessage('');
     setSelectedResultIndex(null);
@@ -433,7 +530,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     return (
       <div className="flex flex-col gap-1">
         <span className="text-[10px] font-bold text-gray-500">{label} 대기</span>
-        <div className="flex gap-2 p-2 bg-white/50 rounded-lg border border-black/10 min-h-[40px]">
+        <div className="flex flex-wrap gap-2 p-2 bg-white/50 rounded-lg border border-black/10 min-h-[40px]">
           {waitingPieces.map(piece => (
             <motion.div
               layoutId={`piece-${teamId}-${piece.id}`}
@@ -458,7 +555,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     return (
       <div className="flex flex-col gap-1">
         <span className="text-[10px] font-bold text-gray-500">{label} 완주</span>
-        <div className="flex gap-1 p-2 bg-white/50 rounded-lg border border-black/10 min-h-[40px] items-center">
+        <div className="flex flex-wrap gap-1 p-2 bg-white/50 rounded-lg border border-black/10 min-h-[40px] items-center">
           {finishedPieces.map((piece) => (
             <motion.div
               layoutId={`piece-${teamId}-${piece.id}`}
@@ -543,9 +640,14 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
         {/* Right: Controls & Status */}
         <div className="flex-1 flex flex-col gap-6">
           <div className="bg-white p-6 rounded-2xl shadow-md border border-black/5">
-            <h3 className="text-xl font-bold mb-4 text-[#073642]">
-              현재 턴: {getPlayerName(currentTurnId)}
-              {isMyTurn && <span className="ml-2 text-sm text-[#859900]">(내 턴)</span>}
+            <h3 className="text-xl font-bold mb-4 text-[#073642] flex flex-wrap items-center justify-between gap-2">
+              <div>
+                현재 턴: {getPlayerName(currentTurnId)}
+                {isMyTurn && <span className="ml-2 text-sm text-[#859900]">(내 턴)</span>}
+              </div>
+              <div className={`text-sm px-3 py-1 rounded-full font-bold ${timeLeft <= 10 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-600'}`}>
+                ⏱ {timeLeft}초
+              </div>
             </h3>
             
             <div className="mb-6">
@@ -635,42 +737,77 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
               )}
             </motion.div>
 
-            <AnimatePresence mode="wait">
-              {message && (
-                <motion.div
-                  key={message}
-                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className={`text-center font-bold mb-6 p-3 rounded-lg shadow-sm border ${
-                    message.includes('잡았습니다') 
-                      ? 'bg-red-100 text-red-600 border-red-200 text-lg animate-pulse' 
-                      : message.includes('한 번 더') 
-                        ? 'bg-blue-100 text-blue-600 border-blue-200 text-lg'
-                        : 'bg-white/50 text-[#d33682] border-black/5'
-                  }`}
-                >
-                  {message}
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div className="min-h-[60px] mb-6 flex items-center justify-center">
+              <AnimatePresence mode="wait">
+                {message ? (
+                  <motion.div
+                    key={message}
+                    initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className={`w-full text-center font-bold p-3 rounded-lg shadow-sm border ${
+                      message.includes('잡았습니다') 
+                        ? 'bg-red-100 text-red-600 border-red-200 text-lg animate-pulse' 
+                        : message.includes('한 번 더') 
+                          ? 'bg-blue-100 text-blue-600 border-blue-200 text-lg'
+                          : 'bg-white/50 text-[#d33682] border-black/5'
+                    }`}
+                  >
+                    {message}
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="empty"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="w-full text-center font-bold p-3 rounded-lg border border-transparent text-gray-400 bg-gray-50/50"
+                  >
+                    게이지를 맞춰 윷을 던지세요!
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
-            <div className="flex gap-4">
-              <button
-                onClick={handleThrow}
-                disabled={gameState.isThrowing || !isMyTurn || !gameState.canThrow}
-                className="flex-1 py-3 bg-[#859900] hover:bg-[#738a00] text-white rounded-xl font-bold shadow-md disabled:opacity-50 transition-colors"
-              >
-                윷 던지기
-              </button>
+            <div className="flex flex-col gap-4">
+              {isMyTurn && gameState.canThrow && !gameState.isThrowing && (
+                <div className="w-full h-8 bg-gray-200 rounded-full overflow-hidden relative border-2 border-gray-300 shadow-inner">
+                  {/* Weak Zone (0-20) */}
+                  <div className="absolute left-0 top-0 bottom-0 w-[20%] bg-yellow-400 opacity-60" />
+                  {/* Perfect Zone (45-55) */}
+                  <div className="absolute left-[45%] top-0 bottom-0 w-[10%] bg-green-500 opacity-80" />
+                  {/* Overpower Zone (85-100) */}
+                  <div className="absolute right-0 top-0 bottom-0 w-[15%] bg-red-500 opacity-60" />
+                  
+                  {/* Moving Cursor */}
+                  <div 
+                    className="absolute top-0 bottom-0 w-3 bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,1)] transition-none"
+                    style={{ left: `calc(${power}% - 6px)` }}
+                  />
+                </div>
+              )}
               
-              <button
-                onClick={handleNextTurn}
-                disabled={gameState.isThrowing || !isMyTurn}
-                className="flex-1 py-3 bg-[#2aa198] hover:bg-[#258a82] text-white rounded-xl font-bold shadow-md disabled:opacity-50 transition-colors"
-              >
-                {(throwResults.length > 0 || gameState.canThrow) ? '턴 포기하고 넘기기' : '턴 넘기기'}
-              </button>
+              <div className="flex gap-4">
+                <button
+                  onMouseDown={handleChargeStart}
+                  onMouseUp={handleChargeEnd}
+                  onMouseLeave={handleChargeEnd}
+                  onTouchStart={handleChargeStart}
+                  onTouchEnd={handleChargeEnd}
+                  disabled={gameState.isThrowing || !isMyTurn || !gameState.canThrow}
+                  className="flex-[2] py-4 bg-[#859900] hover:bg-[#738a00] text-white rounded-xl font-bold text-lg shadow-md disabled:opacity-50 transition-all active:scale-95 select-none touch-none"
+                >
+                  {isCharging ? '놓아서 던지기!' : '누르고 게이지 맞추기'}
+                </button>
+                
+                <button
+                  onClick={handleNextTurn}
+                  disabled={gameState.isThrowing || !isMyTurn}
+                  className="flex-1 py-4 bg-[#2aa198] hover:bg-[#258a82] text-white rounded-xl font-bold shadow-md disabled:opacity-50 transition-colors"
+                >
+                  {(throwResults.length > 0 || gameState.canThrow) ? '턴 포기' : '턴 넘기기'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

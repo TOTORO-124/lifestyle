@@ -2284,33 +2284,18 @@ export const sessionService = {
   },
 
   // --- Office Life ---
-  async startYutNori(sessionId: string, players: Record<string, Player>, turnOrder?: string[], mode: 'INDIVIDUAL' | 'TEAM' = 'INDIVIDUAL') {
+  async startYutNori(sessionId: string, players: Record<string, Player>, turnOrder?: string[], mode: 'INDIVIDUAL' | 'TEAM' = 'INDIVIDUAL', pieceCount: number = 4) {
     if (!db || !players) return;
     
     const order = turnOrder || Object.keys(players || {});
     const pieces: Record<string, { id: string, position: number, count: number, path: number[] }[]> = {};
     
     if (mode === 'TEAM') {
-      pieces['TEAM_A'] = [
-        { id: 'A1', position: -1, count: 1, path: [] },
-        { id: 'A2', position: -1, count: 1, path: [] },
-        { id: 'A3', position: -1, count: 1, path: [] },
-        { id: 'A4', position: -1, count: 1, path: [] }
-      ];
-      pieces['TEAM_B'] = [
-        { id: 'B1', position: -1, count: 1, path: [] },
-        { id: 'B2', position: -1, count: 1, path: [] },
-        { id: 'B3', position: -1, count: 1, path: [] },
-        { id: 'B4', position: -1, count: 1, path: [] }
-      ];
+      pieces['TEAM_A'] = Array.from({ length: pieceCount }).map((_, i) => ({ id: `A${i+1}`, position: -1, count: 1, path: [] }));
+      pieces['TEAM_B'] = Array.from({ length: pieceCount }).map((_, i) => ({ id: `B${i+1}`, position: -1, count: 1, path: [] }));
     } else {
       order.forEach((pid, idx) => {
-        pieces[pid] = [
-          { id: `${idx}1`, position: -1, count: 1, path: [] },
-          { id: `${idx}2`, position: -1, count: 1, path: [] },
-          { id: `${idx}3`, position: -1, count: 1, path: [] },
-          { id: `${idx}4`, position: -1, count: 1, path: [] }
-        ];
+        pieces[pid] = Array.from({ length: pieceCount }).map((_, i) => ({ id: `${idx}${i+1}`, position: -1, count: 1, path: [] }));
       });
     }
 
@@ -2322,7 +2307,8 @@ export const sessionService = {
       pieces,
       throwResults: [],
       canThrow: true,
-      lastUpdate: Date.now()
+      lastUpdate: Date.now(),
+      turnStartTime: Date.now()
     };
 
     await update(ref(db, `sessions/${sessionId}`), {
