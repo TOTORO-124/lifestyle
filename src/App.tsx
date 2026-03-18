@@ -2053,7 +2053,13 @@ export default function App() {
               <SuikaGame 
                 bestScore={session.suikaGame?.bestScore || 0}
                 onGameOver={(score) => sessionService.updateSuikaStats(session.id, currentUser.uid, score)}
-                onBack={() => sessionService.resetSession(session.id, session.players)}
+                onBack={() => {
+                  if (isHost) {
+                    sessionService.resetSession(session.id, session.players);
+                  } else {
+                    setError('방장만 게임을 종료할 수 있습니다.');
+                  }
+                }}
               />
             ) : session.gameType === GameType.BINGO ? (
               !session.bingoGame ? (

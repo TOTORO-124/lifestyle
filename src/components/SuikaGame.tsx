@@ -66,6 +66,14 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
   const comboRef = useRef(0);
   const particlesRef = useRef<Particle[]>([]);
 
+  const onGameOverRef = useRef(onGameOver);
+  const onBackRef = useRef(onBack);
+
+  useEffect(() => {
+    onGameOverRef.current = onGameOver;
+    onBackRef.current = onBack;
+  }, [onGameOver, onBack]);
+
   // Animated score logic
   useEffect(() => {
     const timer = setInterval(() => {
@@ -304,7 +312,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
           if (stillOverLimit) {
             setIsGameOver(true);
             clearInterval(checkGameOver);
-            onGameOver(scoreRef.current);
+            onGameOverRef.current(scoreRef.current);
           }
         }, 2000);
       }
@@ -317,7 +325,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
       Matter.Engine.clear(engineRef.current);
       if (render.canvas) render.canvas.remove();
     };
-  }, [onGameOver]);
+  }, []);
 
   useEffect(() => {
     const cleanup = init();
@@ -384,7 +392,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
 
       {/* Header */}
       <div className="w-full flex justify-between items-center p-4 shrink-0 glass-panel z-30 border-b border-black/5">
-        <button onClick={onBack} className="p-2 hover:bg-black/5 rounded-full btn-interactive">
+        <button onClick={() => onBackRef.current()} className="p-2 hover:bg-black/5 rounded-full btn-interactive">
           <ArrowLeft size={24} />
         </button>
         <div className="flex flex-col items-center">
@@ -512,7 +520,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
                       다시 도전하기
                     </button>
                     <button 
-                      onClick={onBack}
+                      onClick={() => onBackRef.current()}
                       className="w-full py-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-2xl font-bold btn-interactive border border-black/10"
                     >
                       메뉴로 돌아가기

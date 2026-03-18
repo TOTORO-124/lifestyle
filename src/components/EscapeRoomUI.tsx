@@ -568,11 +568,10 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
                 onClick={() => {
                   const currentCount = puzzle.dialCount || 4;
                   const currentVal = (dialValues.length === currentCount ? dialValues : Array(currentCount).fill(0)).join('');
+                  handleSolve(puzzle.id, currentVal);
                   if (currentVal.trim().toUpperCase() === puzzle.answer.trim().toUpperCase()) {
-                    handleSolve(puzzle.id, currentVal);
                     setDialValues([]); // Reset for next puzzle
                   }
-                  else alert(`비밀번호가 틀렸습니다. (입력: ${currentVal})`);
                 }}
               disabled={isSpectator}
               className="px-8 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700"
