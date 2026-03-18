@@ -34,6 +34,12 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
   const [viewingExplanation, setViewingExplanation] = useState<string | null>(null);
   const [viewingHint, setViewingHint] = useState<string | null>(null);
   const [showRoomTitle, setShowRoomTitle] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
+
+  const triggerShake = () => {
+    setIsShaking(true);
+    setTimeout(() => setIsShaking(false), 250);
+  };
 
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showHallOfFame, setShowHallOfFame] = useState(false);
@@ -293,8 +299,11 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
 
   if (!room) return <div className="p-8 text-center text-gray-500">방 정보를 불러올 수 없습니다.</div>;
 
-  const handleSolve = (puzzleId: string, val: string) => {
-    sessionService.submitEscapeRoomAnswer(session.id, puzzleId, val, session);
+  const handleSolve = async (puzzleId: string, val: string) => {
+    const isCorrect = await sessionService.submitEscapeRoomAnswer(session.id, puzzleId, val, session);
+    if (!isCorrect) {
+      triggerShake();
+    }
     setAnswer('');
   };
 
@@ -310,16 +319,17 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
   const lastSolvedPuzzle = room.puzzles.find(p => p.id === game.lastSolvedPuzzleId);
 
   // Direction Sequence Logic
-  const handleDirectionClick = (puzzle: Puzzle, dir: string) => {
+  const handleDirectionClick = async (puzzle: Puzzle, dir: string) => {
     if (isSpectator) return;
     const newSeq = [...directionInput, dir];
     setDirectionInput(newSeq);
     
     if (puzzle.sequence && newSeq.length === puzzle.sequence.length) {
       if (newSeq.join(',') === puzzle.sequence.join(',')) {
-        handleSolve(puzzle.id, newSeq.join(','));
+        await handleSolve(puzzle.id, newSeq.join(','));
       } else {
         setDirectionError(true);
+        triggerShake();
         setTimeout(() => {
           setDirectionError(false);
           setDirectionInput([]);
@@ -362,13 +372,14 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
   };
 
   // Item Interaction Logic
-  const handleItemInteraction = (puzzle: Puzzle) => {
+  const handleItemInteraction = async (puzzle: Puzzle) => {
     if (isSpectator) return;
     if (selectedInventoryItem === puzzle.requiredItem) {
-      handleSolve(puzzle.id, puzzle.answer);
+      await handleSolve(puzzle.id, puzzle.answer);
       setSelectedInventoryItem(null);
     } else {
       setItemError(puzzle.id);
+      triggerShake();
       setTimeout(() => setItemError(null), 1000);
     }
   };

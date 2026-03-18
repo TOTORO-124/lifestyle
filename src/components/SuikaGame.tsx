@@ -54,10 +54,12 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
   const [nextFruitIndex, setNextFruitIndex] = useState(0);
   const [currentFruitIndex, setCurrentFruitIndex] = useState(0);
   const [isDropping, setIsDropping] = useState(false);
-  const [mousePos, setMousePos] = useState(CANVAS_WIDTH / 2);
+  const mousePosRef = useRef(CANVAS_WIDTH / 2);
+  const previewRef = useRef<HTMLDivElement>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [combo, setCombo] = useState(0);
   const [showCombo, setShowCombo] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
 
   const scoreRef = useRef(0);
   const lastMergeTimeRef = useRef(0);
@@ -78,19 +80,24 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
 
   const createParticles = (x: number, y: number, color: string) => {
     const newParticles: Particle[] = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 20; i++) {
       newParticles.push({
         id: Math.random(),
         x,
         y,
-        vx: (Math.random() - 0.5) * 10,
-        vy: (Math.random() - 0.5) * 10,
+        vx: (Math.random() - 0.5) * 15,
+        vy: (Math.random() - 0.5) * 15,
         color,
         life: 1.0,
-        size: Math.random() * 4 + 2
+        size: Math.random() * 6 + 2
       });
     }
     particlesRef.current = [...particlesRef.current, ...newParticles];
+  };
+
+  const triggerShake = () => {
+    setIsShaking(true);
+    setTimeout(() => setIsShaking(false), 250);
   };
 
   const init = useCallback(() => {
@@ -167,6 +174,11 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
             // Particles
             createParticles(newX, newY, RANKS[level].color);
 
+            // Screen shake for big merges
+            if (level >= 4) {
+              triggerShake();
+            }
+
             // Remove old fruits
             Matter.Composite.remove(engineRef.current.world, [bodyA, bodyB]);
 
@@ -207,6 +219,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
             if (comboRef.current > 1) {
               setShowCombo(true);
               setTimeout(() => setShowCombo(false), 1000);
+              if (comboRef.current > 2) triggerShake();
             }
 
             // Update score
@@ -316,7 +329,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
 
     setIsDropping(true);
     const rank = RANKS[currentFruitIndex];
-    const newRank = Matter.Bodies.circle(mousePos, TOP_LIMIT - 50, rank.radius, {
+    const newRank = Matter.Bodies.circle(mousePosRef.current, TOP_LIMIT - 50, rank.radius, {
       label: `rank_${currentFruitIndex}`,
       render: { fillStyle: rank.color },
       restitution: 0.4,
@@ -330,7 +343,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
       setNextFruitIndex(Math.floor(Math.random() * 5)); // Only drop small ranks
       setIsDropping(false);
     }, 800);
-  }, [currentFruitIndex, nextFruitIndex, mousePos, isDropping, isGameOver]);
+  }, [currentFruitIndex, nextFruitIndex, isDropping, isGameOver]);
 
   const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (isGameOver) return;
@@ -354,11 +367,15 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
     // Clamp x
     const radius = RANKS[currentFruitIndex].radius;
     x = Math.max(radius, Math.min(CANVAS_WIDTH - radius, x));
-    setMousePos(x);
+    
+    mousePosRef.current = x;
+    if (previewRef.current) {
+      previewRef.current.style.left = `${(x / CANVAS_WIDTH) * 100}%`;
+    }
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#fdf6e3] font-sans text-[#586e75] overflow-hidden safe-bottom">
+    <div className={`flex flex-col h-full w-full bg-[#fdf6e3] font-sans text-[#586e75] overflow-hidden safe-bottom ${isShaking ? 'animate-shake' : ''}`}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
         .font-noto { font-family: 'Noto Sans KR', sans-serif; }
@@ -366,8 +383,8 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
       `}</style>
 
       {/* Header */}
-      <div className="w-full flex justify-between items-center p-4 shrink-0 bg-white/50 backdrop-blur-sm z-30 border-b border-black/5">
-        <button onClick={onBack} className="p-2 hover:bg-black/5 rounded-full transition-colors">
+      <div className="w-full flex justify-between items-center p-4 shrink-0 glass-panel z-30 border-b border-black/5">
+        <button onClick={onBack} className="p-2 hover:bg-black/5 rounded-full btn-interactive">
           <ArrowLeft size={24} />
         </button>
         <div className="flex flex-col items-center">
@@ -382,16 +399,16 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
             </div>
           </div>
         </div>
-        <button onClick={() => setShowInfo(true)} className="p-2 hover:bg-black/5 rounded-full transition-colors">
+        <button onClick={() => setShowInfo(true)} className="p-2 hover:bg-black/5 rounded-full btn-interactive">
           <Info size={24} />
         </button>
       </div>
 
       {/* Main Game Container */}
-      <div className="flex-1 relative flex flex-col items-center justify-center p-2 overflow-hidden">
+      <div className="flex-1 relative flex flex-col items-center justify-center p-2 overflow-hidden w-full">
         {/* Game Area Wrapper */}
         <div 
-          className="relative border-8 border-[#8b4513] rounded-3xl overflow-hidden cursor-crosshair shadow-2xl bg-white/80 backdrop-blur-sm touch-none w-full max-w-[400px] h-full max-h-[600px] flex flex-col"
+          className="relative border-8 border-[#8b4513] rounded-3xl overflow-hidden cursor-crosshair shadow-2xl glass-panel touch-none w-full max-w-[400px] aspect-[2/3] flex flex-col"
           onMouseMove={handleMouseMove}
           onTouchMove={handleMouseMove}
           onClick={dropFruit}
@@ -425,9 +442,10 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
           {/* Current Fruit Preview */}
           {!isGameOver && !isDropping && (
             <div 
-              className="absolute pointer-events-none transition-all duration-75 z-20 flex items-center justify-center font-bold shadow-lg"
+              ref={previewRef}
+              className="absolute pointer-events-none z-20 flex items-center justify-center font-bold shadow-lg"
               style={{ 
-                left: `${(mousePos / CANVAS_WIDTH) * 100}%`,
+                left: `${(mousePosRef.current / CANVAS_WIDTH) * 100}%`,
                 transform: 'translateX(-50%)',
                 top: 20,
                 width: (RANKS[currentFruitIndex].radius * 2 * 100) / CANVAS_WIDTH + '%',
@@ -447,7 +465,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
           <div ref={sceneRef} className="flex-1 w-full h-full" />
 
           {/* Next Fruit Preview */}
-          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md p-3 rounded-2xl border-2 border-[#8b4513]/20 flex flex-col items-center shadow-xl z-30">
+          <div className="absolute top-4 right-4 glass-panel p-3 rounded-2xl border-2 border-[#8b4513]/20 flex flex-col items-center shadow-xl z-30">
             <span className="text-[9px] uppercase font-black tracking-widest opacity-40 mb-1 font-noto">Next</span>
             <div 
               className="w-8 h-8 rounded-full flex items-center justify-center text-[8px] font-black shadow-inner border border-black/5"
@@ -472,30 +490,30 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
                 <motion.div
                   initial={{ scale: 0.5, y: 50, rotate: -5 }}
                   animate={{ scale: 1, y: 0, rotate: 0 }}
-                  className="bg-white/10 p-10 rounded-[40px] shadow-2xl border border-white/20 backdrop-blur-md w-full max-w-[320px]"
+                  className="glass-panel p-10 rounded-[40px] shadow-2xl border border-white/20 w-full max-w-[320px]"
                 >
                   <div className="mb-2">
-                    <Star className="text-yellow-400 mx-auto animate-bounce" size={48} fill="currentColor" />
+                    <Star className="text-yellow-400 mx-auto animate-bounce drop-shadow-lg" size={48} fill="currentColor" />
                   </div>
-                  <h2 className="text-3xl font-black mb-1 uppercase tracking-tighter font-noto">Game Over</h2>
-                  <p className="text-xs opacity-60 mb-6 font-medium">수고하셨습니다!</p>
+                  <h2 className="text-3xl font-black mb-1 uppercase tracking-tighter font-noto text-gray-800">Game Over</h2>
+                  <p className="text-xs text-gray-600 mb-6 font-medium">수고하셨습니다!</p>
                   
                   <div className="space-y-1 mb-8">
-                    <div className="text-[10px] uppercase font-bold opacity-40 tracking-widest">Final Score</div>
-                    <div className="text-6xl font-black text-yellow-400 drop-shadow-lg font-noto">{score}</div>
+                    <div className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">Final Score</div>
+                    <div className="text-6xl font-black text-[#268bd2] drop-shadow-lg font-noto">{score}</div>
                   </div>
                   
                   <div className="flex flex-col gap-3">
                     <button 
                       onClick={init}
-                      className="flex items-center justify-center gap-2 w-full py-4 bg-[#268bd2] hover:bg-[#2aa198] text-white rounded-2xl font-black transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+                      className="flex items-center justify-center gap-2 w-full py-4 bg-[#268bd2] hover:bg-[#2aa198] text-white rounded-2xl font-black btn-interactive shadow-lg"
                     >
                       <RefreshCw size={20} />
                       다시 도전하기
                     </button>
                     <button 
                       onClick={onBack}
-                      className="w-full py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-bold transition-all border border-white/10"
+                      className="w-full py-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-2xl font-bold btn-interactive border border-black/10"
                     >
                       메뉴로 돌아가기
                     </button>
@@ -520,7 +538,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
             <motion.div 
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
-              className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl font-noto"
+              className="glass-panel rounded-[32px] p-8 max-w-md w-full shadow-2xl font-noto"
               onClick={e => e.stopPropagation()}
             >
               <h3 className="text-2xl font-black mb-6 flex items-center gap-2 text-[#073642]">
@@ -559,7 +577,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
               </div>
               <button 
                 onClick={() => setShowInfo(false)}
-                className="w-full mt-8 py-4 bg-[#073642] text-white rounded-2xl font-black hover:bg-[#586e75] transition-all shadow-lg active:scale-95"
+                className="w-full mt-8 py-4 bg-[#073642] text-white rounded-2xl font-black hover:bg-[#586e75] btn-interactive shadow-lg"
               >
                 확인 완료
               </button>

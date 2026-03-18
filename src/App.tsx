@@ -25,7 +25,7 @@ const LogTicker = ({ logs, isSuika }: { logs: GameLog[], isSuika?: boolean }) =>
   const latestLogs = [...Object.values(logs || {})].sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
   
   return (
-    <div className={`fixed ${isSuika ? 'bottom-24 md:bottom-20' : 'bottom-12 md:bottom-10'} right-4 w-[calc(100%-2rem)] md:w-72 bg-white/90 backdrop-blur border border-gray-200 rounded-lg shadow-xl overflow-hidden z-40 pointer-events-none`}>
+    <div className={`fixed ${isSuika ? 'top-36 md:top-40 left-4' : 'bottom-12 md:bottom-10 right-4'} w-[calc(100%-2rem)] md:w-72 bg-white/90 backdrop-blur border border-gray-200 rounded-lg shadow-xl overflow-hidden z-40 pointer-events-none`}>
       <div className="bg-gray-100 px-3 py-1 border-b border-gray-200 flex justify-between items-center">
         <span className="text-[9px] md:text-[10px] font-bold text-gray-500 flex items-center gap-1">
           <Activity size={10} /> 실시간 시스템 로그
@@ -75,6 +75,21 @@ const ArenaRebuild = () => {
     enemyBattleInterval: null,
     countdownInterval: null
   });
+  
+  const particlesRef = useRef<any[]>([]);
+
+  const createParticles = (x: number, y: number, color: string) => {
+    const newParticles = Array.from({ length: 10 }).map(() => ({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 8,
+      vy: (Math.random() - 0.5) * 8,
+      life: 1,
+      color,
+      size: Math.random() * 4 + 2
+    }));
+    particlesRef.current.push(...newParticles);
+  };
   // [데이터 구조화] 캐릭터 데이터
   const characters = [
     { id: 'milk', name: '우유(밸런스)', maxHp: 150, currentHp: 150, attackPower: 15, attackSpeed: 1.0, defense: 15, speed: 3, evasion: 5, passiveName: '단단한 유막', color: '#3b82f6' },
@@ -128,6 +143,13 @@ const ArenaRebuild = () => {
   const [baseStats, setBaseStats] = useState<any>(null);
   const [playerStats, setPlayerStats] = useState<any>(null);
   const [enemyStats, setEnemyStats] = useState<any>(null);
+
+  const [isShaking, setIsShaking] = useState(false);
+
+  const triggerShake = () => {
+    setIsShaking(true);
+    setTimeout(() => setIsShaking(false), 250);
+  };
 
   // [Ref 선언] 최신 스탯 참조용 (클로저 문제 해결)
   const playerStatsRef = useRef<any>(null);
@@ -362,6 +384,8 @@ const ArenaRebuild = () => {
           currentHp: Math.max(0, prev.currentHp - (m.type === 'large' ? 2 : 1))
         }));
         setPlayerGold(gold => gold + m.gold);
+        triggerShake();
+        createParticles(m.x, m.y, m.color);
         return false;
       }
       return true;
@@ -394,6 +418,22 @@ const ArenaRebuild = () => {
     minionsRef.current.forEach(m => {
       ctx.fillStyle = m.color;
       ctx.fillRect(m.x - m.size / 2, m.y - m.size / 2, m.size, m.size);
+    });
+
+    // 파티클 업데이트 및 그리기
+    particlesRef.current = particlesRef.current.filter(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.05;
+      
+      if (p.life > 0) {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+        ctx.globalAlpha = 1.0;
+        return true;
+      }
+      return false;
     });
 
     ctx.fillStyle = playerStats.color || '#3b82f6';
@@ -574,6 +614,10 @@ const ArenaRebuild = () => {
         const nextHp = Math.max(0, prevP.currentHp - damage);
         console.log(`Enemy deals ${damage} damage. Player HP: ${nextHp}`);
         
+        if (damage > 0) {
+          triggerShake();
+        }
+
         if (nextHp <= 0) {
           isRoundOver.current = true;
           console.log("Player Defeated!");
@@ -825,7 +869,7 @@ const ArenaRebuild = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-2 sm:p-4 pb-16 font-sans text-gray-900">
+    <div className={`min-h-screen bg-gray-50 p-2 sm:p-4 pb-16 font-sans text-gray-900 ${isShaking ? 'animate-shake' : ''}`}>
       <div className="w-full max-w-[500px] mx-auto space-y-4">
         
         <header className="bg-white border-4 border-gray-900 p-3 sm:p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
@@ -2031,7 +2075,7 @@ export default function App() {
   if (!session) return <div className="flex items-center justify-center h-screen spreadsheet-bg font-mono text-[10px] text-[#666]">#리소스_로드_중...</div>;
 
   return (
-    <div className="min-h-screen spreadsheet-bg flex flex-col font-sans">
+    <div className="h-[100dvh] overflow-hidden spreadsheet-bg flex flex-col font-sans">
       {showDisclaimer && (
         <DisclaimerModal onAccept={() => {
           localStorage.setItem('disclaimer_accepted', 'true');
@@ -2109,13 +2153,13 @@ export default function App() {
       )}
 
       <main className={`flex-1 min-h-0 relative ${
-        (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.CYBER_ARENA) && session.status !== SessionStatus.LOBBY 
-          ? 'p-0 overflow-y-auto' 
+        (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.CYBER_ARENA || session.gameType === GameType.SUIKA) && session.status !== SessionStatus.LOBBY 
+          ? 'p-0 overflow-hidden' 
           : 'p-3 sm:p-6 overflow-auto'
       }`}>
         <div className={`${
-          (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.CYBER_ARENA) && session.status !== SessionStatus.LOBBY 
-            ? 'relative flex flex-col min-h-full' 
+          (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.CYBER_ARENA || session.gameType === GameType.SUIKA) && session.status !== SessionStatus.LOBBY 
+            ? 'relative flex flex-col h-full' 
             : 'max-w-5xl mx-auto space-y-4 sm:space-y-6'
         }`}>
           {activeSheet === 'GAME' ? (

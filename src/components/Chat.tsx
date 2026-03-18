@@ -93,7 +93,7 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSp
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className={`fixed ${isSuika ? 'bottom-40 md:bottom-36' : 'bottom-24 md:bottom-20'} right-6 z-50 ${isSpectator ? 'bg-gray-600 hover:bg-gray-700' : 'bg-[#217346] hover:bg-[#1e6b41]'} text-white p-4 rounded-full shadow-lg transition-all duration-200 flex items-center justify-center group`}
+          className={`fixed ${isSuika ? 'top-20 md:top-24 left-4' : 'bottom-24 md:bottom-20 right-6'} z-50 ${isSpectator ? 'bg-gray-600 hover:bg-gray-700' : 'bg-[#217346] hover:bg-[#1e6b41]'} text-white p-4 rounded-full shadow-lg transition-all duration-200 flex items-center justify-center group btn-interactive`}
         >
           <MessageCircle size={24} />
           {unreadCount > 0 && (
@@ -110,7 +110,7 @@ export const Chat: React.FC<ChatProps> = ({ session, currentUser, nickname, isSp
       {/* Chat Window */}
       {isOpen && (
         <div 
-          className={`fixed bottom-0 right-0 md:bottom-6 md:right-6 z-50 w-full md:w-80 bg-white md:rounded-lg shadow-2xl border border-[#d1d1d1] flex flex-col transition-all duration-300 ${
+          className={`fixed bottom-0 ${isSuika ? 'left-0 md:left-6' : 'right-0 md:right-6'} md:bottom-6 z-50 w-full md:w-80 bg-white md:rounded-lg shadow-2xl border border-[#d1d1d1] flex flex-col transition-all duration-300 ${
             isMinimized ? 'h-14' : 'h-[70vh] md:h-[500px]'
           }`}
         >

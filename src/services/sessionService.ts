@@ -2813,14 +2813,14 @@ export const sessionService = {
     await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), { activityLog });
   },
 
-  async submitEscapeRoomAnswer(sessionId: string, puzzleId: string, answer: string, session: Session) {
-    if (!db || !session.escapeRoomGame) return;
+  async submitEscapeRoomAnswer(sessionId: string, puzzleId: string, answer: string, session: Session): Promise<boolean> {
+    if (!db || !session.escapeRoomGame) return false;
     const theme = ESCAPE_ROOM_THEMES[session.escapeRoomGame.themeId];
-    if (!theme) return;
+    if (!theme) return false;
     const room = theme.rooms[session.escapeRoomGame.currentRoomId];
-    if (!room) return;
+    if (!room) return false;
     const puzzle = room.puzzles.find(p => p.id === puzzleId);
-    if (!puzzle) return;
+    if (!puzzle) return false;
 
     const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
 
@@ -2866,9 +2866,11 @@ export const sessionService = {
       }
 
       await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), updates);
+      return true;
     } else {
       await this.logEscapeRoomActivity(sessionId, userName, `오답을 입력했습니다: ${answer}`, 'FAIL', session);
       await this.addLog(sessionId, '틀렸습니다. 다시 생각해보세요.', 'warning');
+      return false;
     }
   },
 
