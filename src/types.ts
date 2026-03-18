@@ -9,7 +9,7 @@ export enum GameType {
   SUDOKU = 'SUDOKU',
   OFFICE_LIFE = 'OFFICE_LIFE',
   ESCAPE_ROOM = 'ESCAPE_ROOM',
-  CYBER_ARENA = 'CYBER_ARENA',
+  YUT_NORI = 'YUT_NORI',
   SUIKA = 'SUIKA',
 }
 
@@ -355,6 +355,18 @@ export interface SuikaGameState {
   startTime?: number;
 }
 
+export interface YutNoriGameState {
+  status: 'PLAYING' | 'FINISHED';
+  mode: 'INDIVIDUAL' | 'TEAM';
+  turnOrder: string[]; // player IDs or team IDs
+  currentTurnIndex: number;
+  pieces: Record<string, { id: string, position: number, count: number, path: number[] }[]>; // teamId/playerId -> pieces
+  throwResults: string[];
+  canThrow: boolean;
+  winner?: string;
+  lastUpdate: number;
+}
+
 export interface LeaderboardEntry {
   playerId: string;
   nickname: string;
@@ -393,6 +405,7 @@ export interface Session {
   escapeRoomGame?: EscapeRoomGameState;
   cyberArenaGame?: CyberArenaGameState;
   suikaGame?: SuikaGameState;
+  yutNoriGame?: YutNoriGameState;
   leaderboards?: Record<string, LeaderboardEntry[]>;
   settings: {
     maxPlayers: number;
@@ -408,6 +421,7 @@ export interface Session {
     minesweeperDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
     sudokuDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
     officeLifeMode?: 'INDIVIDUAL' | 'TEAM';
+    yutNoriMode?: 'INDIVIDUAL' | 'TEAM';
     escapeRoomDifficulty?: 'EASY' | 'NORMAL' | 'HARD';
     escapeRoomThemeId?: string;
     cyberArenaPvE?: boolean;
