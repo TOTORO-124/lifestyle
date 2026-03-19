@@ -42,7 +42,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
   const [timeLeft, setTimeLeft] = useState<number>(120);
   const [power, setPower] = useState(0);
   const [isCharging, setIsCharging] = useState(false);
-  const [isAutoPlayEnabled, setIsAutoPlayEnabled] = useState<boolean>(true);
+  const [isAutoPlayEnabled, setIsAutoPlayEnabled] = useState<boolean>(false);
 
   if (!gameState) return null;
 
@@ -99,13 +99,13 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
 
   // Auto-play logic
   useEffect(() => {
-    if (!isAutoPlayEnabled || !isMyTurn || gameState.status !== 'PLAYING' || isSpectator) return;
+    if (!isMyTurn || gameState.status !== 'PLAYING' || isSpectator) return;
     
-    // If 1 minute has passed (timeLeft <= 60), trigger auto-play
-    if (timeLeft <= 60 && timeLeft > 0) {
+    // Trigger auto-play if explicitly enabled OR if 1 minute has passed (AFK)
+    if (isAutoPlayEnabled || (timeLeft <= 60 && timeLeft > 0)) {
       const autoPlayAction = () => {
-        if (gameState.canThrow && !isShaking && !isCharging) {
-          executeThrow(Math.random() * 100);
+        if (gameState.canThrow && !isShaking && !isCharging && !gameState.isThrowing) {
+          executeThrow(Math.random() * 100, true);
         } else if (!gameState.canThrow && throwResults.length > 0) {
           const resultIndex = 0;
           const result = throwResults[resultIndex];
@@ -120,7 +120,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
           
           if (validPieces.length > 0) {
             const randomPiece = validPieces[Math.floor(Math.random() * validPieces.length)];
-            handlePieceClick(randomPiece.id, resultIndex);
+            handlePieceClick(randomPiece.id, resultIndex, true);
           } else {
             // No valid moves, consume the result and skip
             const newResults = [...throwResults];
@@ -135,11 +135,11 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
         }
       };
 
-      // Add a small delay so it doesn't instantly execute multiple actions in the same second
-      const timer = setTimeout(autoPlayAction, 1500);
+      // Use 500ms so it executes before the next 1000ms timeLeft interval clears it
+      const timer = setTimeout(autoPlayAction, 500);
       return () => clearTimeout(timer);
     }
-  }, [timeLeft, isMyTurn, gameState.status, gameState.canThrow, throwResults, isShaking, isCharging, currentTurnId, session.id, isAutoPlayEnabled]);
+  }, [timeLeft, isMyTurn, gameState.status, gameState.canThrow, throwResults, isShaking, isCharging, currentTurnId, session.id, isAutoPlayEnabled, gameState.isThrowing]);
 
   const getPlayerName = (id: string) => {
     if (gameState.mode === 'TEAM') {
@@ -238,7 +238,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     executeThrow(power);
   };
 
-  const executeThrow = (finalPower: number) => {
+  const executeThrow = (finalPower: number, isAutoPlay: boolean = false) => {
 
     // Sync throwing state to Firebase so opponents can see
     update(ref(db, `sessions/${session.id}/yutNoriGame`), {
@@ -264,7 +264,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
         isThrowing: false,
         currentSticks: sticks,
         lastUpdate: Date.now(),
-        turnStartTime: Date.now()
+        turnStartTime: isAutoPlay ? gameState.turnStartTime : Date.now()
       });
 
       if (result === '낙') {
@@ -380,7 +380,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     return newPath;
   };
 
-  const handlePieceClick = (pieceId: string, overrideResultIndex?: number) => {
+  const handlePieceClick = (pieceId: string, overrideResultIndex?: number, isAutoPlay: boolean = false) => {
     if (!isMyTurn || isSpectator || throwResults.length === 0) return;
 
     if (gameState.canThrow) {
@@ -500,7 +500,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       status,
       rankings,
       lastUpdate: Date.now(),
-      turnStartTime: Date.now()
+      turnStartTime: isAutoPlay ? gameState.turnStartTime : Date.now()
     };
     if (nextIndex !== gameState.currentTurnIndex) {
       updateData.currentTurnIndex = nextIndex;
