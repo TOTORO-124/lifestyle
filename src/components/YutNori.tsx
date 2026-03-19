@@ -179,9 +179,8 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     }
 
     let flatCount = 0;
-    let markedFlat = false;
-    if (result === '도') { flatCount = 1; markedFlat = false; }
-    else if (result === '빽도') { flatCount = 1; markedFlat = true; }
+    if (result === '도') { flatCount = 1; }
+    else if (result === '빽도') { flatCount = 1; }
     else if (result === '개') { flatCount = 2; }
     else if (result === '걸') { flatCount = 3; }
     else if (result === '윷') { flatCount = 4; }
@@ -196,18 +195,21 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       offsetY: Math.random() * 40 - 20
     }));
 
-    let flatsToAssign = flatCount;
-    if (markedFlat) {
+    if (result === '빽도') {
       sticks[0].isFlat = true;
-      flatsToAssign--;
-    } else if (flatCount > 0 && result !== '낙') {
+    } else if (result === '도') {
       sticks[0].isFlat = false;
-    }
-
-    const unmarkedIndices = [1, 2, 3].sort(() => Math.random() - 0.5);
-    for (let i = 0; i < flatsToAssign; i++) {
-      if (unmarkedIndices[i] !== undefined && sticks[unmarkedIndices[i]]) {
-        sticks[unmarkedIndices[i]].isFlat = true;
+      const randomIdx = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
+      sticks[randomIdx].isFlat = true;
+    } else if (result === '윷') {
+      sticks.forEach(s => s.isFlat = true);
+    } else if (result === '모') {
+      sticks.forEach(s => s.isFlat = false);
+    } else {
+      // 개, 걸, 낙
+      const indices = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+      for (let i = 0; i < flatCount; i++) {
+        sticks[indices[i]].isFlat = true;
       }
     }
 
