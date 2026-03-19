@@ -458,7 +458,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       return p;
     });
 
-    const newResults = [...throwResults];
+    let newResults = [...throwResults];
     newResults.splice(resultIndex, 1);
 
     let canThrow = gameState.canThrow;

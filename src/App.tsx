@@ -1134,6 +1134,37 @@ export default function App() {
                   </div>
                 </div>
 
+                {(session.settings.officeLifeMode === 'TEAM' || session.settings.yutNoriMode === 'TEAM') && (
+                  <div className="bg-white border border-[#d1d1d1] p-4 rounded shadow-sm space-y-4">
+                    <h3 className="text-[10px] font-bold text-[#666] border-b border-[#d1d1d1] pb-2 uppercase">팀_배정</h3>
+                    <div className="p-3 bg-blue-50 rounded border border-blue-100">
+                      <p className="text-[10px] font-bold text-blue-800 mb-2">팀 배정 (클릭하여 변경)</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.values(session?.players || {}).map(pObj => {
+                          const p = pObj as Player;
+                          return (
+                            <div key={p.id} className="flex items-center justify-between p-2 bg-white rounded border border-blue-200">
+                              <span className="text-[10px] font-medium truncate max-w-[60px]">{p.nickname}</span>
+                              <button
+                                onClick={() => {
+                                  if (p.id === currentUser.uid) {
+                                    const nextTeam = p.teamId === 'TEAM_B' ? 'TEAM_A' : 'TEAM_B';
+                                    sessionService.setPlayerTeam(session.id, p.id, nextTeam);
+                                  }
+                                }}
+                                disabled={p.id !== currentUser.uid}
+                                className={`px-2 py-0.5 rounded text-[8px] font-bold ${p.teamId === 'TEAM_B' ? 'bg-orange-500 text-white' : 'bg-blue-500 text-white'}`}
+                              >
+                                {p.teamId === 'TEAM_B' ? 'B팀' : 'A팀'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-white border border-[#d1d1d1] p-4 rounded shadow-sm space-y-4">
                   <h3 className="text-[10px] font-bold text-[#666] border-b border-[#d1d1d1] pb-2 uppercase">세션_제어</h3>
                   
@@ -1328,33 +1359,6 @@ export default function App() {
                           </div>
                         </div>
                       )}
-                      {(session.settings.officeLifeMode === 'TEAM' || session.settings.yutNoriMode === 'TEAM') && (
-                            <div className="p-3 bg-blue-50 rounded border border-blue-100">
-                              <p className="text-[10px] font-bold text-blue-800 mb-2">팀 배정 (클릭하여 변경)</p>
-                              <div className="grid grid-cols-2 gap-2">
-                                {Object.values(session?.players || {}).map(pObj => {
-                                  const p = pObj as Player;
-                                  return (
-                                    <div key={p.id} className="flex items-center justify-between p-2 bg-white rounded border border-blue-200">
-                                      <span className="text-[10px] font-medium truncate max-w-[60px]">{p.nickname}</span>
-                                      <button
-                                        onClick={() => {
-                                          if (p.id === currentUser.uid) {
-                                            const nextTeam = p.teamId === 'TEAM_B' ? 'TEAM_A' : 'TEAM_B';
-                                            sessionService.setPlayerTeam(session.id, p.id, nextTeam);
-                                          }
-                                        }}
-                                        disabled={p.id !== currentUser.uid}
-                                        className={`px-2 py-0.5 rounded text-[8px] font-bold ${p.teamId === 'TEAM_B' ? 'bg-orange-500 text-white' : 'bg-blue-500 text-white'}`}
-                                      >
-                                        {p.teamId === 'TEAM_B' ? 'B팀' : 'A팀'}
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
                       {session.gameType === GameType.OMOK && (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between p-2 bg-gray-50 rounded border border-[#d1d1d1]">
