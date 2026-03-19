@@ -112,11 +112,6 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
   const init = useCallback(() => {
     if (!sceneRef.current) return;
 
-    if (cleanupRef.current) {
-      cleanupRef.current();
-      cleanupRef.current = null;
-    }
-
     // Reset state
     setScore(0);
     setDisplayScore(0);
@@ -129,34 +124,90 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
     setNextFruitIndex(Math.floor(Math.random() * 3));
     particlesRef.current = [];
 
-    // Clear previous engine
-    if (engineRef.current) {
-      Matter.World.clear(engineRef.current.world, false);
-      Matter.Engine.clear(engineRef.current);
-    }
-    engineRef.current = Matter.Engine.create();
+    // Clear world but keep engine
+    Matter.World.clear(engineRef.current.world, false);
+    Matter.Engine.clear(engineRef.current);
     engineRef.current.gravity.y = 1.2; // Slightly stronger gravity for better feel
 
-    // Create render
-    const render = Matter.Render.create({
-      element: sceneRef.current,
-      engine: engineRef.current,
-      options: {
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT,
-        wireframes: false,
-        background: 'transparent',
-      },
-    });
-    
-    // Make canvas responsive via CSS
-    if (render.canvas) {
-      render.canvas.style.width = '100%';
-      render.canvas.style.height = '100%';
-      render.canvas.style.objectFit = 'contain';
+    // Create render only if it doesn't exist
+    if (!renderRef.current) {
+      const render = Matter.Render.create({
+        element: sceneRef.current,
+        engine: engineRef.current,
+        options: {
+          width: CANVAS_WIDTH,
+          height: CANVAS_HEIGHT,
+          wireframes: false,
+          background: 'transparent',
+        },
+      });
+      
+      if (render.canvas) {
+        render.canvas.style.width = '100%';
+        render.canvas.style.height = '100%';
+        render.canvas.style.objectFit = 'contain';
+      }
+      
+      renderRef.current = render;
+
+      // Add labels and particles after render
+      Matter.Events.on(render, 'afterRender', () => {
+        const context = render.context;
+        const bodies = Matter.Composite.allBodies(engineRef.current.world);
+
+        // Draw particles
+        for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+          const p = particlesRef.current[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.2; // gravity
+          p.life -= 0.02;
+          
+          if (p.life <= 0) {
+            particlesRef.current.splice(i, 1);
+            continue;
+          }
+
+          context.globalAlpha = p.life;
+          context.fillStyle = p.color;
+          context.beginPath();
+          context.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          context.fill();
+        }
+        context.globalAlpha = 1.0;
+
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+
+        bodies.forEach(body => {
+          if (body.label.startsWith('rank_')) {
+            const level = parseInt(body.label.split('_')[1]);
+            const rank = RANKS[level];
+            
+            context.save();
+            context.translate(body.position.x, body.position.y);
+            context.rotate(body.angle);
+
+            // Draw label text
+            context.fillStyle = level < 3 ? '#1e293b' : '#ffffff';
+            const fontSize = Math.max(8, Math.min(18, body.circleRadius! / 2.5));
+            context.font = `bold ${fontSize}px 'Noto Sans KR', sans-serif`;
+            context.fillText(rank.label, 0, 0);
+
+            context.restore();
+          }
+        });
+      });
+
+      Matter.Render.run(render);
     }
-    
-    renderRef.current = render;
+
+    // Create runner only if it doesn't exist
+    if (!runnerRef.current) {
+      const runner = Matter.Runner.create();
+      runnerRef.current = runner;
+      Matter.Runner.run(runner, engineRef.current);
+    }
 
     // Create walls
     const ground = Matter.Bodies.rectangle(CANVAS_WIDTH / 2, CANVAS_HEIGHT + 25, CANVAS_WIDTH, 50, { 
@@ -175,7 +226,8 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
 
     Matter.Composite.add(engineRef.current.world, [ground, leftWall, rightWall]);
 
-    // Collision event
+    // Collision event (clear old ones first)
+    Matter.Events.off(engineRef.current, 'collisionStart');
     Matter.Events.on(engineRef.current, 'collisionStart', (event: Matter.IEventCollision<Matter.Engine>) => {
       event.pairs.forEach((pair) => {
         const bodyA = pair.bodyA;
@@ -243,62 +295,11 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
       });
     });
 
-    // Add labels after render
-    Matter.Events.on(render, 'afterRender', () => {
-      const context = render.context;
-      const bodies = Matter.Composite.allBodies(engineRef.current.world);
-
-      // Draw particles
-      for (let i = particlesRef.current.length - 1; i >= 0; i--) {
-        const p = particlesRef.current[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.2; // gravity
-        p.life -= 0.02;
-        
-        if (p.life <= 0) {
-          particlesRef.current.splice(i, 1);
-          continue;
-        }
-
-        context.globalAlpha = p.life;
-        context.fillStyle = p.color;
-        context.beginPath();
-        context.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        context.fill();
-      }
-      context.globalAlpha = 1.0;
-
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-
-      bodies.forEach(body => {
-        if (body.label.startsWith('rank_')) {
-          const level = parseInt(body.label.split('_')[1]);
-          const rank = RANKS[level];
-          
-          context.save();
-          context.translate(body.position.x, body.position.y);
-          context.rotate(body.angle);
-
-          // Draw label text
-          context.fillStyle = level < 3 ? '#1e293b' : '#ffffff';
-          const fontSize = Math.max(8, Math.min(18, body.circleRadius! / 2.5));
-          context.font = `bold ${fontSize}px 'Noto Sans KR', sans-serif`;
-          context.fillText(rank.label, 0, 0);
-
-          context.restore();
-        }
-      });
-    });
-
-    // Run
-    const runner = Matter.Runner.create();
-    runnerRef.current = runner;
-    Matter.Runner.run(runner, engineRef.current);
-    Matter.Render.run(render);
-
     // Game Over Check Loop
+    if (cleanupRef.current) {
+      cleanupRef.current();
+    }
+
     const checkGameOver = setInterval(() => {
       const bodies = Matter.Composite.allBodies(engineRef.current.world);
       const ranks = bodies.filter(b => b.label.startsWith('rank_') && !b.isStatic);
@@ -319,21 +320,11 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
       }
     }, 500);
 
-    let isCleanedUp = false;
-    const cleanup = () => {
-      if (isCleanedUp) return;
-      isCleanedUp = true;
+    cleanupRef.current = () => {
       clearInterval(checkGameOver);
-      Matter.Render.stop(render);
-      Matter.Runner.stop(runner);
-      Matter.World.clear(engineRef.current.world, false);
-      Matter.Engine.clear(engineRef.current);
-      if (render.canvas) render.canvas.remove();
     };
 
-    cleanupRef.current = cleanup;
-
-    return cleanup;
+    return cleanupRef.current;
   }, []);
 
   useEffect(() => {
@@ -342,6 +333,20 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
       if (cleanupRef.current) {
         cleanupRef.current();
         cleanupRef.current = null;
+      }
+      // Full cleanup on unmount
+      if (renderRef.current) {
+        Matter.Render.stop(renderRef.current);
+        if (renderRef.current.canvas) renderRef.current.canvas.remove();
+        renderRef.current = null;
+      }
+      if (runnerRef.current) {
+        Matter.Runner.stop(runnerRef.current);
+        runnerRef.current = null;
+      }
+      if (engineRef.current) {
+        Matter.World.clear(engineRef.current.world, false);
+        Matter.Engine.clear(engineRef.current);
       }
     };
   }, [init]);
