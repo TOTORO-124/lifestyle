@@ -58,6 +58,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
   const previewRef = useRef<HTMLDivElement>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [combo, setCombo] = useState(0);
+  const cleanupRef = useRef<(() => void) | null>(null);
   const [showCombo, setShowCombo] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
 
@@ -111,6 +112,11 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
   const init = useCallback(() => {
     if (!sceneRef.current) return;
 
+    if (cleanupRef.current) {
+      cleanupRef.current();
+      cleanupRef.current = null;
+    }
+
     // Reset state
     setScore(0);
     setDisplayScore(0);
@@ -124,7 +130,10 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
     particlesRef.current = [];
 
     // Clear previous engine
-    Matter.Engine.clear(engineRef.current);
+    if (engineRef.current) {
+      Matter.World.clear(engineRef.current.world, false);
+      Matter.Engine.clear(engineRef.current);
+    }
     engineRef.current = Matter.Engine.create();
     engineRef.current.gravity.y = 1.2; // Slightly stronger gravity for better feel
 
@@ -173,6 +182,10 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
         const bodyB = pair.bodyB;
 
         if (bodyA.label === bodyB.label && bodyA.label.startsWith('rank_')) {
+          if ((bodyA as any).isMerged || (bodyB as any).isMerged) return;
+          (bodyA as any).isMerged = true;
+          (bodyB as any).isMerged = true;
+
           const level = parseInt(bodyA.label.split('_')[1]);
           if (level < RANKS.length - 1) {
             const nextLevel = level + 1;
@@ -199,21 +212,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
               friction: 0.1,
             });
             
-            // Merge animation effect: start small
-            Matter.Body.scale(newRank, 0.5, 0.5);
             Matter.Composite.add(engineRef.current.world, newRank);
-            
-            // Scale up animation
-            let scale = 0.5;
-            const scaleInterval = setInterval(() => {
-              if (scale >= 1) {
-                clearInterval(scaleInterval);
-                return;
-              }
-              const step = 0.1;
-              Matter.Body.scale(newRank, (scale + step) / scale, (scale + step) / scale);
-              scale += step;
-            }, 16);
 
             // Combo logic
             const now = Date.now();
@@ -250,15 +249,16 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
       const bodies = Matter.Composite.allBodies(engineRef.current.world);
 
       // Draw particles
-      particlesRef.current.forEach((p, index) => {
+      for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+        const p = particlesRef.current[i];
         p.x += p.vx;
         p.y += p.vy;
         p.vy += 0.2; // gravity
         p.life -= 0.02;
         
         if (p.life <= 0) {
-          particlesRef.current.splice(index, 1);
-          return;
+          particlesRef.current.splice(i, 1);
+          continue;
         }
 
         context.globalAlpha = p.life;
@@ -266,7 +266,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
         context.beginPath();
         context.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         context.fill();
-      });
+      }
       context.globalAlpha = 1.0;
 
       context.textAlign = 'center';
@@ -303,33 +303,47 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
       const bodies = Matter.Composite.allBodies(engineRef.current.world);
       const ranks = bodies.filter(b => b.label.startsWith('rank_') && !b.isStatic);
       
-      const isOverLimit = ranks.some(f => f.position.y < TOP_LIMIT && f.velocity.y < 0.1 && f.velocity.y > -0.1);
+      // Check if the top of the fruit is above the TOP_LIMIT
+      const isOverLimit = ranks.some(f => (f.position.y - (f.circleRadius || 0)) < TOP_LIMIT && f.velocity.y < 0.1 && f.velocity.y > -0.1);
       
       if (isOverLimit) {
         // Wait a bit to confirm
         setTimeout(() => {
-          const stillOverLimit = ranks.some(f => f.position.y < TOP_LIMIT && f.velocity.y < 0.1 && f.velocity.y > -0.1);
+          const stillOverLimit = ranks.some(f => (f.position.y - (f.circleRadius || 0)) < TOP_LIMIT && f.velocity.y < 0.1 && f.velocity.y > -0.1);
           if (stillOverLimit) {
             setIsGameOver(true);
             clearInterval(checkGameOver);
             onGameOverRef.current(scoreRef.current);
           }
-        }, 2000);
+        }, 500);
       }
-    }, 1000);
+    }, 500);
 
-    return () => {
+    let isCleanedUp = false;
+    const cleanup = () => {
+      if (isCleanedUp) return;
+      isCleanedUp = true;
       clearInterval(checkGameOver);
       Matter.Render.stop(render);
       Matter.Runner.stop(runner);
+      Matter.World.clear(engineRef.current.world, false);
       Matter.Engine.clear(engineRef.current);
       if (render.canvas) render.canvas.remove();
     };
+
+    cleanupRef.current = cleanup;
+
+    return cleanup;
   }, []);
 
   useEffect(() => {
-    const cleanup = init();
-    return cleanup;
+    init();
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+        cleanupRef.current = null;
+      }
+    };
   }, [init]);
 
   const dropFruit = useCallback(() => {
