@@ -95,16 +95,27 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
   const currentTurnId = gameState.turnOrder[gameState.currentTurnIndex];
   const myTeamId = session.players[currentUser.uid]?.teamId || 'TEAM_A';
   const isMyTurn = !isSpectator && (gameState.mode === 'TEAM' ? currentTurnId === myTeamId : currentTurnId === currentUser.uid);
+  
+  const isTeamOnlyBots = (teamId: string) => {
+    const teamPlayers = Object.values(session.players || {}).filter(p => p.teamId === teamId);
+    return teamPlayers.length > 0 && teamPlayers.every(p => p.id.startsWith('ai_'));
+  };
+  const isBotTurn = (gameState.mode === 'INDIVIDUAL' && currentTurnId.startsWith('ai_')) || 
+                    (gameState.mode === 'TEAM' && isTeamOnlyBots(currentTurnId));
+  const amIResponsibleForBot = session.hostId === currentUser.uid && isBotTurn;
+
   const throwResults = gameState.throwResults || [];
 
   // Auto-play logic
   useEffect(() => {
-    if (!isMyTurn || gameState.status !== 'PLAYING' || isSpectator) return;
+    if (gameState.status !== 'PLAYING' || isSpectator) return;
+    if (!isMyTurn && !amIResponsibleForBot) return;
     
-    // Trigger auto-play if explicitly enabled OR if 1 minute has passed (AFK)
-    if (isAutoPlayEnabled || (timeLeft <= 60 && timeLeft > 0)) {
+    // Trigger auto-play if explicitly enabled OR if 1 minute has passed (AFK) OR if it's a bot's turn
+    if (isAutoPlayEnabled || (timeLeft <= 60 && timeLeft > 0) || amIResponsibleForBot) {
       const autoPlayAction = () => {
-        if (gameState.canThrow && !isShaking && !isCharging && !gameState.isThrowing) {
+        if (gameState.canThrow && !isShaking && !gameState.isThrowing) {
+          if (isCharging) setIsCharging(false);
           executeThrow(Math.random() * 100, true);
         } else if (!gameState.canThrow && throwResults.length > 0) {
           const resultIndex = 0;
@@ -125,10 +136,24 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
             // No valid moves, consume the result and skip
             const newResults = [...throwResults];
             newResults.splice(resultIndex, 1);
-            update(ref(db, `sessions/${session.id}/yutNoriGame`), {
+            
+            let nextIndex = gameState.currentTurnIndex;
+            let canThrow = gameState.canThrow;
+            if (newResults.length === 0 && !canThrow) {
+              nextIndex = getNextTurnIndex(gameState.currentTurnIndex, gameState.rankings || []);
+              canThrow = true;
+            }
+            
+            const updateData: any = {
               throwResults: newResults,
-              lastUpdate: Date.now()
-            });
+              lastUpdate: Date.now(),
+              turnStartTime: (nextIndex === gameState.currentTurnIndex) ? gameState.turnStartTime : Date.now()
+            };
+            if (nextIndex !== gameState.currentTurnIndex) {
+              updateData.currentTurnIndex = nextIndex;
+              updateData.canThrow = canThrow;
+            }
+            update(ref(db, `sessions/${session.id}/yutNoriGame`), updateData);
           }
         } else if (!gameState.canThrow && throwResults.length === 0) {
           handleNextTurn();
@@ -136,10 +161,12 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       };
 
       // Use 500ms so it executes before the next 1000ms timeLeft interval clears it
-      const timer = setTimeout(autoPlayAction, 500);
+      // For bots, we can use a slightly longer delay so it feels natural
+      const delay = amIResponsibleForBot ? 1000 : 500;
+      const timer = setTimeout(autoPlayAction, delay);
       return () => clearTimeout(timer);
     }
-  }, [timeLeft, isMyTurn, gameState.status, gameState.canThrow, throwResults, isShaking, isCharging, currentTurnId, session.id, isAutoPlayEnabled, gameState.isThrowing]);
+  }, [timeLeft, isMyTurn, amIResponsibleForBot, gameState.status, gameState.canThrow, throwResults, isShaking, isCharging, currentTurnId, session.id, isAutoPlayEnabled, gameState.isThrowing, gameState.turnStartTime, gameState.currentTurnIndex, gameState.rankings, session.players]);
 
   const getPlayerName = (id: string) => {
     if (gameState.mode === 'TEAM') {
@@ -381,7 +408,8 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
   };
 
   const handlePieceClick = (pieceId: string, overrideResultIndex?: number, isAutoPlay: boolean = false) => {
-    if (!isMyTurn || isSpectator || throwResults.length === 0) return;
+    if ((!isMyTurn && !amIResponsibleForBot) || isSpectator || throwResults.length === 0) return;
+    if (amIResponsibleForBot && !isAutoPlay) return;
 
     if (gameState.canThrow) {
       setMessage('윷을 먼저 다 던져주세요!');
@@ -500,7 +528,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       status,
       rankings,
       lastUpdate: Date.now(),
-      turnStartTime: isAutoPlay ? gameState.turnStartTime : Date.now()
+      turnStartTime: (isAutoPlay && nextIndex === gameState.currentTurnIndex) ? gameState.turnStartTime : Date.now()
     };
     if (nextIndex !== gameState.currentTurnIndex) {
       updateData.currentTurnIndex = nextIndex;
@@ -512,7 +540,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
   };
 
   const handleNextTurn = () => {
-    if (!isMyTurn) return;
+    if (!isMyTurn && !amIResponsibleForBot) return;
     const nextIndex = getNextTurnIndex(gameState.currentTurnIndex, gameState.rankings || []);
     update(ref(db, `sessions/${session.id}/yutNoriGame`), {
       currentTurnIndex: nextIndex,

@@ -41,7 +41,10 @@ const TOP_LIMIT = 100;
 
 export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestScore: initialBestScore }) => {
   const sceneRef = useRef<HTMLDivElement>(null);
-  const engineRef = useRef<Matter.Engine>(Matter.Engine.create());
+  const engineRef = useRef<Matter.Engine | null>(null);
+  if (!engineRef.current) {
+    engineRef.current = Matter.Engine.create();
+  }
   const renderRef = useRef<Matter.Render | null>(null);
   const runnerRef = useRef<Matter.Runner | null>(null);
   const [score, setScore] = useState(0);
@@ -50,6 +53,11 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
     const saved = localStorage.getItem('suika_best_score');
     return saved ? parseInt(saved) : initialBestScore;
   });
+  const bestScoreRef = useRef(bestScore);
+
+  useEffect(() => {
+    bestScoreRef.current = bestScore;
+  }, [bestScore]);
   const [isGameOver, setIsGameOver] = useState(false);
   const [nextFruitIndex, setNextFruitIndex] = useState(0);
   const [currentFruitIndex, setCurrentFruitIndex] = useState(0);
@@ -110,7 +118,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
   };
 
   const init = useCallback(() => {
-    if (!sceneRef.current) return;
+    if (!sceneRef.current || !engineRef.current) return;
 
     // Reset state
     setScore(0);
@@ -210,16 +218,16 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
     }
 
     // Create walls
-    const ground = Matter.Bodies.rectangle(CANVAS_WIDTH / 2, CANVAS_HEIGHT + 25, CANVAS_WIDTH, 50, { 
+    const ground = Matter.Bodies.rectangle(CANVAS_WIDTH / 2, CANVAS_HEIGHT + 50, CANVAS_WIDTH + 200, 100, { 
       isStatic: true,
       render: { fillStyle: '#8b4513' },
       restitution: 0.5 // Bounce
     });
-    const leftWall = Matter.Bodies.rectangle(-25, CANVAS_HEIGHT / 2, 50, CANVAS_HEIGHT, { 
+    const leftWall = Matter.Bodies.rectangle(-50, CANVAS_HEIGHT / 2, 100, CANVAS_HEIGHT * 2, { 
       isStatic: true,
       render: { fillStyle: '#8b4513' }
     });
-    const rightWall = Matter.Bodies.rectangle(CANVAS_WIDTH + 25, CANVAS_HEIGHT / 2, 50, CANVAS_HEIGHT, { 
+    const rightWall = Matter.Bodies.rectangle(CANVAS_WIDTH + 50, CANVAS_HEIGHT / 2, 100, CANVAS_HEIGHT * 2, { 
       isStatic: true,
       render: { fillStyle: '#8b4513' }
     });
@@ -286,7 +294,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
             scoreRef.current += points;
             setScore(scoreRef.current);
             
-            if (scoreRef.current > bestScore) {
+            if (scoreRef.current > bestScoreRef.current) {
               setBestScore(scoreRef.current);
               localStorage.setItem('suika_best_score', scoreRef.current.toString());
             }
@@ -300,28 +308,43 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
       cleanupRef.current();
     }
 
+    let checkGameOverTimeout: NodeJS.Timeout | null = null;
+
     const checkGameOver = setInterval(() => {
+      if (!engineRef.current) return;
       const bodies = Matter.Composite.allBodies(engineRef.current.world);
       const ranks = bodies.filter(b => b.label.startsWith('rank_') && !b.isStatic);
       
       // Check if the top of the fruit is above the TOP_LIMIT
       const isOverLimit = ranks.some(f => (f.position.y - (f.circleRadius || 0)) < TOP_LIMIT && f.velocity.y < 0.1 && f.velocity.y > -0.1);
       
-      if (isOverLimit) {
+      if (isOverLimit && !checkGameOverTimeout) {
         // Wait a bit to confirm
-        setTimeout(() => {
-          const stillOverLimit = ranks.some(f => (f.position.y - (f.circleRadius || 0)) < TOP_LIMIT && f.velocity.y < 0.1 && f.velocity.y > -0.1);
+        checkGameOverTimeout = setTimeout(() => {
+          checkGameOverTimeout = null;
+          if (!engineRef.current) return;
+          const currentBodies = Matter.Composite.allBodies(engineRef.current.world);
+          const currentRanks = currentBodies.filter(b => b.label.startsWith('rank_') && !b.isStatic);
+          const stillOverLimit = currentRanks.some(f => (f.position.y - (f.circleRadius || 0)) < TOP_LIMIT && f.velocity.y < 0.1 && f.velocity.y > -0.1);
+          
           if (stillOverLimit) {
             setIsGameOver(true);
             clearInterval(checkGameOver);
             onGameOverRef.current(scoreRef.current);
           }
         }, 500);
+      } else if (!isOverLimit && checkGameOverTimeout) {
+        clearTimeout(checkGameOverTimeout);
+        checkGameOverTimeout = null;
       }
     }, 500);
 
     cleanupRef.current = () => {
       clearInterval(checkGameOver);
+      if (checkGameOverTimeout) {
+        clearTimeout(checkGameOverTimeout);
+        checkGameOverTimeout = null;
+      }
     };
 
     return cleanupRef.current;
@@ -352,7 +375,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
   }, [init]);
 
   const dropFruit = useCallback(() => {
-    if (isDropping || isGameOver) return;
+    if (isDropping || isGameOver || !engineRef.current) return;
 
     setIsDropping(true);
     const rank = RANKS[currentFruitIndex];
