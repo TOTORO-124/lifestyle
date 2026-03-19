@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ref, update } from 'firebase/database';
 import { db } from '../firebase';
 import { Session, YutNoriGameState } from '../types';
+import { ToggleLeft, ToggleRight } from 'lucide-react';
 
 type YutResult = '도' | '개' | '걸' | '윷' | '모' | '빽도' | '낙';
 
@@ -41,6 +42,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
   const [timeLeft, setTimeLeft] = useState<number>(120);
   const [power, setPower] = useState(0);
   const [isCharging, setIsCharging] = useState(false);
+  const [isAutoPlayEnabled, setIsAutoPlayEnabled] = useState<boolean>(true);
 
   if (!gameState) return null;
 
@@ -90,9 +92,14 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     return () => clearInterval(interval);
   }, [isCharging]);
 
+  const currentTurnId = gameState.turnOrder[gameState.currentTurnIndex];
+  const myTeamId = session.players[currentUser.uid]?.teamId || 'TEAM_A';
+  const isMyTurn = !isSpectator && (gameState.mode === 'TEAM' ? currentTurnId === myTeamId : currentTurnId === currentUser.uid);
+  const throwResults = gameState.throwResults || [];
+
   // Auto-play logic
   useEffect(() => {
-    if (!isMyTurn || gameState.status !== 'PLAYING' || isSpectator) return;
+    if (!isAutoPlayEnabled || !isMyTurn || gameState.status !== 'PLAYING' || isSpectator) return;
     
     // If 1 minute has passed (timeLeft <= 60), trigger auto-play
     if (timeLeft <= 60 && timeLeft > 0) {
@@ -132,12 +139,7 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       const timer = setTimeout(autoPlayAction, 1500);
       return () => clearTimeout(timer);
     }
-  }, [timeLeft, isMyTurn, gameState.status, gameState.canThrow, throwResults, isShaking, isCharging, currentTurnId, session.id]);
-
-  const currentTurnId = gameState.turnOrder[gameState.currentTurnIndex];
-  const myTeamId = session.players[currentUser.uid]?.teamId || 'TEAM_A';
-  const isMyTurn = !isSpectator && (gameState.mode === 'TEAM' ? currentTurnId === myTeamId : currentTurnId === currentUser.uid);
-  const throwResults = gameState.throwResults || [];
+  }, [timeLeft, isMyTurn, gameState.status, gameState.canThrow, throwResults, isShaking, isCharging, currentTurnId, session.id, isAutoPlayEnabled]);
 
   const getPlayerName = (id: string) => {
     if (gameState.mode === 'TEAM') {
@@ -761,8 +763,21 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
                 현재 턴: {getPlayerName(currentTurnId)}
                 {isMyTurn && <span className="ml-2 text-sm text-[#859900]">(내 턴)</span>}
               </div>
-              <div className={`text-sm px-3 py-1 rounded-full font-bold ${timeLeft <= 10 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-600'}`}>
-                ⏱ {timeLeft}초
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setIsAutoPlayEnabled(!isAutoPlayEnabled)}
+                  className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                  title="1분 대기 시 자동 플레이"
+                >
+                  {isAutoPlayEnabled ? (
+                    <><ToggleRight size={18} className="text-green-500" /> 자동 플레이 ON</>
+                  ) : (
+                    <><ToggleLeft size={18} className="text-gray-400" /> 자동 플레이 OFF</>
+                  )}
+                </button>
+                <div className={`text-sm px-3 py-1 rounded-full font-bold ${timeLeft <= 10 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-600'}`}>
+                  ⏱ {timeLeft}초
+                </div>
               </div>
             </h3>
             
