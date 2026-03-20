@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ref, update } from 'firebase/database';
 import { db } from '../firebase';
-import { Session, YutNoriGameState } from '../types';
+import { Session, YutNoriGameState, Player } from '../types';
 import { ToggleLeft, ToggleRight } from 'lucide-react';
 
 type YutResult = '도' | '개' | '걸' | '윷' | '모' | '빽도' | '낙';
@@ -97,8 +97,8 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
   const isMyTurn = !isSpectator && (gameState.mode === 'TEAM' ? currentTurnId === myTeamId : currentTurnId === currentUser.uid);
   
   const isTeamOnlyBots = (teamId: string) => {
-    const teamPlayers = Object.values(session.players || {}).filter(p => p.teamId === teamId);
-    return teamPlayers.length > 0 && teamPlayers.every(p => p.id.startsWith('ai_'));
+    const teamPlayers = Object.values(session.players || {}).filter(p => (p as Player).teamId === teamId);
+    return teamPlayers.length > 0 && teamPlayers.every(p => (p as Player).id.startsWith('ai_'));
   };
   const isBotTurn = (gameState.mode === 'INDIVIDUAL' && currentTurnId.startsWith('ai_')) || 
                     (gameState.mode === 'TEAM' && isTeamOnlyBots(currentTurnId));
@@ -111,62 +111,93 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     if (gameState.status !== 'PLAYING' || isSpectator) return;
     if (!isMyTurn && !amIResponsibleForBot) return;
     
-    // Trigger auto-play if explicitly enabled OR if 1 minute has passed (AFK) OR if it's a bot's turn
-    if (isAutoPlayEnabled || (timeLeft <= 60 && timeLeft > 0) || amIResponsibleForBot) {
-      const autoPlayAction = () => {
-        if (gameState.canThrow && !isShaking && !gameState.isThrowing) {
-          if (isCharging) setIsCharging(false);
-          executeThrow(Math.random() * 100, true);
-        } else if (!gameState.canThrow && throwResults.length > 0) {
-          const resultIndex = 0;
-          const result = throwResults[resultIndex];
-          const steps = STEPS[result];
-          
-          const myPieces = gameState.pieces[currentTurnId] || [];
-          const validPieces = myPieces.filter(p => {
-            if (p.position === 30) return false;
-            if (p.position === -1 && steps === -1) return false;
-            return true;
-          });
-          
-          if (validPieces.length > 0) {
-            const randomPiece = validPieces[Math.floor(Math.random() * validPieces.length)];
-            handlePieceClick(randomPiece.id, resultIndex, true);
-          } else {
-            // No valid moves, consume the result and skip
-            const newResults = [...throwResults];
-            newResults.splice(resultIndex, 1);
-            
-            let nextIndex = gameState.currentTurnIndex;
-            let canThrow = gameState.canThrow;
-            if (newResults.length === 0 && !canThrow) {
-              nextIndex = getNextTurnIndex(gameState.currentTurnIndex, gameState.rankings || []);
-              canThrow = true;
-            }
-            
-            const updateData: any = {
-              throwResults: newResults,
-              lastUpdate: Date.now(),
-              turnStartTime: (nextIndex === gameState.currentTurnIndex) ? gameState.turnStartTime : Date.now()
-            };
-            if (nextIndex !== gameState.currentTurnIndex) {
-              updateData.currentTurnIndex = nextIndex;
-              updateData.canThrow = canThrow;
-            }
-            update(ref(db, `sessions/${session.id}/yutNoriGame`), updateData);
-          }
-        } else if (!gameState.canThrow && throwResults.length === 0) {
-          handleNextTurn();
-        }
-      };
+    const shouldAutoPlay = isAutoPlayEnabled || (timeLeft <= 60 && timeLeft > 0) || amIResponsibleForBot;
+    if (!shouldAutoPlay) return;
 
-      // Use 500ms so it executes before the next 1000ms timeLeft interval clears it
-      // For bots, we can use a slightly longer delay so it feels natural
-      const delay = amIResponsibleForBot ? 1000 : 500;
-      const timer = setTimeout(autoPlayAction, delay);
+    const autoPlayAction = () => {
+      if (gameState.canThrow && !isShaking && !gameState.isThrowing) {
+        if (isCharging) setIsCharging(false);
+        executeThrow(Math.random() * 100, true);
+      } else if (!gameState.canThrow && throwResults.length > 0) {
+        const resultIndex = 0;
+        const result = throwResults[resultIndex];
+        const steps = STEPS[result];
+        
+        const myPieces = gameState.pieces[currentTurnId] || [];
+        const validPieces = myPieces.filter(p => {
+          if (p.position === 30) return false;
+          if (p.position === -1 && steps === -1) return false;
+          return true;
+        });
+        
+        if (validPieces.length > 0) {
+          const randomPiece = validPieces[Math.floor(Math.random() * validPieces.length)];
+          handlePieceClick(randomPiece.id, resultIndex, true);
+        } else {
+          // No valid moves, consume the result and skip
+          const newResults = [...throwResults];
+          newResults.splice(resultIndex, 1);
+          
+          let nextIndex = gameState.currentTurnIndex;
+          let canThrow = gameState.canThrow;
+          if (newResults.length === 0 && !canThrow) {
+            nextIndex = getNextTurnIndex(gameState.currentTurnIndex, gameState.rankings || []);
+            canThrow = true;
+          }
+          
+          const updateData: any = {
+            throwResults: newResults,
+            lastUpdate: Date.now(),
+            turnStartTime: (nextIndex === gameState.currentTurnIndex) ? gameState.turnStartTime : Date.now()
+          };
+          if (nextIndex !== gameState.currentTurnIndex) {
+            updateData.currentTurnIndex = nextIndex;
+            updateData.canThrow = canThrow;
+          }
+          update(ref(db, `sessions/${session.id}/yutNoriGame`), updateData);
+        }
+      } else if (!gameState.canThrow && throwResults.length === 0) {
+        handleNextTurn();
+      }
+    };
+
+    // Use a ref to avoid clearing the timeout when timeLeft changes, unless it's no longer auto-play
+    const delay = amIResponsibleForBot ? 800 : 500;
+    const timer = setTimeout(autoPlayAction, delay);
+    return () => clearTimeout(timer);
+  }, [isMyTurn, amIResponsibleForBot, gameState.status, gameState.canThrow, throwResults, isShaking, isCharging, currentTurnId, session.id, isAutoPlayEnabled, gameState.isThrowing, gameState.turnStartTime, gameState.currentTurnIndex, gameState.rankings, session.players, timeLeft <= 60]);
+
+  // Auto-advance turn if no actions left
+  useEffect(() => {
+    if (gameState.status !== 'PLAYING' || isSpectator) return;
+    if (!isMyTurn) return;
+    if (gameState.isThrowing) return;
+
+    const checkHasValidMoves = () => {
+      if (gameState.canThrow) return true;
+      if (throwResults.length === 0) return false;
+      
+      const myPieces = gameState.pieces[currentTurnId] || [];
+      for (const result of throwResults) {
+        const steps = STEPS[result];
+        const validPieces = myPieces.filter(p => {
+          if (p.position === 30) return false;
+          if (p.position === -1 && steps === -1) return false;
+          return true;
+        });
+        if (validPieces.length > 0) return true;
+      }
+      return false;
+    };
+    
+    if (!checkHasValidMoves()) {
+      // Small delay to allow user to see the result before turn changes
+      const timer = setTimeout(() => {
+        handleNextTurn();
+      }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [timeLeft, isMyTurn, amIResponsibleForBot, gameState.status, gameState.canThrow, throwResults, isShaking, isCharging, currentTurnId, session.id, isAutoPlayEnabled, gameState.isThrowing, gameState.turnStartTime, gameState.currentTurnIndex, gameState.rankings, session.players]);
+  }, [gameState.status, isSpectator, isMyTurn, gameState.canThrow, throwResults, gameState.isThrowing, gameState.pieces, currentTurnId]);
 
   const getPlayerName = (id: string) => {
     if (gameState.mode === 'TEAM') {

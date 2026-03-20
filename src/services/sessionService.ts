@@ -158,12 +158,20 @@ export const sessionService = {
     }
   },
 
-  async addAIPlayer(sessionId: string) {
+  async addAIPlayer(sessionId: string, session?: Session) {
     if (!db) return;
     const aiId = `ai_${Math.random().toString(36).substr(2, 9)}`;
     const aiNicknames = ['인턴_봇', '사원_봇', '주임_봇', '대리_봇', '과장_봇', '차장_봇', '부장_봇', '이사_봇', '상무_봇'];
     const nickname = aiNicknames[Math.floor(Math.random() * aiNicknames.length)];
     
+    let teamId = 'TEAM_A';
+    if (session && (session.settings.yutNoriMode === 'TEAM' || session.settings.officeLifeMode === 'TEAM')) {
+      const players = Object.values(session.players || {});
+      const teamACount = players.filter(p => p.teamId === 'TEAM_A').length;
+      const teamBCount = players.filter(p => p.teamId === 'TEAM_B').length;
+      teamId = teamACount <= teamBCount ? 'TEAM_A' : 'TEAM_B';
+    }
+
     const aiPlayer: Player = {
       id: aiId,
       nickname: `${nickname}(AI)`,
@@ -173,6 +181,7 @@ export const sessionService = {
       isConnected: true,
       isAI: true,
       lastActive: Date.now(),
+      teamId,
     };
 
     await set(ref(db, `sessions/${sessionId}/players/${aiId}`), aiPlayer);

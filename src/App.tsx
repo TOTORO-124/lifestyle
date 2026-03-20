@@ -1018,9 +1018,9 @@ export default function App() {
                       <button 
                         onClick={async () => {
                           // Add 3 AI bots and start game
-                          await sessionService.addAIPlayer(session.id);
-                          await sessionService.addAIPlayer(session.id);
-                          await sessionService.addAIPlayer(session.id);
+                          await sessionService.addAIPlayer(session.id, session);
+                          await sessionService.addAIPlayer(session.id, session);
+                          await sessionService.addAIPlayer(session.id, session);
                           setTimeout(() => handleStartGame(), 1000);
                         }}
                         className="text-[10px] bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition-colors flex items-center gap-1"
@@ -1030,7 +1030,7 @@ export default function App() {
                     )}
                     {isHost && (
                       <button 
-                        onClick={() => sessionService.addAIPlayer(session.id)}
+                        onClick={() => sessionService.addAIPlayer(session.id, session)}
                         className="text-[10px] text-[#217346] hover:underline flex items-center gap-1"
                       >
                         <Play size={10} /> AI 봇 추가
@@ -1147,12 +1147,12 @@ export default function App() {
                               <span className="text-[10px] font-medium truncate max-w-[60px]">{p.nickname}</span>
                               <button
                                 onClick={() => {
-                                  if (p.id === currentUser.uid) {
+                                  if (p.id === currentUser.uid || (session.hostId === currentUser.uid && p.isAI)) {
                                     const nextTeam = p.teamId === 'TEAM_B' ? 'TEAM_A' : 'TEAM_B';
                                     sessionService.setPlayerTeam(session.id, p.id, nextTeam);
                                   }
                                 }}
-                                disabled={p.id !== currentUser.uid}
+                                disabled={p.id !== currentUser.uid && !(session.hostId === currentUser.uid && p.isAI)}
                                 className={`px-2 py-0.5 rounded text-[8px] font-bold ${p.teamId === 'TEAM_B' ? 'bg-orange-500 text-white' : 'bg-blue-500 text-white'}`}
                               >
                                 {p.teamId === 'TEAM_B' ? 'B팀' : 'A팀'}
