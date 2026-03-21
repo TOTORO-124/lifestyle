@@ -527,7 +527,7 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
           {
             id: 's2_r2_p1',
             type: 'TERMINAL',
-            question: '낡은 컴퓨터 모니터가 켜져 있다. 금고 열기 프로그램을 실행해야 한다.',
+            question: '낡은 컴퓨터 모니터가 켜져 있다. 바탕화면에 "vault.exe"라는 금고 열기 프로그램이 보인다. 이를 실행해야 한다.',
             answer: 'open vault.exe',
             hint: '파일을 열려면 open [파일명] 을 입력하자.',
             expectedCommand: 'open vault.exe',

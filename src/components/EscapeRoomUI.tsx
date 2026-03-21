@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Session, SessionStatus, HallOfFameEntry } from '../types';
 import { ESCAPE_ROOM_THEMES, Puzzle } from '../data/escapeRoomData';
@@ -57,18 +57,27 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
 
   // Puzzle specific states
   const [directionInput, setDirectionInput] = useState<string[]>([]);
+  const directionSeqRef = useRef<string[]>([]);
   const [directionError, setDirectionError] = useState(false);
   const [dialValues, setDialValues] = useState<number[]>([]);
-
-  useEffect(() => {
-    setDialValues([]);
-  }, [game.currentPuzzleId]);
   const [dragConnections, setDragConnections] = useState<Record<string, string>>({});
   const [selectedDragItem, setSelectedDragItem] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [clickCounts, setClickCounts] = useState<Record<string, number>>({});
   const [timeAttackLeft, setTimeAttackLeft] = useState<number | null>(null);
   const [itemError, setItemError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDialValues([]);
+    setDirectionInput([]);
+    directionSeqRef.current = [];
+    setDirectionError(false);
+    setDragConnections({});
+    setClickCounts({});
+    setSelectedDragItem(null);
+    setItemError(null);
+    setTimeAttackLeft(null);
+  }, [game.currentPuzzleId]);
 
   useEffect(() => {
     if (game.currentRoomId && game.currentRoomId !== 'STAGE_SELECT') {
@@ -320,19 +329,26 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
 
   // Direction Sequence Logic
   const handleDirectionClick = async (puzzle: Puzzle, dir: string) => {
-    if (isSpectator) return;
-    const newSeq = [...directionInput, dir];
+    if (isSpectator || directionError) return;
+    
+    directionSeqRef.current.push(dir);
+    const newSeq = [...directionSeqRef.current];
     setDirectionInput(newSeq);
     
-    if (puzzle.sequence && newSeq.length === puzzle.sequence.length) {
-      if (newSeq.join(',') === puzzle.sequence.join(',')) {
-        await handleSolve(puzzle.id, newSeq.join(','));
+    if (puzzle.sequence && newSeq.length >= puzzle.sequence.length) {
+      const targetSeq = puzzle.sequence;
+      const currentSeq = newSeq.slice(0, targetSeq.length);
+      
+      if (currentSeq.join(',') === targetSeq.join(',')) {
+        await handleSolve(puzzle.id, targetSeq.join(','));
+        directionSeqRef.current = [];
       } else {
         setDirectionError(true);
         triggerShake();
         setTimeout(() => {
           setDirectionError(false);
           setDirectionInput([]);
+          directionSeqRef.current = [];
         }, 800);
       }
     }
