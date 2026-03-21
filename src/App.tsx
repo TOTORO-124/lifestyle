@@ -837,7 +837,7 @@ export default function App() {
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
-                  <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (부장급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
+                  <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (국가대표급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
                   <Leaderboard entries={globalLeaderboards?.ESCAPE_ROOM || []} title="방탈출 마스터" sessionId="GLOBAL" gameType="ESCAPE_ROOM" />
                 </div>
               </div>
@@ -1386,9 +1386,9 @@ export default function App() {
                                 <option value={2}>Lv.2 사원 (기초 연산)</option>
                                 <option value={3}>Lv.3 주임 (패턴 분석)</option>
                                 <option value={4}>Lv.4 대리 (수읽기 2수)</option>
-                                <option value={5}>Lv.5 과장 (수읽기 4수)</option>
-                                <option value={6}>Lv.6 차장 (수읽기 6수)</option>
-                                <option value={7}>Lv.7 부장 (최적 확률 계산)</option>
+                                <option value={5}>Lv.5 과장 (수읽기 3수)</option>
+                                <option value={6}>Lv.6 차장 (수읽기 4수)</option>
+                                <option value={7}>Lv.7 국가대표 (수읽기 5수)</option>
                               </select>
                             </div>
                           )}
@@ -3660,7 +3660,7 @@ export default function App() {
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
-                  <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (부장급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
+                  <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (국가대표급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
                   <Leaderboard entries={globalLeaderboards?.SUIKA || []} title="초고속 승진 (승진게임)" sessionId="GLOBAL" gameType="SUIKA" />
                 </div>
               </div>

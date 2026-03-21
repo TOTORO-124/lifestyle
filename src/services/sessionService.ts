@@ -1288,49 +1288,138 @@ export const sessionService = {
   getOmokBestMove(board: number[][], aiStone: number, playerStone: number, difficulty: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
     const searchPoints = this.getOmokSearchPoints(board);
     
-    const evaluatedPoints = searchPoints.map(p => {
-      if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, p.x, p.y, 1)) {
-        return { ...p, score: -1 };
+    // For lower difficulties, use simple greedy evaluation
+    if (difficulty <= 3) {
+      const evaluatedPoints = searchPoints.map(p => {
+        if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, p.x, p.y, 1)) {
+          return { ...p, score: -1 };
+        }
+        const attackScore = this.evaluateOmokPoint(board, p.x, p.y, aiStone);
+        const defenseScore = this.evaluateOmokPoint(board, p.x, p.y, playerStone);
+        
+        let score = attackScore + defenseScore * 1.2;
+        
+        if (attackScore >= 10000000) score += 100000000;
+        if (defenseScore >= 10000000) score += 50000000;
+        
+        return { ...p, score };
+      }).filter(p => p.score >= 0);
+
+      if (evaluatedPoints.length === 0) return { x: 7, y: 7 };
+      evaluatedPoints.sort((a, b) => b.score - a.score);
+
+      let poolSize = 1;
+      switch (difficulty) {
+        case 1: poolSize = Math.min(20, evaluatedPoints.length); break;
+        case 2: poolSize = Math.min(10, evaluatedPoints.length); break;
+        case 3: poolSize = Math.min(5, evaluatedPoints.length); break;
       }
+      const idx = Math.floor(Math.random() * poolSize);
+      return { x: evaluatedPoints[idx].x, y: evaluatedPoints[idx].y };
+    }
+
+    // For higher difficulties, use Minimax with Alpha-Beta Pruning
+    let depth = 2;
+    if (difficulty === 4) depth = 2;
+    else if (difficulty === 5) depth = 3;
+    else if (difficulty === 6) depth = 4;
+    else if (difficulty >= 7) depth = 5; // Strong but playable speed
+
+    // Move ordering: sort search points by heuristic score first to improve pruning
+    const orderedPoints = searchPoints.map(p => {
       const attackScore = this.evaluateOmokPoint(board, p.x, p.y, aiStone);
       const defenseScore = this.evaluateOmokPoint(board, p.x, p.y, playerStone);
+      return { ...p, score: attackScore + defenseScore };
+    }).sort((a, b) => b.score - a.score).slice(0, 12); // Branching factor
+
+    let bestScore = -Infinity;
+    let bestMove = orderedPoints[0] || { x: 7, y: 7 };
+
+    for (const p of orderedPoints) {
+      if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, p.x, p.y, 1)) continue;
       
-      let score = attackScore + defenseScore * 1.2;
-      
-      if (attackScore >= 10000000) score += 100000000;
-      if (defenseScore >= 10000000) score += 50000000;
-      
-      return { ...p, score };
-    }).filter(p => p.score >= 0);
+      board[p.y][p.x] = aiStone;
+      const score = this.minimaxOmok(board, depth - 1, -Infinity, Infinity, false, aiStone, playerStone, ruleType);
+      board[p.y][p.x] = 0;
 
-    if (evaluatedPoints.length === 0) return { x: 7, y: 7 };
-
-    evaluatedPoints.sort((a, b) => b.score - a.score);
-
-    let poolSize = 1;
-    let probabilities = [1];
-
-    switch (difficulty) {
-      case 1: poolSize = Math.min(20, evaluatedPoints.length); probabilities = Array(poolSize).fill(1/poolSize); break;
-      case 2: poolSize = Math.min(10, evaluatedPoints.length); probabilities = Array(poolSize).fill(1/poolSize); break;
-      case 3: poolSize = Math.min(5, evaluatedPoints.length); probabilities = Array(poolSize).fill(1/poolSize); break;
-      case 4: poolSize = Math.min(2, evaluatedPoints.length); probabilities = [0.8, 0.2]; break;
-      case 5: poolSize = Math.min(2, evaluatedPoints.length); probabilities = [0.9, 0.1]; break;
-      case 6: poolSize = Math.min(2, evaluatedPoints.length); probabilities = [0.95, 0.05]; break;
-      case 7: poolSize = 1; probabilities = [1]; break;
-      default: poolSize = 1; probabilities = [1]; break;
-    }
-
-    const rand = Math.random();
-    let cumulative = 0;
-    for (let i = 0; i < poolSize; i++) {
-      cumulative += probabilities[i] || 0;
-      if (rand <= cumulative) {
-        return { x: evaluatedPoints[i].x, y: evaluatedPoints[i].y };
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = p;
       }
     }
 
-    return { x: evaluatedPoints[0].x, y: evaluatedPoints[0].y };
+    return { x: bestMove.x, y: bestMove.y };
+  },
+
+  minimaxOmok(board: number[][], depth: number, alpha: number, beta: number, isMaximizing: boolean, aiStone: number, playerStone: number, ruleType: string): number {
+    // Check for terminal state
+    if (this.checkOmokAnyWin(board)) {
+      return isMaximizing ? -1000000000 : 1000000000;
+    }
+    if (depth === 0) {
+      return this.evaluateOmokBoard(board, aiStone, playerStone);
+    }
+
+    const searchPoints = this.getOmokSearchPoints(board);
+    // Sort points for better pruning
+    const orderedPoints = searchPoints.map(p => {
+      const attackScore = this.evaluateOmokPoint(board, p.x, p.y, isMaximizing ? aiStone : playerStone);
+      const defenseScore = this.evaluateOmokPoint(board, p.x, p.y, isMaximizing ? playerStone : aiStone);
+      return { ...p, score: attackScore + defenseScore };
+    }).sort((a, b) => b.score - a.score).slice(0, 8); // Branching factor
+
+    if (isMaximizing) {
+      let maxEval = -Infinity;
+      for (const p of orderedPoints) {
+        if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, p.x, p.y, 1)) continue;
+        board[p.y][p.x] = aiStone;
+        const ev = this.minimaxOmok(board, depth - 1, alpha, beta, false, aiStone, playerStone, ruleType);
+        board[p.y][p.x] = 0;
+        maxEval = Math.max(maxEval, ev);
+        alpha = Math.max(alpha, ev);
+        if (beta <= alpha) break;
+      }
+      return maxEval;
+    } else {
+      let minEval = Infinity;
+      for (const p of orderedPoints) {
+        board[p.y][p.x] = playerStone;
+        const ev = this.minimaxOmok(board, depth - 1, alpha, beta, true, aiStone, playerStone, ruleType);
+        board[p.y][p.x] = 0;
+        minEval = Math.min(minEval, ev);
+        beta = Math.min(beta, ev);
+        if (beta <= alpha) break;
+      }
+      return minEval;
+    }
+  },
+
+  evaluateOmokBoard(board: number[][], aiStone: number, playerStone: number): number {
+    let score = 0;
+    // Only evaluate points that have stones
+    for (let y = 0; y < 15; y++) {
+      for (let x = 0; x < 15; x++) {
+        const stone = board[y][x];
+        if (stone === aiStone) {
+          score += this.evaluateOmokPoint(board, x, y, aiStone);
+        } else if (stone === playerStone) {
+          score -= this.evaluateOmokPoint(board, x, y, playerStone) * 1.1;
+        }
+      }
+    }
+    return score;
+  },
+
+  checkOmokAnyWin(board: number[][]) {
+    // Check if any player has 5 in a row
+    for (let y = 0; y < 15; y++) {
+      for (let x = 0; x < 15; x++) {
+        if (board[y][x] !== 0) {
+          if (this.isFive(board, x, y, board[y][x])) return true;
+        }
+      }
+    }
+    return false;
   },
 
   getOmokSearchPoints(board: number[][]) {
