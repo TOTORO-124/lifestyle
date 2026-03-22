@@ -383,7 +383,7 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
     if (puzzle.dropZones) {
       const isAllCorrect = puzzle.dropZones.every(z => newConns[z.id] === z.accepts);
       if (isAllCorrect && Object.keys(newConns).length === puzzle.dropZones.length) {
-        handleSolve(puzzle.id, 'CONNECTED');
+        handleSolve(puzzle.id, puzzle.answer);
       }
     }
   };
@@ -470,7 +470,7 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
                   zIndex: 20
                 }}
                 onClick={() => {
-                  if (!isSpectator) handleSolve(puzzle.id, 'found_all');
+                  if (!isSpectator) handleSolve(puzzle.id, puzzle.answer);
                 }}
                 disabled={isSpectator}
                 title={obj.name}
@@ -486,23 +486,27 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
               {puzzle.clickTargets?.map((target) => {
                 const currentClicks = clickCounts[target.id] || 0;
                 const progress = Math.min(100, (currentClicks / target.requiredClicks) * 100);
-                const isDone = currentClicks >= target.requiredClicks;
+                const isTargetDone = currentClicks >= target.requiredClicks;
+                const isPuzzleSolved = game.solvedPuzzles?.includes(puzzle.id);
                 
                 return (
                   <div key={target.id} className="bg-gray-800 p-4 rounded-xl border border-gray-700 text-center space-y-3">
                     <h4 className="text-sm font-bold text-gray-300">{target.label}</h4>
                     <div className="w-full bg-gray-900 rounded-full h-4 overflow-hidden border border-gray-700">
                       <div 
-                        className={`h-full transition-all duration-100 ${isDone ? 'bg-green-500' : 'bg-blue-500'}`}
+                        className={`h-full transition-all duration-100 ${isTargetDone ? 'bg-green-500' : 'bg-blue-500'}`}
                         style={{ width: `${progress}%` }}
                       />
                     </div>
                     <button
                       className={`w-full py-2 rounded-lg font-bold text-sm transition-colors ${
-                        isDone ? 'bg-green-600 text-white cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95'
+                        isPuzzleSolved ? 'bg-green-600 text-white cursor-not-allowed' : 
+                        isTargetDone ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95' :
+                        'bg-blue-600 hover:bg-blue-500 text-white active:scale-95'
                       }`}
                       onClick={() => {
-                        if (isSpectator || isDone) return;
+                        if (isSpectator || isPuzzleSolved) return;
+                        
                         const newCounts = { ...clickCounts, [target.id]: currentClicks + 1 };
                         setClickCounts(newCounts);
                         
@@ -511,12 +515,12 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
                           (newCounts[t.id] || 0) >= t.requiredClicks
                         );
                         if (allDone) {
-                          handleSolve(puzzle.id, 'REPAIRED');
+                          handleSolve(puzzle.id, puzzle.answer);
                         }
                       }}
-                      disabled={isSpectator || isDone}
+                      disabled={isSpectator || isPuzzleSolved}
                     >
-                      {isDone ? '수리 완료' : '수리하기 (클릭!)'}
+                      {isPuzzleSolved ? '완료' : isTargetDone ? '제출하기' : '클릭하기!'}
                     </button>
                   </div>
                 );
