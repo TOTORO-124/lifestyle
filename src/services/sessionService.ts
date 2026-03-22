@@ -2863,10 +2863,13 @@ export const sessionService = {
     const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
 
     let isCorrect = false;
+    const trimmedAnswer = answer.trim();
     if (puzzle.isRandomPassword) {
-      isCorrect = answer.trim() === session.escapeRoomGame.terminalRandomPassword;
+      isCorrect = trimmedAnswer === session.escapeRoomGame.terminalRandomPassword;
+    } else if (puzzle.type === 'TEXT' || puzzle.type === 'TERMINAL') {
+      isCorrect = puzzle.answer.toLowerCase() === trimmedAnswer.toLowerCase();
     } else {
-      isCorrect = puzzle.answer === answer.trim();
+      isCorrect = puzzle.answer === trimmedAnswer;
     }
 
     if (isCorrect) {
@@ -3098,14 +3101,25 @@ export const sessionService = {
     const puzzle = room.puzzles.find(p => p.id === puzzleId);
     if (!puzzle) return;
 
-    const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
-    await this.logEscapeRoomActivity(sessionId, userName, `힌트를 사용했습니다.`, 'HINT', session);
+    const currentLevel = (session.escapeRoomGame.hintLevels?.[puzzleId] || 0);
+    const hints = puzzle.hints || [puzzle.hint];
+    const nextHint = hints[Math.min(currentLevel, hints.length - 1)];
 
-    await this.addLog(sessionId, `힌트 사용: ${puzzle.hint}`, 'info');
-    await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), {
+    const userName = session.players[auth.currentUser?.uid || '']?.nickname || '누군가';
+    await this.logEscapeRoomActivity(sessionId, userName, `힌트를 사용했습니다. (단계: ${currentLevel + 1})`, 'HINT', session);
+
+    await this.addLog(sessionId, `힌트 사용: ${nextHint}`, 'info');
+    
+    const updates: any = {
       hintsUsed: (session.escapeRoomGame.hintsUsed || 0) + 1,
-      lastClue: puzzle.hint
-    });
+      lastClue: nextHint
+    };
+    
+    if (currentLevel < hints.length) {
+      updates[`hintLevels/${puzzleId}`] = currentLevel + 1;
+    }
+
+    await update(ref(db, `sessions/${sessionId}/escapeRoomGame`), updates);
   },
 
   async useEscapeRoomSuperHint(sessionId: string, puzzleId: string, session: Session) {

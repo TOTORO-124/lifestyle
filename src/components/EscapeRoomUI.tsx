@@ -321,6 +321,7 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
   };
 
   const handleHint = (puzzleId: string) => {
+    if (isSpectator) return;
     sessionService.useEscapeRoomHint(session.id, puzzleId, session);
     setViewingHint(puzzleId);
   };
@@ -1022,7 +1023,8 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
                                   disabled={isSpectator}
                                   className="flex items-center gap-2 md:gap-3 px-4 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl text-xs md:text-sm font-black transition-all shadow-md hover:shadow-xl active:scale-95 bg-yellow-400 text-yellow-950 hover:bg-yellow-300 border-b-4 border-yellow-600"
                                 >
-                                  <HelpCircle size={16} className="md:w-5 md:h-5" /> 힌트 보기 ({game.hintsUsed || 0})
+                                  <HelpCircle size={16} className="md:w-5 md:h-5" /> 
+                                  {game.hintLevels?.[puzzle.id] ? `다음 힌트 (${game.hintLevels[puzzle.id]}/${(puzzle.hints?.length || 1)})` : '힌트 보기'}
                                 </button>
                               </div>
                             </div>
@@ -1181,7 +1183,13 @@ export const EscapeRoomUI: React.FC<EscapeRoomUIProps> = ({ session, currentUser
                     <div className="p-6 bg-yellow-50 rounded-2xl border-2 border-yellow-100 relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1 h-full bg-yellow-400" />
                       <p className="text-sm text-gray-700 leading-relaxed font-medium italic">
-                        "{Object.values(theme.rooms).flatMap(r => r.puzzles).find(p => p.id === viewingHint)?.hint}"
+                        "{(() => {
+                          const p = Object.values(theme.rooms).flatMap(r => r.puzzles).find(p => p.id === viewingHint);
+                          if (!p) return '';
+                          const level = game.hintLevels?.[p.id] || 0;
+                          const hints = p.hints || [p.hint];
+                          return hints[Math.max(0, Math.min(level - 1, hints.length - 1))];
+                        })()}"
                       </p>
                     </div>
                   </div>

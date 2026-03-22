@@ -6,6 +6,7 @@ export interface Puzzle {
   question: string;
   answer: string;
   hint: string;
+  hints?: string[]; // Step-by-step hints
   superHint?: string;
   explanation?: string;
   options?: string[];
@@ -102,7 +103,12 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             type: 'DIRECTION_SEQUENCE',
             question: '벽면에 4개의 원소 문양(불, 물, 공기, 흙)이 새겨진 버튼이 있습니다. 일기장의 힌트대로 순서대로 눌러야 합니다.',
             answer: 'UP,DOWN,RIGHT,LEFT',
-            hint: '일기장에 적힌 원소의 순서를 방향으로 치환해보세요. (불=UP, 물=DOWN, 공기=RIGHT, 흙=LEFT)',
+            hint: '일기장에 적힌 원소의 순서를 방향으로 치환해보세요.',
+            hints: [
+              '불=UP, 물=DOWN, 공기=RIGHT, 흙=LEFT 입니다.',
+              '일기장의 순서는 불 -> 물 -> 공기 -> 흙 입니다.',
+              'UP, DOWN, RIGHT, LEFT 버튼을 순서대로 클릭하세요.'
+            ],
             sequence: ['UP', 'DOWN', 'RIGHT', 'LEFT'],
             explanation: '쿠르릉 소리와 함께 책장이 옆으로 밀려나며 비밀 통로가 나타납니다!'
           }
@@ -197,6 +203,10 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '방이 너무 어두워서 아무것도 보이지 않는다.',
             answer: 'found_all',
             hint: '화면 구석의 수상한 모양을 클릭해보자.',
+            hints: [
+              '화면 오른쪽 상단 구석에 배전반이 있는 것 같다.',
+              '배전반(두꺼비집)을 클릭하여 불을 켜자.'
+            ],
             imageUrl: 'https://images.unsplash.com/photo-1519068737630-e5db30e12e42?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
               { id: 'fusebox', x: 80, y: 20, width: 15, height: 15, name: '두꺼비집(배전반)' }
@@ -249,6 +259,10 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '연구소 컴퓨터가 잠겨 있다. 모니터 옆 포스트잇에 "내 생일은 광복절(8월 15일) 다음 날이야"라고 적혀 있다.',
             answer: '0816',
             hint: '8월 15일의 다음 날짜를 4자리로 입력하자.',
+            hints: [
+              '8월 15일의 다음 날은 8월 16일이다.',
+              '4자리 숫자로 입력해야 하므로 0816을 입력하자.'
+            ],
             dialCount: 4,
             explanation: '컴퓨터 잠금이 해제되었다!'
           },
@@ -276,6 +290,10 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '문 앞을 레이저가 막고 있다. 금고를 열어야 레이저를 끌 수 있다. 힌트: "첫 번째 숫자는 2, 두 번째는 4, 세 번째는 8... 그렇다면 네 번째는?"',
             answer: '16',
             hint: '이전 숫자에 2를 곱해보자.',
+            hints: [
+              '2, 4, 8 다음에 올 숫자를 생각해보자.',
+              '2 * 2 = 4, 4 * 2 = 8, 8 * 2 = ?'
+            ],
             rewardItem: '거울',
             explanation: '정답 16을 입력해 금고를 열고 거울을 획득했다!'
           },
@@ -490,6 +508,10 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '바닥에 손전등 같은 것이 떨어져 있다.',
             answer: 'found_all',
             hint: '바닥을 잘 살펴보자.',
+            hints: [
+              '화면 왼쪽 하단 구석을 클릭해보자.',
+              '바닥에 떨어져 있는 검은색 물체를 클릭하자.'
+            ],
             imageUrl: 'https://images.unsplash.com/photo-1505686994434-e3cc5abf1330?q=80&w=1000&auto=format&fit=crop',
             hiddenObjects: [
               { id: 'uv_lantern', x: 20, y: 80, width: 20, height: 20, name: 'UV 랜턴' }
@@ -503,6 +525,11 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '방은 피투성이 벽돌로 가득하다. 평범하게 보면 아무것도 없지만...',
             answer: 'HELP',
             hint: '인벤토리에서 UV 랜턴을 활성화하고 벽을 살펴보자.',
+            hints: [
+              '인벤토리에서 UV 랜턴을 클릭하여 선택한 상태로 벽을 드래그해보자.',
+              '벽 어딘가에 피로 쓰여진 글자가 보일 것이다.',
+              '글자는 네 글자 영단어이다.'
+            ],
             requiredItem: 'UV 랜턴',
             hiddenMessage: 'HELP',
             triggerTimer: 60, // 60 seconds timer triggers when this puzzle is solved
@@ -529,7 +556,11 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             type: 'TERMINAL',
             question: '낡은 컴퓨터 모니터가 켜져 있다. 바탕화면에 "vault.exe"라는 금고 열기 프로그램이 보인다. 이를 실행해야 한다.',
             answer: 'open vault.exe',
-            hint: '파일을 열려면 open [파일명] 을 입력하자.',
+            hint: '파일을 열려면 open 파일명 을 입력하자.',
+            hints: [
+              '바탕화면에 있는 파일 이름은 vault.exe 이다.',
+              '명령어 창에 open vault.exe 라고 입력해보자.'
+            ],
             expectedCommand: 'open vault.exe',
             explanation: '금고 프로그램이 실행되었다!'
           },
@@ -539,6 +570,10 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             question: '암호화된 파일이 있다. 해독해서 정답을 콘솔에 입력하자.',
             answer: 'RANDOM', // This will be handled dynamically
             hint: '수식을 계산해서 입력하자.',
+            hints: [
+              '화면에 표시된 수식의 결과값을 입력하면 된다.',
+              '예를 들어 1000 + 1234 = ? 라면 2234를 입력하자.'
+            ],
             isRandomPassword: true,
             explanation: '비밀번호가 일치한다! 다음 방으로 이동한다.'
           }
@@ -681,7 +716,11 @@ export const ESCAPE_ROOM_THEMES: Record<string, EscapeRoomTheme> = {
             type: 'TERMINAL',
             question: '탈출정 발사 터미널이 켜졌다. 시스템을 재부팅하고 발사 시퀀스를 시작해야 한다.',
             answer: 'launch escape_pod',
-            hint: '명령어: launch [대상] 을 입력하자. 대상은 escape_pod 이다.',
+            hint: '명령어: launch 대상 을 입력하자.',
+            hints: [
+              '대상은 escape_pod 이다.',
+              'launch escape_pod 라고 입력하자.'
+            ],
             expectedCommand: 'launch escape_pod',
             explanation: '발사 시퀀스 가동! 탈출정이 엄청난 속도로 수면을 향해 솟구친다. 탈출 성공!'
           }

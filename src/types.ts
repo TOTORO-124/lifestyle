@@ -233,6 +233,7 @@ export interface EscapeRoomGameState {
   status: 'PLAYING' | 'WON' | 'LOST';
   hintsUsed: number;
   superHintsUsed: number;
+  hintLevels?: Record<string, number>; // puzzleId -> current hint level (0, 1, 2...)
   lastClue?: string;
   lastSolvedPuzzleId?: string;
   isRoomCleared?: boolean;
