@@ -22,17 +22,17 @@ interface Particle {
 }
 
 const RANKS = [
-  { label: '인턴', radius: 15, color: '#ff4d4d', score: 1, next: 1 }, // Cherry
-  { label: '사원', radius: 22, color: '#ff8533', score: 3, next: 2 }, // Strawberry/Orange
-  { label: '주임', radius: 30, color: '#9933ff', score: 6, next: 3 }, // Grape
-  { label: '대리', radius: 38, color: '#ffcc00', score: 10, next: 4 }, // Dekopon
-  { label: '과장', radius: 48, color: '#ff6600', score: 15, next: 5 }, // Persimmon
-  { label: '차장', radius: 58, color: '#ff3300', score: 21, next: 6 }, // Apple
-  { label: '부장', radius: 70, color: '#ffff66', score: 28, next: 7 }, // Pear
-  { label: '이사', radius: 85, color: '#ff99cc', score: 36, next: 8 }, // Peach
-  { label: '상무', radius: 100, color: '#ffff00', score: 45, next: 9 }, // Pineapple
-  { label: '전무', radius: 120, color: '#99ff33', score: 55, next: 10 }, // Melon
-  { label: '사장', radius: 145, color: '#006600', score: 66, next: -1 }, // Watermelon
+  { label: '인턴', radius: 15, color: '#E57373', score: 1, next: 1 }, // Soft Red
+  { label: '사원', radius: 22, color: '#FF8A65', score: 3, next: 2 }, // Soft Deep Orange
+  { label: '주임', radius: 30, color: '#FFB74D', score: 6, next: 3 }, // Soft Orange
+  { label: '대리', radius: 38, color: '#FFF176', score: 10, next: 4 }, // Soft Yellow
+  { label: '과장', radius: 48, color: '#AED581', score: 15, next: 5 }, // Soft Light Green
+  { label: '차장', radius: 58, color: '#81C784', score: 21, next: 6 }, // Soft Green
+  { label: '부장', radius: 70, color: '#4DB6AC', score: 28, next: 7 }, // Soft Teal
+  { label: '이사', radius: 85, color: '#4FC3F7', score: 36, next: 8 }, // Soft Light Blue
+  { label: '상무', radius: 100, color: '#7986CB', score: 45, next: 9 }, // Soft Indigo
+  { label: '전무', radius: 120, color: '#BA68C8', score: 55, next: 10 }, // Soft Purple
+  { label: '사장', radius: 145, color: '#F06292', score: 66, next: -1 }, // Soft Pink
 ];
 
 const CANVAS_WIDTH = 400;
@@ -197,7 +197,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
             context.rotate(body.angle);
 
             // Draw label text
-            context.fillStyle = level < 3 ? '#1e293b' : '#ffffff';
+            context.fillStyle = '#1e293b'; // Dark text for all soft colors
             const fontSize = Math.max(8, Math.min(18, body.circleRadius! / 2.5));
             context.font = `bold ${fontSize}px 'Noto Sans KR', sans-serif`;
             context.fillText(rank.label, 0, 0);
