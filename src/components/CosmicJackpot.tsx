@@ -26,6 +26,8 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
   const [coupons, setCoupons] = useState(0);
   const [hotPotatoBuff, setHotPotatoBuff] = useState(0); // Turns remaining
   const [selectedBeltIndex, setSelectedBeltIndex] = useState<number | null>(null);
+  const [rerollCost, setRerollCost] = useState<bigint>(1000n);
+  const [isBossChallenge, setIsBossChallenge] = useState(false);
   
   const [belt, setBelt] = useState<(CosmicItem | null)[]>([null, null, null, null, null]);
   const [beltSize, setBeltSize] = useState(5);
@@ -104,12 +106,24 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     }
   };
 
+  const getRefundAmount = (tier: number) => {
+    const refundMap: Record<number, bigint> = {
+      1: 500n,
+      2: 1000n,
+      3: 1500n,
+      4: 2000n,
+      5: 1500n,
+      6: 5000n
+    };
+    return refundMap[tier] || 0n;
+  };
+
   const sellItem = (index: number) => {
     if (isSpinning) return;
     const item = belt[index];
     if (!item || item.id === 'dummy_slot') return;
 
-    const refund = BigInt(Math.floor(item.cost / 2));
+    const refund = getRefundAmount(item.tier);
     setMoney(prev => prev + refund);
     
     const newBelt = [...belt];
@@ -319,6 +333,21 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
           }
           await sleep(300);
         }
+        else if (item.id === 'legendary_distortion_mirror') {
+          turnFinalScore *= 5n;
+          showItemPopup(i, 'x5 왜곡!', true);
+          triggerShake();
+          await sleep(300);
+        }
+        else if (item.id === 'legendary_slime_king') {
+          const tier1Count = newBelt.filter(it => it?.tier === 1).length;
+          if (tier1Count > 0) {
+            turnFinalScore *= (10n ** BigInt(tier1Count));
+            showItemPopup(i, `x${10 ** tier1Count} 슬라임!`, true);
+            triggerShake();
+            await sleep(300);
+          }
+        }
       }
     }
 
@@ -333,6 +362,14 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
           const interest = finalMoney * 5n / 100n;
           finalMoney += interest;
           showItemPopup(i, `+${formatKoreanNumber(interest)} 이자`);
+          await sleep(300);
+        }
+      }
+      if (item?.id === 'legendary_bank_key') {
+        for (let t = 0; t < triggerCounts[i]; t++) {
+          const interest = finalMoney * 50n / 100n;
+          finalMoney += interest;
+          showItemPopup(i, `+${formatKoreanNumber(interest)} 은행 이자`);
           await sleep(300);
         }
       }
@@ -391,33 +428,50 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
       setPiggyBankSaved(0n);
     }
 
-    // Golden Ticket
+    // Golden Ticket & VVIP Card
     let ticketCount = 0;
+    let vvipCount = 0;
     for (let i = 0; i < beltSize; i++) {
       if (belt[i]?.id === 'golden_ticket') {
         ticketCount += triggerCounts[i];
       }
+      if (belt[i]?.id === 'legendary_vvip_card') {
+        vvipCount += triggerCounts[i];
+      }
     }
-    const earnedCoupons = 1 + ticketCount;
+    const earnedCoupons = 1 + ticketCount + (vvipCount * 2);
 
     setMoney(payout);
     setCoupons(prev => prev + earnedCoupons);
     setHotPotatoBuff(0); // Reset buff on round clear
+    setRerollCost(1000n); // Reset reroll cost
+    
+    const wasBoss = isBossChallenge;
+    setIsBossChallenge(false);
     
     await sleep(1500);
-    generateShop();
+    generateShop(wasBoss);
     setPhase('SHOP');
   };
 
   // --- Shop Logic ---
-  const generateShop = () => {
-    const shuffled = [...COSMIC_ITEMS].sort(() => 0.5 - Math.random());
-    setShopItems(shuffled.slice(0, 3));
+  const generateShop = (isBossClear = false) => {
+    const availableItems = COSMIC_ITEMS.filter(i => i.tier < 6);
+    const shuffled = [...availableItems].sort(() => 0.5 - Math.random());
+    const items = shuffled.slice(0, 3);
+    
+    if (isBossClear) {
+      const legendaries = COSMIC_ITEMS.filter(i => i.tier === 6);
+      const randomLegendary = legendaries[Math.floor(Math.random() * legendaries.length)];
+      items.push({ ...randomLegendary, cost: 0 });
+    }
+    
+    setShopItems(items);
   };
 
   const buyItem = (item: CosmicItem) => {
-    if (money < BigInt(item.cost)) {
-      alert('돈이 부족합니다!');
+    if (coupons < item.cost && item.cost > 0) {
+      alert('쿠폰이 부족합니다!');
       return;
     }
 
@@ -434,7 +488,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
       } else if (item.id === 'hot_potato') {
         setHotPotatoBuff(prev => prev + 1);
       }
-      setMoney(prev => prev - BigInt(item.cost));
+      if (item.cost > 0) setCoupons(prev => prev - item.cost);
       setShopItems(prev => prev.filter(i => i.id !== item.id));
     } else {
       // Passive item
@@ -467,14 +521,17 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
         newBelt[emptyIndex + 1] = { ...item, id: 'dummy_slot', name: '차지됨', description: '', cost: 0, tier: 1, type: 'passive', size: 1, icon: '🔒' };
       }
       setBelt(newBelt);
-      setMoney(prev => prev - BigInt(item.cost));
+      if (item.cost > 0) setCoupons(prev => prev - item.cost);
       setShopItems(prev => prev.filter(i => i.id !== item.id));
     }
   };
 
   const rerollShop = () => {
-    if (money < 50n) return;
-    setMoney(prev => prev - 50n);
+    const hasVVIP = belt.some(i => i?.id === 'legendary_vvip_card');
+    const currentCost = hasVVIP ? 0n : rerollCost;
+    if (money < currentCost) return;
+    setMoney(prev => prev - currentCost);
+    if (!hasVVIP) setRerollCost(prev => prev * 2n);
     generateShop();
   };
 
@@ -484,6 +541,17 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     setTurn(3);
     setPhase('SLOT');
     setSelectedBeltIndex(null);
+    setRerollCost(1000n);
+  };
+
+  const startBossChallenge = () => {
+    setRound(prev => prev + 1);
+    setQuota(prev => (prev * 2n + 200n) * 1000n); // 1000x quota
+    setTurn(3);
+    setPhase('SLOT');
+    setSelectedBeltIndex(null);
+    setRerollCost(1000n);
+    setIsBossChallenge(true);
   };
 
   const canSubmit = money >= quota;
@@ -524,7 +592,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
                     sellItem(i);
                   }}
                 >
-                  판매 ({formatKoreanNumber(BigInt(Math.floor(item.cost / 2)))}원)
+                  판매 ({formatKoreanNumber(getRefundAmount(item.tier))}원)
                 </button>
               </div>
             )}
@@ -597,7 +665,15 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="h-full flex flex-col">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-black text-[#00ffcc] mb-2">야옹 상회</h2>
-            <div className="text-xl text-[#ffb800] font-bold">보유 금액: {formatKoreanNumber(money)}원</div>
+            <div className="flex justify-center gap-6 text-xl font-bold">
+              <div className="text-[#ffb800] flex items-center gap-2">
+                <Coins size={24} />
+                {formatKoreanNumber(money)}원
+              </div>
+              <div className="text-[#ff4444] flex items-center gap-2">
+                🎫 쿠폰 {coupons}장
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -609,11 +685,10 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
                 <div className="mt-auto w-full">
                   <button 
                     onClick={() => buyItem(item)}
-                    disabled={money < BigInt(item.cost)}
+                    disabled={coupons < item.cost}
                     className="w-full py-2 rounded-lg font-bold bg-[#2a2a36] hover:bg-[#3a3a4c] disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
                   >
-                    <Coins size={16} className="text-[#ffb800]" />
-                    {item.cost}원
+                    🎫 쿠폰 {item.cost}장
                   </button>
                 </div>
               </div>
@@ -627,11 +702,17 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
           <div className="flex flex-col md:flex-row gap-4 mt-auto">
             <button 
               onClick={rerollShop}
-              disabled={money < 50n}
+              disabled={money < rerollCost && !belt.some(i => i?.id === 'legendary_vvip_card')}
               className="flex-1 py-3 rounded-xl font-bold bg-[#2a2a36] border border-[#3a3a4c] hover:bg-[#3a3a4c] flex justify-center items-center gap-2"
             >
               <RefreshCw size={18} />
-              리롤 (50원)
+              리롤 ({belt.some(i => i?.id === 'legendary_vvip_card') ? '무료' : `${formatKoreanNumber(rerollCost)}원`})
+            </button>
+            <button 
+              onClick={startBossChallenge}
+              className="flex-1 py-3 rounded-xl font-bold bg-gradient-to-r from-red-600 to-red-800 text-white hover:opacity-90 flex justify-center items-center gap-2"
+            >
+              💀 보스 도전 (할당량 x1000)
             </button>
             <button 
               onClick={nextRound}
