@@ -22,17 +22,17 @@ interface Particle {
 }
 
 const RANKS = [
-  { label: '인턴', radius: 15, color: '#E57373', score: 1, next: 1 }, // Soft Red
-  { label: '사원', radius: 22, color: '#FF8A65', score: 3, next: 2 }, // Soft Deep Orange
-  { label: '주임', radius: 30, color: '#FFB74D', score: 6, next: 3 }, // Soft Orange
-  { label: '대리', radius: 38, color: '#FFF176', score: 10, next: 4 }, // Soft Yellow
-  { label: '과장', radius: 48, color: '#AED581', score: 15, next: 5 }, // Soft Light Green
-  { label: '차장', radius: 58, color: '#81C784', score: 21, next: 6 }, // Soft Green
-  { label: '부장', radius: 70, color: '#4DB6AC', score: 28, next: 7 }, // Soft Teal
-  { label: '이사', radius: 85, color: '#4FC3F7', score: 36, next: 8 }, // Soft Light Blue
-  { label: '상무', radius: 100, color: '#7986CB', score: 45, next: 9 }, // Soft Indigo
-  { label: '전무', radius: 120, color: '#BA68C8', score: 55, next: 10 }, // Soft Purple
-  { label: '사장', radius: 145, color: '#F06292', score: 66, next: -1 }, // Soft Pink
+  { label: '인턴', radius: 15, color: '#FCA5A5', score: 1, next: 1 }, // Red 300
+  { label: '사원', radius: 22, color: '#FDBA74', score: 3, next: 2 }, // Orange 300
+  { label: '주임', radius: 30, color: '#FDE047', score: 6, next: 3 }, // Yellow 300
+  { label: '대리', radius: 38, color: '#BEF264', score: 10, next: 4 }, // Lime 300
+  { label: '과장', radius: 48, color: '#86EFAC', score: 15, next: 5 }, // Green 300
+  { label: '차장', radius: 58, color: '#6EE7B7', score: 21, next: 6 }, // Emerald 300
+  { label: '부장', radius: 70, color: '#5EEAD4', score: 28, next: 7 }, // Teal 300
+  { label: '이사', radius: 85, color: '#7DD3FC', score: 36, next: 8 }, // Sky 300
+  { label: '상무', radius: 100, color: '#93C5FD', score: 45, next: 9 }, // Blue 300
+  { label: '전무', radius: 120, color: '#C4B5FD', score: 55, next: 10 }, // Violet 300
+  { label: '사장', radius: 145, color: '#F9A8D4', score: 66, next: -1 }, // Pink 300
 ];
 
 const CANVAS_WIDTH = 400;
@@ -503,7 +503,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
                 backgroundColor: RANKS[currentFruitIndex].color,
                 borderRadius: '50%',
                 fontSize: '10px',
-                color: currentFruitIndex < 3 ? '#1e293b' : '#ffffff',
+                color: '#1e293b',
                 border: '2px solid rgba(255,255,255,0.3)'
               }}
             >
@@ -521,7 +521,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
               className="w-8 h-8 rounded-full flex items-center justify-center text-[8px] font-black shadow-inner border border-black/5"
               style={{ 
                 backgroundColor: RANKS[nextFruitIndex].color,
-                color: nextFruitIndex < 3 ? '#1e293b' : '#ffffff'
+                color: '#1e293b'
               }}
             >
               {RANKS[nextFruitIndex].label}
@@ -618,7 +618,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
                   <div key={i} className="flex flex-col items-center gap-1">
                     <div 
                       className="w-10 h-10 rounded-full flex items-center justify-center text-[8px] font-black shadow-sm border border-black/5"
-                      style={{ backgroundColor: f.color, color: i < 3 ? '#1e293b' : '#ffffff' }}
+                      style={{ backgroundColor: f.color, color: '#1e293b' }}
                     >
                       {f.label}
                     </div>

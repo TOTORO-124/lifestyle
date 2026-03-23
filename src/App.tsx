@@ -12,13 +12,10 @@ import { DRAW_TOPICS } from './data/drawTopics';
 import { Canvas } from './components/Canvas';
 import { OfficeLifeBoard } from './components/OfficeLifeBoard';
 import { UserProfileCard } from './components/UserProfileCard';
-import { HiddenObjectPuzzle } from './components/HiddenObjectPuzzle';
-import { SlidePuzzle } from './components/SlidePuzzle';
-import { CubePuzzle } from './components/CubePuzzle';
 import { YutNori } from './components/YutNori';
-import EscapeRoomUI from './components/EscapeRoomUI';
+import { CosmicJackpot } from './components/CosmicJackpot';
 import Leaderboard from './components/Leaderboard';
-import { ESCAPE_ROOM_THEMES } from './data/escapeRoomData';
+
 import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS, SYNERGIES } from './data/cyberArenaData';
 import { Users, Shield, User, Play, LogOut, CheckCircle2, Circle, Settings2, AlertTriangle, FileText, Share2, HelpCircle, MoreVertical, Search, Filter, Grid, Download, Moon, Sun, Stethoscope, Siren, RefreshCw, ListOrdered, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Hash, Edit3, Check, Palette, Timer, Trophy, Eye, EyeOff, MessageSquare, Send, Bomb, LayoutGrid, Briefcase, Loader2, Coffee, StickyNote, Zap, Skull, ShieldCheck, Activity, Key, DoorOpen, Sword, ZapOff, Heart, ShieldAlert, Cpu, Coins, Package, Target, ShoppingBag, ChevronRight, Star, Info, Trash2, Sparkles } from 'lucide-react';
 
@@ -496,8 +493,8 @@ export default function App() {
         await sessionService.startSudokuGame(session.id, session.settings.sudokuDifficulty || 'EASY');
       } else if (session.gameType === GameType.OFFICE_LIFE) {
         await sessionService.startOfficeLifeGame(session.id, session.players, session.turnOrder, session.settings.officeLifeMode || 'INDIVIDUAL');
-      } else if (session.gameType === GameType.ESCAPE_ROOM) {
-        await sessionService.startEscapeRoom(session.id, session.settings.escapeRoomThemeId || 'universe_escape', session.settings);
+      } else if (session.gameType === GameType.COSMIC_JACKPOT) {
+        await sessionService.startCosmicJackpot(session.id);
       } else if (session.gameType === GameType.YUT_NORI) {
         await sessionService.startYutNori(session.id, session.players, session.turnOrder, session.settings.yutNoriMode || 'INDIVIDUAL', session.settings.yutNoriPieceCount || 4);
       } else if (session.gameType === GameType.SUIKA) {
@@ -775,12 +772,12 @@ export default function App() {
                           <span className="text-[9px] font-normal opacity-80">오피스 라이프 보드</span>
                         </button>
                         <button 
-                          onClick={() => handleCreateSession(GameType.ESCAPE_ROOM)} 
+                          onClick={() => handleCreateSession(GameType.COSMIC_JACKPOT)} 
                           className="office-btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1"
                           disabled={loading}
                         >
-                          <span className="font-bold">방탈출</span>
-                          <span className="text-[9px] font-normal opacity-80">비밀의 오피스</span>
+                          <span className="font-bold">우주적 잭팟</span>
+                          <span className="text-[9px] font-normal opacity-80">로그라이크 슬롯머신</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.YUT_NORI)} 
@@ -838,7 +835,7 @@ export default function App() {
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
                   <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (국가대표급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
-                  <Leaderboard entries={globalLeaderboards?.ESCAPE_ROOM || []} title="방탈출 마스터" sessionId="GLOBAL" gameType="ESCAPE_ROOM" />
+                  <Leaderboard entries={globalLeaderboards?.COSMIC_JACKPOT || []} title="우주적 잭팟 마스터" sessionId="GLOBAL" gameType="COSMIC_JACKPOT" />
                 </div>
               </div>
             </div>
@@ -1279,39 +1276,7 @@ export default function App() {
                         </div>
                       )}
 
-                      {session.gameType === GameType.ESCAPE_ROOM && (
-                        <div className="space-y-4">
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-[#999]">테마 선택</label>
-                            <select 
-                              className="office-input text-xs"
-                              value={session.settings.escapeRoomThemeId || 'universe_escape'}
-                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, escapeRoomThemeId: e.target.value })}
-                            >
-                              {Object.values(ESCAPE_ROOM_THEMES).map(theme => (
-                                <option key={theme.id} value={theme.id}>
-                                  [{theme.genre}] {theme.name} ({theme.difficulty})
-                                </option>
-                              ))}
-                            </select>
-                            <p className="text-[8px] text-gray-500 mt-1">
-                              {ESCAPE_ROOM_THEMES[session.settings.escapeRoomThemeId || 'universe_escape']?.description}
-                            </p>
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-[#999]">난이도 (시간 제한)</label>
-                            <select 
-                              className="office-input text-xs"
-                              value={session.settings.escapeRoomDifficulty || 'NORMAL'}
-                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, escapeRoomDifficulty: e.target.value })}
-                            >
-                              <option value="EASY">쉬움 (15분)</option>
-                              <option value="NORMAL">보통 (10분)</option>
-                              <option value="HARD">어려움 (5분)</option>
-                            </select>
-                          </div>
-                        </div>
-                      )}
+
 
                       {session.gameType === GameType.YUT_NORI && (
                         <div className="space-y-4">
@@ -2349,8 +2314,11 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            ) : session.gameType === GameType.ESCAPE_ROOM ? (
-              <EscapeRoomUI session={session} currentUser={currentUser} isSpectator={isSpectator} />
+            ) : session.gameType === GameType.COSMIC_JACKPOT ? (
+              <CosmicJackpot 
+                onGameOver={() => alert('게임 오버!')} 
+                onClear={() => alert('클리어!')} 
+              />
             ) : session.gameType === GameType.YUT_NORI ? (
               <YutNori session={session} currentUser={currentUser} isSpectator={isSpectator} />
             ) : session.gameType === GameType.OFFICE_LIFE ? (

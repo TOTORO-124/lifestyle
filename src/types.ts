@@ -8,7 +8,7 @@ export enum GameType {
   OFFICE_2048 = 'OFFICE_2048',
   SUDOKU = 'SUDOKU',
   OFFICE_LIFE = 'OFFICE_LIFE',
-  ESCAPE_ROOM = 'ESCAPE_ROOM',
+  COSMIC_JACKPOT = 'COSMIC_JACKPOT',
   YUT_NORI = 'YUT_NORI',
   SUIKA = 'SUIKA',
 }
@@ -214,33 +214,7 @@ export interface OfficeLifeGameState {
   waitingForAction?: 'SELECT_ROLE' | 'BUY_PROJECT' | 'CHANCE_CARD' | 'BUY_ITEM' | 'PROMOTION_TEST' | 'END_TURN' | 'NONE';
 }
 
-export interface EscapeRoomActivity {
-  id: string;
-  timestamp: number;
-  userName: string;
-  message: string;
-  type: 'SOLVE' | 'HINT' | 'MOVE' | 'SYSTEM' | 'FAIL';
-}
 
-export interface EscapeRoomGameState {
-  themeId: string;
-  currentRoomId: string;
-  solvedPuzzles: string[];
-  clearedRooms?: string[];
-  inventory: string[];
-  startTime: number;
-  timeLimit: number;
-  status: 'PLAYING' | 'WON' | 'LOST';
-  hintsUsed: number;
-  superHintsUsed: number;
-  hintLevels?: Record<string, number>; // puzzleId -> current hint level (0, 1, 2...)
-  lastClue?: string;
-  lastSolvedPuzzleId?: string;
-  isRoomCleared?: boolean;
-  activityLog?: EscapeRoomActivity[];
-  timeAttackEndTime?: number;
-  terminalRandomPassword?: string;
-}
 
 export interface ArenaItem {
   id: string;
@@ -407,7 +381,6 @@ export interface Session {
   office2048Game?: Office2048GameState;
   sudokuGame?: SudokuGameState;
   officeLifeGame?: OfficeLifeGameState;
-  escapeRoomGame?: EscapeRoomGameState;
   cyberArenaGame?: CyberArenaGameState;
   suikaGame?: SuikaGameState;
   yutNoriGame?: YutNoriGameState;
@@ -428,8 +401,6 @@ export interface Session {
     officeLifeMode?: 'INDIVIDUAL' | 'TEAM';
     yutNoriMode?: 'INDIVIDUAL' | 'TEAM';
     yutNoriPieceCount?: number;
-    escapeRoomDifficulty?: 'EASY' | 'NORMAL' | 'HARD';
-    escapeRoomThemeId?: string;
     cyberArenaPvE?: boolean;
   };
   turnOrder?: string[];

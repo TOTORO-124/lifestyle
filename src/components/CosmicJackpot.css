@@ -1,0 +1,251 @@
+/* =========================================
+   우주적 잭팟 머신 (Cosmic Jackpot Machine) CSS
+   ========================================= */
+.jp-slot-wrapper {
+  font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+  background-color: #0f0f13;
+  color: #ffffff;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* 상단 정보 영역 */
+.jp-slot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #1a1a24;
+  border-radius: 12px;
+  border: 1px solid #3a3a4c;
+}
+
+.jp-slot-info h2 { margin: 0; font-size: 1.2rem; color: #aaa; }
+.jp-slot-info .jp-slot-money { font-size: 2rem; font-weight: 900; color: #ffb800; text-shadow: 0 0 10px rgba(255, 184, 0, 0.5); }
+.jp-slot-quota { font-size: 1.2rem; color: #ff3366; font-weight: bold; }
+
+/* 슬롯 그리드 (3x5) */
+.jp-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 10px;
+  background: #000;
+  padding: 15px;
+  border-radius: 12px;
+  border: 3px solid #3a3a4c;
+  position: relative;
+}
+
+.jp-slot-cell {
+  background: #1a1a24;
+  border-radius: 8px;
+  height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 3rem;
+  box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
+  transition: transform 0.1s;
+}
+
+/* 시너지 벨트 (인벤토리) */
+.jp-slot-belt-container {
+  margin-top: 20px;
+  background: #1a1a24;
+  padding: 15px;
+  border-radius: 12px;
+  border: 1px solid #3a3a4c;
+}
+
+.jp-slot-belt-title {
+  font-size: 1rem;
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: #aaa;
+}
+
+.jp-slot-belt {
+  display: flex;
+  gap: 10px;
+}
+
+.jp-slot-item {
+  flex: 1;
+  height: 60px;
+  background: #2a2a36;
+  border: 2px dashed #3a3a4c;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.5rem;
+  position: relative;
+}
+
+.jp-slot-item.active {
+  border-style: solid;
+  border-color: #ffb800;
+  background: rgba(255, 184, 0, 0.1);
+}
+
+/* 컨트롤 영역 */
+.jp-slot-controls {
+  margin-top: 20px;
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+.jp-slot-btn {
+  background: linear-gradient(135deg, #ffb800, #ff8c00);
+  color: #000;
+  border: none;
+  padding: 15px 40px;
+  font-size: 1.5rem;
+  font-weight: 900;
+  border-radius: 50px;
+  cursor: pointer;
+  box-shadow: 0 5px 15px rgba(255, 184, 0, 0.4);
+  transition: transform 0.1s, box-shadow 0.1s;
+  flex: 1;
+}
+
+.jp-slot-submit-btn {
+  border: none;
+  padding: 15px 40px;
+  font-size: 1.5rem;
+  font-weight: 900;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex: 1;
+}
+
+.jp-slot-btn:active, .jp-slot-submit-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.jp-slot-btn:disabled {
+  background: #555;
+  color: #888;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .jp-slot-wrapper {
+    padding: 10px;
+  }
+  .jp-slot-cell {
+    height: 60px;
+    font-size: 2rem;
+  }
+  .jp-slot-item {
+    height: 50px;
+    font-size: 1.2rem;
+  }
+  .jp-slot-controls {
+    flex-direction: column;
+  }
+  .jp-slot-btn, .jp-slot-submit-btn {
+    padding: 20px;
+    font-size: 1.2rem;
+  }
+}
+
+/* =========================================
+   애니메이션 & 시각적 도파민 효과
+   ========================================= */
+
+/* 스크린 쉐이크 */
+@keyframes jp-slot-shake-anim {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(-5px, 5px) rotate(-1deg); }
+  50% { transform: translate(5px, -5px) rotate(1deg); }
+  75% { transform: translate(-5px, -5px) rotate(-1deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+.jp-slot-shake {
+  animation: jp-slot-shake-anim 0.3s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+/* 텍스트 팝업 */
+.jp-slot-popup {
+  position: absolute;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 100;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+  animation: jp-slot-float-up 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes jp-slot-float-up {
+  0% { opacity: 0; transform: translateY(20px) scale(0.5); }
+  20% { opacity: 1; transform: translateY(0px) scale(1.2); }
+  80% { opacity: 1; transform: translateY(-30px) scale(1); }
+  100% { opacity: 0; transform: translateY(-50px) scale(0.8); }
+}
+
+/* 무지개 텍스트 (초대박 시너지용) */
+.jp-slot-rainbow {
+  background: linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: jp-slot-rainbow-flow 2s linear infinite;
+  font-size: 3rem !important;
+}
+
+@keyframes jp-slot-rainbow-flow {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+/* 코인 파티클 */
+.jp-slot-particle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle, #ffd700, #b8860b);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 200;
+  box-shadow: 0 0 5px rgba(255, 215, 0, 0.8);
+  animation: jp-slot-fall linear forwards;
+}
+
+@keyframes jp-slot-fall {
+  0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(800px) rotate(720deg); opacity: 0; }
+}
+
+/* 팝 파티클 (판매 시) */
+.jp-slot-pop-particle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background-color: #ffb800;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 150;
+  animation: jp-slot-pop 0.6s ease-out forwards;
+}
+
+@keyframes jp-slot-pop {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--vx), var(--vy)) scale(0);
+    opacity: 0;
+  }
+}
