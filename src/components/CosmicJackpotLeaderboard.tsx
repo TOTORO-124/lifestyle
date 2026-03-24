@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Trophy, Loader2 } from 'lucide-react';
 import { ref, push, get, query, orderByChild, limitToLast } from 'firebase/database';
-import { db } from '../firebase';
+import { db, isConfigured } from '../firebase';
 
 export interface CosmicJackpotLeaderboardEntry {
   id?: string;
   name: string;
-  money: number;
+  money: string | number; // Support both for backward compatibility
   round: number;
   date: string;
 }
@@ -30,6 +30,7 @@ export const CosmicJackpotLeaderboard: React.FC<LeaderboardProps> = ({ onClose, 
   }, []);
 
   const fetchLeaderboard = async () => {
+    console.log("Fetching leaderboard...", { isConfigured, db: !!db });
     if (!db) {
       setLoading(false);
       return;
@@ -37,7 +38,7 @@ export const CosmicJackpotLeaderboard: React.FC<LeaderboardProps> = ({ onClose, 
     setLoading(true);
     try {
       const entriesRef = ref(db, 'cosmicJackpotLeaderboard');
-      const q = query(entriesRef, orderByChild('money'), limitToLast(10));
+      const q = query(entriesRef, orderByChild('money'), limitToLast(20));
       
       const snapshot = await get(q);
       if (snapshot.exists()) {
@@ -47,8 +48,14 @@ export const CosmicJackpotLeaderboard: React.FC<LeaderboardProps> = ({ onClose, 
           ...data[key]
         }));
         
-        // Sort descending
-        setEntries(loadedEntries.sort((a, b) => b.money - a.money));
+        // Sort descending by money (handle string or number)
+        setEntries(loadedEntries.sort((a, b) => {
+          const moneyA = BigInt(a.money || 0);
+          const moneyB = BigInt(b.money || 0);
+          if (moneyB > moneyA) return 1;
+          if (moneyB < moneyA) return -1;
+          return 0;
+        }));
       }
     } catch (error) {
       console.error("Failed to fetch leaderboard", error);
@@ -58,22 +65,28 @@ export const CosmicJackpotLeaderboard: React.FC<LeaderboardProps> = ({ onClose, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || currentScore === undefined || currentRound === undefined || !db) return;
+    console.log("Submitting score...", { name, currentScore, currentRound, db: !!db });
+    if (!name.trim() || currentScore === undefined || currentRound === undefined || !db) {
+      if (!db) alert("데이터베이스가 설정되지 않았습니다.");
+      return;
+    }
     
     try {
       const entriesRef = ref(db, 'cosmicJackpotLeaderboard');
-      const newEntry: CosmicJackpotLeaderboardEntry = {
-        name,
-        money: Number(currentScore), // Convert BigInt to Number for storage
+      const newEntry = {
+        name: name.trim(),
+        money: currentScore.toString(), // Store as string to avoid precision loss and BigInt issues
         round: currentRound,
         date: new Date().toISOString()
       };
       
       await push(entriesRef, newEntry);
+      console.log("Score submitted successfully!");
       setSubmitted(true);
       fetchLeaderboard();
     } catch (error) {
       console.error("Failed to submit score", error);
+      alert("점수 등록 중 오류가 발생했습니다: " + (error instanceof Error ? error.message : String(error)));
     }
   };
 
@@ -89,11 +102,17 @@ export const CosmicJackpotLeaderboard: React.FC<LeaderboardProps> = ({ onClose, 
           <h2 className="text-3xl font-black text-white">명예의 전당</h2>
         </div>
 
+        {!isConfigured && (
+          <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-xs text-center">
+            Firebase가 설정되지 않았습니다. .env 파일을 확인해주세요.
+          </div>
+        )}
+
         {isGameOver && currentScore !== undefined && !submitted && (
           <form onSubmit={handleSubmit} className="mb-8 bg-gray-800 p-4 rounded-xl border border-gray-700">
             <h3 className="text-lg text-gray-300 mb-2">당신의 기록을 남기세요!</h3>
             <div className="text-2xl text-[#00ffcc] font-bold mb-4">
-              {currentScore.toLocaleString()}원 (Round {currentRound})
+              {currentScore.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}원 (Round {currentRound})
             </div>
             <div className="flex gap-2">
               <input
@@ -134,7 +153,15 @@ export const CosmicJackpotLeaderboard: React.FC<LeaderboardProps> = ({ onClose, 
                     <span className="text-white font-medium">{entry.name}</span>
                   </div>
                   <div className="text-right">
-                    <div className="text-[#00ffcc] font-bold">{BigInt(entry.money).toLocaleString()}원</div>
+                    <div className="text-[#00ffcc] font-bold">
+                      {(() => {
+                        try {
+                          return BigInt(entry.money || 0).toLocaleString();
+                        } catch (e) {
+                          return Number(entry.money || 0).toLocaleString();
+                        }
+                      })()}원
+                    </div>
                     <div className="text-xs text-gray-400">Round {entry.round}</div>
                   </div>
                 </div>

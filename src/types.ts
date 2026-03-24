@@ -330,6 +330,15 @@ export interface SuikaGameState {
   startTime?: number;
 }
 
+export interface CosmicJackpotGameState {
+  round: number;
+  money: bigint;
+  quota: bigint;
+  status: 'PLAYING' | 'FINISHED';
+  winnerId?: string;
+  startTime: number;
+}
+
 export interface YutNoriGameState {
   status: 'PLAYING' | 'FINISHED';
   mode: 'INDIVIDUAL' | 'TEAM';
@@ -383,6 +392,7 @@ export interface Session {
   officeLifeGame?: OfficeLifeGameState;
   cyberArenaGame?: CyberArenaGameState;
   suikaGame?: SuikaGameState;
+  cosmicJackpot?: CosmicJackpotGameState;
   yutNoriGame?: YutNoriGameState;
   leaderboards?: Record<string, LeaderboardEntry[]>;
   settings: {

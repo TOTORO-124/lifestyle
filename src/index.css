@@ -7,136 +7,139 @@
 }
 
 @layer base {
-  * {
-    box-sizing: border-box;
+  html, body {
+    height: 100vh;
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #f3f4f6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
+    touch-action: manipulation;
   }
-  body {
-    @apply bg-[#f8f9fa] text-[#3c4043] font-sans antialiased;
-    overflow-x: hidden;
-    letter-spacing: -0.01em;
-    overscroll-behavior-y: none;
+
+  #root {
+    height: 100%;
+    width: 100%;
+  }
+
+  * {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
-@layer components {
-  /* Glassmorphism Panel */
-  .glass-panel {
-    @apply bg-white/70 backdrop-blur-md border border-white/40 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)];
-  }
+/* Office Sheets Theme */
+.desk-texture {
+  background-color: #e5e7eb;
+  background-image: 
+    radial-gradient(#d1d5db 1px, transparent 1px),
+    radial-gradient(#d1d5db 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: 0 0, 20px 20px;
+}
 
-  /* Interactive Button (Physical Click Feel) */
-  .btn-interactive {
-    @apply transition-all duration-200 ease-out hover:scale-105 hover:brightness-110 active:scale-95 active:brightness-90 shadow-sm hover:shadow-md;
-  }
+.spreadsheet-bg {
+  background-color: #fff;
+  background-image: 
+    linear-gradient(#e5e7eb 1px, transparent 1px),
+    linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
+  background-size: 80px 25px;
+}
 
-  .excel-grid {
-    @apply border-collapse w-full bg-white border border-[#d1d1d1];
-  }
-  .excel-grid th {
-    @apply border border-[#d1d1d1] bg-[#f8f9fa] px-2 py-1 text-center font-normal text-[#666] text-[10px] select-none uppercase tracking-tighter;
-  }
-  .excel-grid td {
-    @apply border border-[#d1d1d1] px-3 py-1.5 text-sm relative;
-  }
-  .excel-grid tr:hover td {
-    @apply bg-[#f1f8f5];
-  }
-  
-  .office-btn {
-    @apply inline-flex items-center justify-center px-4 py-1 border border-[#d1d1d1] rounded bg-white text-xs font-medium text-[#333] hover:bg-[#f1f1f1] active:bg-[#e1e1e1] focus:outline-none focus:ring-1 focus:ring-[#217346] disabled:opacity-50 transition-colors shadow-sm;
-  }
-  .office-btn-primary {
-    @apply inline-flex items-center justify-center px-4 py-1 border border-transparent rounded bg-[#217346] text-xs font-medium text-white hover:bg-[#1a5c38] active:bg-[#14462b] focus:outline-none focus:ring-1 focus:ring-[#217346] disabled:opacity-50 transition-colors shadow-sm;
-  }
-  
-  .office-input {
-    @apply block w-full px-2 py-1 border border-[#d1d1d1] focus:border-[#217346] focus:ring-0 rounded bg-white text-sm transition-colors outline-none;
-  }
-  
-  .office-toolbar {
-    @apply flex items-center space-x-2 px-2 py-1 bg-white border-b border-[#d1d1d1] text-[10px] text-[#666];
-  }
-  
-  .office-tab {
-    @apply px-4 py-1 border-r border-[#d1d1d1] text-[10px] font-bold cursor-pointer transition-colors flex items-center;
-  }
-  .office-tab.active {
-    @apply bg-white border-t-2 border-t-[#217346] text-[#217346];
-  }
-  .office-tab:not(.active) {
-    @apply bg-[#f8f9fa] hover:bg-[#f1f1f1] text-[#666];
-  }
+.office-toolbar {
+  @apply bg-[#f3f4f6] border-b border-[#d1d1d1] flex items-center px-1 gap-1;
+}
 
-  .spreadsheet-bg {
-    background-color: #f3f3f3;
-    background-image: 
-      linear-gradient(#e2e2e2 1px, transparent 1px),
-      linear-gradient(90deg, #e2e2e2 1px, transparent 1px);
-    background-size: 100px 25px;
-  }
+.office-input {
+  @apply w-full px-3 py-2 bg-white border border-[#d1d1d1] rounded-sm text-sm focus:outline-none focus:border-[#217346] focus:ring-1 focus:ring-[#217346] transition-all;
+}
 
-  .desk-texture {
-    background-color: #e1e1e1;
-    background-image: 
-      linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
-    background-size: 20px 20px;
-  }
+.office-btn {
+  @apply px-4 py-2 bg-white border border-[#d1d1d1] rounded-sm text-sm font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-all shadow-sm;
+}
 
-  .post-it {
-    @apply bg-[#fff9c4] p-4 shadow-md border border-[#fbc02d] relative rotate-1 transition-transform hover:rotate-0;
-  }
-  .post-it::after {
-    content: '';
-    @apply absolute top-0 right-0 w-8 h-8 bg-black/5 pointer-events-none;
-    clip-path: polygon(100% 0, 0 0, 100% 100%);
-  }
+.office-btn-primary {
+  @apply px-4 py-2 bg-[#217346] border border-[#1a5c38] rounded-sm text-sm font-bold text-white hover:bg-[#1a5c38] active:bg-[#154a2d] transition-all shadow-sm;
+}
 
-  @keyframes shake {
-    0%, 100% { transform: translate(0, 0) rotate(0deg); }
-    20% { transform: translate(-3px, 2px) rotate(-1deg); }
-    40% { transform: translate(3px, -2px) rotate(1deg); }
-    60% { transform: translate(-3px, -2px) rotate(-1deg); }
-    80% { transform: translate(3px, 2px) rotate(1deg); }
-  }
-  .animate-shake {
-    animation: shake 0.25s cubic-bezier(.36,.07,.19,.97) both;
-  }
+.office-tab {
+  @apply h-full px-4 text-[11px] font-medium text-gray-600 border-r border-[#d1d1d1] hover:bg-white transition-colors relative;
+}
 
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  @keyframes zoomIn {
-    from { transform: scale(0.95); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-  }
-  .animate-in {
-    animation-duration: 0.3s;
-    animation-fill-mode: both;
-  }
-  .fade-in {
-    animation-name: fadeIn;
-  }
-  .zoom-in {
-    animation-name: zoomIn;
-  }
+.office-tab.active {
+  @apply bg-white text-[#217346] font-bold;
+}
 
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: #f1f1f1;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #217346;
-    border-radius: 10px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #1a5c38;
-  }
+.office-tab.active::after {
+  content: '';
+  @apply absolute bottom-0 left-0 right-0 h-0.5 bg-[#217346];
+}
+
+.excel-grid {
+  @apply w-full border-collapse bg-white;
+}
+
+.excel-grid th, .excel-grid td {
+  @apply border border-[#d1d1d1] px-2 py-1.5 text-xs;
+}
+
+.excel-col-header {
+  @apply bg-[#f8f9fa] text-[#666] font-bold text-center;
+}
+
+.excel-cell {
+  @apply text-[#333] truncate;
+}
+
+.post-it {
+  @apply bg-[#fff9c4] p-4 shadow-md rotate-[-1deg] border-t-4 border-[#fbc02d] relative;
+}
+
+.post-it::before {
+  content: '';
+  @apply absolute top-0 right-0 w-8 h-8 bg-black/5 -mr-4 -mt-4 rotate-45;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Pixel Art Rendering */
+.pixel-art {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
 }

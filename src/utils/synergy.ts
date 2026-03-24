@@ -9,6 +9,7 @@ export interface ReceiptStep {
 
 export interface SynergyState {
   grid: string[];
+  overlays: string[][];
   belt: (CosmicItem | null)[];
   atm: bigint;
   luck: number;
@@ -24,6 +25,11 @@ export interface SynergyState {
   shieldGeneratorCharges: number;
   snowballStacks: { [index: number]: bigint };
   coupons: number;
+  symbolMultiplier: number;
+  patternMultiplierBonus: number;
+  extraPatternTriggers: number;
+  smallPatternMultiplier: number;
+  largePatternMultiplier: number;
 }
 
 export interface SynergyResult {
@@ -44,7 +50,12 @@ export interface SynergyResult {
 }
 
 export const calculateSynergy = (state: SynergyState): SynergyResult => {
-  const { grid, belt, atm, luck, globalPatternBonus, piggyBankSaved, hotPotatoBuff, turn, maxTurn, shieldGeneratorCharges, snowballStacks, coupons } = state;
+  const { 
+    grid, overlays, belt, atm, luck, globalPatternBonus, piggyBankSaved, 
+    hotPotatoBuff, turn, maxTurn, shieldGeneratorCharges, 
+    snowballStacks, coupons, symbolMultiplier, patternMultiplierBonus,
+    extraPatternTriggers, smallPatternMultiplier, largePatternMultiplier
+  } = state;
   const newBelt = belt.map(item => item ? { ...item } : null);
   const newSnowball = { ...snowballStacks };
   const receipt: ReceiptStep[] = [];
@@ -55,59 +66,130 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
   let addedCoupons = 0;
   let addedAtm = 0n;
 
+  const getDeceptionMult = (item: CosmicItem | null) => {
+    if (item?.trait === 'deception') {
+      return Math.random() < 0.2 ? 0 : 2;
+    }
+    return 1;
+  };
+
   // --- Pattern Detection ---
-  const checkCombo = (indices: number[]) => {
+  const checkCombo = (indices: number[], type?: string) => {
     const chars = indices.map(idx => grid[idx]);
+    const cellOverlays = indices.map(idx => overlays[idx] || []);
+    
+    if (type) {
+      // Check for overlay combo
+      return cellOverlays.every(ovs => ovs.includes(type));
+    }
+
     const first = chars.find(c => c !== 'WILD');
-    if (first === '💀') return false; // Skulls don't form combos
+    if (first === '6') return false; // Trap symbols don't form combos
     if (!first) return true; // All WILD is a combo
     return chars.every(c => c === first || c === 'WILD');
   };
 
   let patternMultiplier = 1.0;
   let comboCount = 0;
+  const triggeredPatterns: Set<string> = new Set();
   
-  // Rows (5 symbols)
-  [ [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14] ].forEach(row => {
-    if (checkCombo(row)) {
-      patternMultiplier *= 2.0;
-      comboCount++;
+  const applyPattern = (indices: number[], mult: number, name: string, priority: number, excludes: string[] = []) => {
+    // Check if any excluded patterns already triggered
+    if (excludes.some(ex => triggeredPatterns.has(ex))) return;
+
+    const triggers = 1 + extraPatternTriggers;
+    let triggered = false;
+
+    // Check base symbols
+    if (checkCombo(indices)) {
+      triggered = true;
+    } else {
+      // Check overlays
+      const allOverlays = Array.from(new Set(overlays.flat()));
+      for (const ov of allOverlays) {
+        if (checkCombo(indices, ov)) {
+          triggered = true;
+          break;
+        }
+      }
     }
+
+    if (triggered) {
+      for(let i=0; i<triggers; i++) {
+        let finalMult = mult;
+        if (indices.length <= 3) finalMult *= smallPatternMultiplier;
+        else finalMult *= largePatternMultiplier;
+        
+        patternMultiplier *= finalMult;
+        comboCount++;
+      }
+      triggeredPatterns.add(name);
+    }
+  };
+
+  // Pattern Definitions (Priority based, higher first)
+  // 1. Jackpot (15 symbols)
+  const allIndices = Array.from({length: 15}, (_, i) => i);
+  applyPattern(allIndices, 10.0, 'Jackpot', 100);
+
+  // 2. Eye (눈)
+  applyPattern([1,2,3, 5,6,8,9, 11,12,13], 8.0, 'Eye', 90, []);
+
+  // 3. Heaven/Earth (천상/지상)
+  applyPattern([0,1,2,3,4, 6,8, 12], 7.0, 'Heaven', 80, []);
+  applyPattern([2,6,8, 10,11,12,13,14], 7.0, 'Earth', 80, []);
+
+  // 4. Zig/Zag (지그/재그)
+  applyPattern([2,6,8,10,14], 4.0, 'Zig', 70, ['Heaven', 'Earth']);
+  applyPattern([0,4,6,8,12], 4.0, 'Zag', 70, ['Heaven', 'Earth']);
+
+  // 5. Horizontal XL (5 symbols)
+  [ [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14] ].forEach((row, i) => {
+    const excludes = i === 0 ? ['Heaven'] : (i === 2 ? ['Earth'] : []);
+    applyPattern(row, 3.0, `RowXL_${i}`, 60, excludes);
   });
-    // Cols (3 symbols)
-    [ [0,5,10], [1,6,11], [2,7,12], [3,8,13], [4,9,14] ].forEach(col => {
-      if (checkCombo(col)) {
-        patternMultiplier *= 1.5;
-        comboCount++;
-      }
-    });
-    // Diagonals (3 symbols)
-    [ [0,6,12], [1,7,13], [2,8,14], [10,6,2], [11,7,3], [12,8,4] ].forEach(diag => {
-      if (checkCombo(diag)) {
-        patternMultiplier *= 1.5;
-        comboCount++;
-      }
-    });
-    // Triangle Patterns (5 symbols)
-    [ [0,6,12,8,4], [10,6,2,8,14] ].forEach(tri => {
-      if (checkCombo(tri)) {
-        patternMultiplier *= 3.0;
-        comboCount++;
-      }
-    });
-    // Square Patterns (4 symbols)
-    [ 
-      [0,1,5,6], [1,2,6,7], [2,3,7,8], [3,4,8,9],
-      [5,6,10,11], [6,7,11,12], [7,8,12,13], [8,9,13,14]
-    ].forEach(sq => {
-      if (checkCombo(sq)) {
-        patternMultiplier *= 2.0;
-        comboCount++;
-      }
-    });
+
+  // 6. Horizontal L (4 symbols)
+  [ [0,1,2,3], [1,2,3,4], [5,6,7,8], [6,7,8,9], [10,11,12,13], [11,12,13,14] ].forEach((row, i) => {
+    const rowIdx = Math.floor(i/2);
+    const excludes = [`RowXL_${rowIdx}`];
+    applyPattern(row, 2.0, `RowL_${i}`, 50, excludes);
+  });
+
+  // 7. Horizontal (3 symbols)
+  [ [0,1,2], [1,2,3], [2,3,4], [5,6,7], [6,7,8], [7,8,9], [10,11,12], [11,12,13], [12,13,14] ].forEach((row, i) => {
+    const rowIdx = Math.floor(i/3);
+    const excludes = [`RowXL_${rowIdx}`, `RowL_${rowIdx*2}`, `RowL_${rowIdx*2+1}`];
+    applyPattern(row, 1.0, `Row_${i}`, 40, excludes);
+  });
+
+  // 8. Vertical (3 symbols)
+  [ [0,5,10], [1,6,11], [2,7,12], [3,8,13], [4,9,14] ].forEach((col, i) => {
+    const excludes = i === 1 || i === 3 ? ['Eye'] : [];
+    applyPattern(col, 1.0, `Col_${i}`, 30, excludes);
+  });
+
+  // 9. Diagonal (3 symbols)
+  [ [0,6,12], [1,7,13], [2,8,14], [10,6,2], [11,7,3], [12,8,4] ].forEach((diag, i) => {
+    applyPattern(diag, 1.0, `Diag_${i}`, 20, ['Zig', 'Zag']);
+  });
+
+  // 10. Hidden S Patterns (2 symbols)
+  // Horizontal S
+  [ [0,1], [1,2], [2,3], [3,4], [5,6], [6,7], [7,8], [8,9], [10,11], [11,12], [12,13], [13,14] ].forEach((row, i) => {
+    const rowIdx = Math.floor(i/4);
+    const excludes = [`RowXL_${rowIdx}`, `RowL_${rowIdx*2}`, `RowL_${rowIdx*2+1}`, `Row_${rowIdx*3}`, `Row_${rowIdx*3+1}`, `Row_${rowIdx*3+2}`];
+    applyPattern(row, 0.5, `RowS_${i}`, 10, excludes);
+  });
+  // Vertical S
+  [ [0,5], [5,10], [1,6], [6,11], [2,7], [7,12], [3,8], [8,13], [4,9], [9,14] ].forEach((col, i) => {
+    const colIdx = Math.floor(i/2);
+    const excludes = [`Col_${colIdx}`];
+    applyPattern(col, 0.5, `ColS_${i}`, 10, excludes);
+  });
 
   // Trap Check
-  const trapCount = grid.filter(r => r === '💀').length;
+  const trapCount = grid.filter(r => r === '6').length;
   if (trapCount >= 3) {
     let protected_ = false;
     const bibleIdx = newBelt.findIndex(it => it?.id === 'bible_shield');
@@ -148,22 +230,22 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
   
   // Base from symbols
   const SYMBOLS = [
-    { char: '🍒', value: 10n },
-    { char: '🍋', value: 10n },
-    { char: '☘️', value: 20n },
-    { char: '🔔', value: 20n },
-    { char: '💎', value: 40n },
-    { char: '💰', value: 40n },
-    { char: '🌟', value: 100n },
+    { char: '🍒', value: 2n },
+    { char: '🍋', value: 2n },
+    { char: '☘️', value: 3n },
+    { char: '🔔', value: 3n },
+    { char: '💎', value: 5n },
+    { char: '💰', value: 5n },
+    { char: '7', value: 7n },
   ];
 
   let symbolBase = 0n;
   grid.forEach(char => {
     if (char === 'WILD') {
-      symbolBase += 5n;
+      symbolBase += 5n * BigInt(Math.floor((1 + symbolMultiplier) * 100)) / 100n;
     } else {
       const sym = SYMBOLS.find(s => s.char === char);
-      if (sym) symbolBase += sym.value;
+      if (sym) symbolBase += sym.value * BigInt(Math.floor((1 + symbolMultiplier) * 100)) / 100n;
     }
   });
   
@@ -187,6 +269,7 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
     if (!item) continue;
 
     if (item.effectType === 'base' || item.effectType === 'growth' || item.effectType === 'luck') {
+      const deceptionMult = getDeceptionMult(item);
       for (let t = 0; t < triggerCounts[i]; t++) {
         let added = 0n;
         if (item.id === 'acorn_squirrel') {
@@ -206,8 +289,9 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
         }
 
         if (added !== 0n) {
-          step1Base += added;
-          receipt.push({ name: item.name, type: 'base', value: added > 0n ? `+${added}` : `${added}`, amount: step1Base });
+          const finalAdded = added * BigInt(deceptionMult);
+          step1Base += finalAdded;
+          receipt.push({ name: item.name + (deceptionMult === 2 ? ' (기만)' : ''), type: 'base', value: finalAdded > 0n ? `+${finalAdded}` : `${finalAdded}`, amount: step1Base });
         }
       }
     }
@@ -230,6 +314,7 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
     if (!item) continue;
 
     if (item.effectType === 'multiplier' || item.effectType === 'luck' || item.effectType === 'growth') {
+      const deceptionMult = getDeceptionMult(item);
       for (let t = 0; t < triggerCounts[i]; t++) {
         let floatMult = 1.0;
         
@@ -298,8 +383,11 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
         }
 
         if (floatMult > 1.0) {
-          step1Base = (step1Base * BigInt(Math.floor(floatMult * 100))) / 100n;
-          receipt.push({ name: item.name, type: 'multiplier', value: `x${floatMult.toFixed(2)}`, amount: step1Base });
+          const finalFloatMult = 1.0 + (floatMult - 1.0) * deceptionMult;
+          if (finalFloatMult !== 1.0) {
+            step1Base = (step1Base * BigInt(Math.floor(finalFloatMult * 100))) / 100n;
+            receipt.push({ name: item.name + (deceptionMult === 2 ? ' (기만)' : ''), type: 'multiplier', value: `x${finalFloatMult.toFixed(2)}`, amount: step1Base });
+          }
         }
       }
     }
@@ -335,7 +423,7 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
   let step3Global = step1Base;
   
   // Pattern Multiplier
-  let currentGlobalPatternBonus = globalPatternBonus;
+  let currentGlobalPatternBonus = globalPatternBonus + patternMultiplierBonus;
   if (newBelt.some(it => it?.id === 'ultra_clover_pit')) {
     currentGlobalPatternBonus += 2.0;
   }
@@ -353,6 +441,7 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
     for (let t = 0; t < triggerCounts[i]; t++) {
       let mult = 1n;
       let floatMult = 1.0;
+      const deceptionMult = getDeceptionMult(item);
 
       if (item.id === 'blackhole_safe') {
         mult = 5n;
@@ -394,18 +483,24 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
       }
 
       if (mult > 1n) {
-        step3Global *= mult;
-        receipt.push({ name: item.name, type: 'global', value: `x${mult}`, amount: step3Global });
+        const finalMult = BigInt(deceptionMult === 0 ? 0 : (deceptionMult === 2 ? Number(mult) * 2 : Number(mult)));
+        if (finalMult > 1n || finalMult === 0n) {
+          step3Global *= finalMult;
+          receipt.push({ name: item.name + (deceptionMult === 2 ? ' (기만)' : ''), type: 'global', value: `x${finalMult}`, amount: step3Global });
+        }
       }
       if (floatMult !== 1.0) {
-        const oldStep3 = step3Global;
-        step3Global = (step3Global * BigInt(Math.floor(floatMult * 100))) / 100n;
-        
-        if (item.id === 'hungry_pig') {
-          newPiggyBank += (oldStep3 - step3Global);
+        const finalFloatMult = 1.0 + (floatMult - 1.0) * deceptionMult;
+        if (finalFloatMult !== 1.0) {
+          const oldStep3 = step3Global;
+          step3Global = (step3Global * BigInt(Math.floor(finalFloatMult * 100))) / 100n;
+          
+          if (item.id === 'hungry_pig') {
+            newPiggyBank += (oldStep3 - step3Global);
+          }
+          
+          receipt.push({ name: item.name + (deceptionMult === 2 ? ' (기만)' : ''), type: 'global', value: `x${finalFloatMult.toFixed(2)}`, amount: step3Global });
         }
-        
-        receipt.push({ name: item.name, type: 'global', value: `x${floatMult.toFixed(2)}`, amount: step3Global });
       }
     }
   }
