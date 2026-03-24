@@ -12,13 +12,13 @@ interface CosmicJackpotProps {
 }
 
 const SYMBOLS = [
-  { char: '🍒', value: 5n, weight: 1.3, tier: 1, tags: ['fruit'] },
-  { char: '🍋', value: 5n, weight: 1.3, tier: 1, tags: ['fruit'] },
-  { char: '☘️', value: 10n, weight: 1.0, tier: 2, tags: ['luck'] },
-  { char: '🔔', value: 10n, weight: 1.0, tier: 2, tags: ['bell'] },
-  { char: '💎', value: 20n, weight: 0.8, tier: 3, tags: ['gem'] },
-  { char: '💰', value: 20n, weight: 0.8, tier: 3, tags: ['money'] },
-  { char: '🌟', value: 50n, weight: 0.5, tier: 4, tags: ['star'] },
+  { char: '🍒', value: 10n, weight: 1.3, tier: 1, tags: ['fruit'] },
+  { char: '🍋', value: 10n, weight: 1.3, tier: 1, tags: ['fruit'] },
+  { char: '☘️', value: 20n, weight: 1.0, tier: 2, tags: ['luck'] },
+  { char: '🔔', value: 20n, weight: 1.0, tier: 2, tags: ['bell'] },
+  { char: '💎', value: 40n, weight: 0.8, tier: 3, tags: ['gem'] },
+  { char: '💰', value: 40n, weight: 0.8, tier: 3, tags: ['money'] },
+  { char: '🌟', value: 100n, weight: 0.5, tier: 4, tags: ['star'] },
   { char: '💀', value: 0n, weight: 0.15, tier: 0, isTrap: true, tags: ['trap'] }
 ];
 
@@ -36,8 +36,8 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
   const [turn, setTurn] = useState(7);
   const [maxTurn, setMaxTurn] = useState(7);
   const [quota, setQuota] = useState<bigint>(500n);
-  const [money, setMoney] = useState<bigint>(0n); // Wallet
-  const [displayMoney, setDisplayMoney] = useState<bigint>(0n); // For counter animation
+  const [money, setMoney] = useState<bigint>(2000n); // Wallet
+  const [displayMoney, setDisplayMoney] = useState<bigint>(2000n); // For counter animation
   const [atm, setAtm] = useState<bigint>(0n); // ATM
   const [displayAtm, setDisplayAtm] = useState<bigint>(0n); // For counter animation
   const [coupons, setCoupons] = useState(3);
@@ -90,8 +90,8 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     setTurn(7);
     setMaxTurn(7);
     setQuota(500n);
-    setMoney(0n);
-    setDisplayMoney(0n);
+    setMoney(2000n);
+    setDisplayMoney(2000n);
     setAtm(0n);
     setDisplayAtm(0n);
     setCoupons(3); // Start with 3 coupons as requested
@@ -381,7 +381,11 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     // 2. Finalize Results
     const hasRainbowClay = belt.some(i => i?.id === 'rainbow_clay');
     let currentWildcardIndex: number | null = null;
-    if (hasRainbowClay) {
+    
+    // Luck-based Wildcard Chance: Every 100 luck gives 10% chance, max 50%
+    const luckWildcardChance = Math.min(0.5, luck / 1000);
+    
+    if (hasRainbowClay || Math.random() < luckWildcardChance) {
       currentWildcardIndex = Math.floor(Math.random() * 15);
       setWildcardIndex(currentWildcardIndex);
     } else {
@@ -507,16 +511,26 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
       let w = s.weight;
       // Luck affects weights: tier 0 (trap) weight decreases, high tier increases
       if (s.tier === 0) {
+        // No traps in first 3 rounds
+        if (round <= 3) return 0;
+
         let currentTrapMultiplier = trapChanceMultiplier;
         if (belt.some(it => it?.id === 'atm_security_guard') && atm >= 100000n) {
           currentTrapMultiplier *= 0.5;
         }
-        w = Math.max(0.01, (w * currentTrapMultiplier) - (currentLuck / 200));
+        w = Math.max(0, (w * currentTrapMultiplier) - (currentLuck / 100));
         if (hasCloverHairpin) w *= 0.5;
         if (hasBasketOfPlenty) w *= 0.5;
         if (hasLuckyCharm) w *= 0.9;
       }
-      if (s.tier >= 3) w = w + (currentLuck / 100);
+      
+      // Luck buff: high tier symbols get much more weight
+      if (s.tier >= 3) {
+        w = w + (currentLuck / 50); // Buffed from /100 to /50
+      }
+      if (s.tier >= 4) {
+        w = w + (currentLuck / 30); // Tier 4 gets even more weight
+      }
       
       // Clover Seed: Cherry/Lemon -5%, Clover/Bell +5%
       if (hasCloverSeed) {

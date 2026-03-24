@@ -129,13 +129,13 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
   
   // Base from symbols
   const SYMBOLS = [
-    { char: '🍒', value: 5n },
-    { char: '🍋', value: 5n },
-    { char: '☘️', value: 10n },
-    { char: '🔔', value: 10n },
-    { char: '💎', value: 20n },
-    { char: '💰', value: 20n },
-    { char: '🌟', value: 50n },
+    { char: '🍒', value: 10n },
+    { char: '🍋', value: 10n },
+    { char: '☘️', value: 20n },
+    { char: '🔔', value: 20n },
+    { char: '💎', value: 40n },
+    { char: '💰', value: 40n },
+    { char: '🌟', value: 100n },
   ];
 
   let symbolBase = 0n;
