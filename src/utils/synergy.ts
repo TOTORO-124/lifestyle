@@ -41,7 +41,7 @@ export interface SynergyResult {
 
 export const calculateSynergy = (state: SynergyState): SynergyResult => {
   const { grid, belt, atm, luck, globalPatternBonus, piggyBankSaved, hotPotatoBuff, turn, maxTurn, shieldGeneratorCharges, snowballStacks } = state;
-  const newBelt = [...belt];
+  const newBelt = belt.map(item => item ? { ...item } : null);
   const newSnowball = { ...snowballStacks };
   const receipt: ReceiptStep[] = [];
   
@@ -162,44 +162,18 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
     if (item.effectType === 'base' || item.effectType === 'growth' || item.effectType === 'luck') {
       for (let t = 0; t < triggerCounts[i]; t++) {
         let added = 0n;
-        if (item.id === 'lucky_coin') added = 5n;
-        else if (item.id === 'clover_tea') added = 10n;
-        else if (item.id === 'star_fragment') added = 5n;
-        else if (item.id === 'golden_pig_statue') added = 15n;
-        else if (item.id === 'golden_feather' && comboCount > 0) added = BigInt(comboCount * 100);
-        else if (item.id === 'acorn_squirrel') added = BigInt(item.currentBase || 0);
+        if (item.id === 'acorn_squirrel') {
+          // Now a multiplier
+        }
         else if (item.id === 'snowball_rice') {
-          const currentMult = newSnowball[i] || 1n;
-          added = 10n * currentMult;
-          newSnowball[i] = currentMult * 2n;
-        }
-        else if (item.id === 'space_donut') {
-          added = 20n;
-          if ((i === 0 || !newBelt[i-1]) && (i === newBelt.length - 1 || !newBelt[i+1])) {
-            added += 80n;
-          }
-        }
-        else if (item.id === 'hamster_worker') {
-          if (turn === 3) added = 100n;
-          else added = 10n;
-        }
-        else if (item.id === 'lucky_clover') {
-          added = BigInt(Math.floor(Math.random() * 91) + 10);
+          // Now a multiplier
         }
         else if (item.id === 'hungry_pig') {
-          added = -10n;
-          newPiggyBank += 10n;
+          // Handled in global
         }
         else if (item.id === 'golden_egg') {
-          added = 10n;
+          // Handled in global
         }
-        else if (item.id === 'meteor_candy') {
-          const sevens = grid.filter(c => c === '🌟').length;
-          added = BigInt(sevens * 500);
-        }
-        else if (item.id === 'legendary_vvip_card') added = 200n;
-
-        if (hotPotatoBuff > 0) added += 20n;
 
         if (added !== 0n) {
           step1Base += added;
@@ -214,32 +188,65 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
     const item = newBelt[i];
     if (!item) continue;
 
-    if (item.effectType === 'multiplier') {
+    if (item.effectType === 'multiplier' || item.effectType === 'luck' || item.effectType === 'growth') {
       for (let t = 0; t < triggerCounts[i]; t++) {
-        let mult = 1n;
-        if (item.id === 'gold_magnifier' && i > 0 && newBelt[i-1]) {
-          mult = 2n;
+        let floatMult = 1.0;
+        
+        if (item.id === 'coin_1') floatMult *= 1.1;
+        else if (item.id === 'cash_dog') floatMult *= 1.3;
+        else if (item.id === 'gold_cat') floatMult *= 1.5;
+        else if (item.id === 'hamster_worker') floatMult *= (turn === 3 ? 3.0 : 1.1);
+        else if (item.id === 'lucky_clover') floatMult *= (1.1 + Math.random() * 0.9);
+        else if (item.id === 'magnet_paw') floatMult *= 1.0; // Handled elsewhere
+        else if (item.id === 'space_donut') {
+          floatMult *= 1.2;
+          if ((i === 0 || !newBelt[i-1]) && (i === newBelt.length - 1 || !newBelt[i+1])) floatMult *= 2.0;
         }
+        else if (item.id === 'golden_feather' && comboCount > 0) floatMult *= 1.5;
+        else if (item.id === 'gold_magnifier' && i > 0 && newBelt[i-1]) floatMult *= 2.0;
+        else if (item.id === 'twin_mirror') floatMult *= 1.0; // Handled via triggerCounts
         else if (item.id === 'magic_popcorn') {
-          if (i > 0 && newBelt[i-1]) mult *= 3n;
-          if (i < newBelt.length - 1 && newBelt[i+1]) mult *= 3n;
+          if (i > 0 && newBelt[i-1]) floatMult *= 3.0;
+          if (i < newBelt.length - 1 && newBelt[i+1]) floatMult *= 3.0;
         }
         else if (item.id === 'alien_jelly') {
           const alienCount = newBelt.filter(it => it?.id === 'alien_jelly').length;
-          mult = BigInt(Math.pow(2, alienCount - 1));
+          floatMult *= 1.1 * Math.pow(2, alienCount - 1);
         }
-
-        // Multiplier Prism
-        if (item.effectType === 'multiplier') {
-          if ((i > 0 && newBelt[i-1]?.id === 'multiplier_prism') || 
-              (i < newBelt.length - 1 && newBelt[i+1]?.id === 'multiplier_prism')) {
-            mult *= 2n;
+        else if (item.id === 'meteor_candy') {
+          const actualStars = grid.filter(c => c === '🌟').length;
+          if (actualStars > 0) floatMult *= Math.pow(2, actualStars);
+        }
+        // Luck items with multiplier
+        else if (item.id === 'lucky_coin') floatMult *= 1.1;
+        else if (item.id === 'clover_tea') floatMult *= 1.2;
+        else if (item.id === 'star_fragment') floatMult *= 1.1;
+        else if (item.id === 'golden_pig_statue') floatMult *= 1.5;
+        // Growth items with multiplier
+        else if (item.id === 'acorn_squirrel') {
+          floatMult *= (item.currentMultiplier || 1.1);
+          item.currentMultiplier = (item.currentMultiplier || 1.1) + 0.1;
+        }
+        else if (item.id === 'snowball_rice') {
+          floatMult *= (item.currentMultiplier || 1.1);
+          item.currentMultiplier = (item.currentMultiplier || 1.1) + 0.1;
+        }
+        else if (item.id === 'sponge_slime') {
+          const cherryLemonCount = grid.filter(c => c === '🍒' || c === '🍋').length;
+          if (cherryLemonCount > 0) {
+            item.currentMultiplier = (item.currentMultiplier || 1.0) + (0.1 * cherryLemonCount);
           }
         }
 
-        if (mult > 1n) {
-          step1Base *= mult;
-          receipt.push({ name: item.name, type: 'multiplier', value: `x${mult}`, amount: step1Base });
+        // Multiplier Prism
+        if ((i > 0 && newBelt[i-1]?.id === 'multiplier_prism') || 
+            (i < newBelt.length - 1 && newBelt[i+1]?.id === 'multiplier_prism')) {
+          floatMult *= 2.0;
+        }
+
+        if (floatMult > 1.0) {
+          step1Base = (step1Base * BigInt(Math.floor(floatMult * 100))) / 100n;
+          receipt.push({ name: item.name, type: 'multiplier', value: `x${floatMult.toFixed(2)}`, amount: step1Base });
         }
       }
     }
@@ -312,6 +319,15 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
       else if (item.id === 'sponge_slime') {
         floatMult = item.currentMultiplier || 1.0;
       }
+      else if (item.id === 'hungry_pig') {
+        floatMult = 0.5;
+      }
+      else if (item.id === 'golden_egg') {
+        floatMult = 1.1;
+      }
+      else if (item.id === 'hot_potato') {
+        floatMult = 2.0;
+      }
       else if (item.id === 'plasma_gun' && item.activeGauge && item.maxGauge && item.activeGauge >= item.maxGauge) {
         mult = 10n;
         // Gauge reset is handled outside or we can do it here
@@ -322,9 +338,15 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
         step3Global *= mult;
         receipt.push({ name: item.name, type: 'global', value: `x${mult}`, amount: step3Global });
       }
-      if (floatMult > 1.0) {
-        step3Global = BigInt(Math.floor(Number(step3Global) * floatMult));
-        receipt.push({ name: item.name, type: 'global', value: `x${floatMult.toFixed(1)}`, amount: step3Global });
+      if (floatMult !== 1.0) {
+        const oldStep3 = step3Global;
+        step3Global = (step3Global * BigInt(Math.floor(floatMult * 100))) / 100n;
+        
+        if (item.id === 'hungry_pig') {
+          newPiggyBank += (oldStep3 - step3Global);
+        }
+        
+        receipt.push({ name: item.name, type: 'global', value: `x${floatMult.toFixed(2)}`, amount: step3Global });
       }
     }
   }

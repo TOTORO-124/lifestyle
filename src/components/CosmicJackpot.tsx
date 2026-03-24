@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { COSMIC_ITEMS, CosmicItem } from '../data/cosmicJackpotItems';
 import { calculateSynergy, ReceiptStep } from '../utils/synergy';
-import { Coins, ShoppingCart, ArrowRight, RefreshCw, Sparkles, CheckCircle2, X, Shield, Wallet } from 'lucide-react';
+import { Coins, ShoppingCart, ArrowRight, RefreshCw, Sparkles, CheckCircle2, X, Shield, Wallet, Trophy } from 'lucide-react';
+import { CosmicJackpotLeaderboard } from './CosmicJackpotLeaderboard';
 import './CosmicJackpot.css';
 
 interface CosmicJackpotProps {
@@ -78,6 +79,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
   const [piggyBankSaved, setPiggyBankSaved] = useState(0n);
   const [magnetPawUsed, setMagnetPawUsed] = useState(false);
   const [shieldGeneratorCharges, setShieldGeneratorCharges] = useState(0);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -642,16 +644,22 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     setCoupons(prev => prev + earnedCoupons);
     
     // Golden Egg and Piggy Bank Payout
-    let bonusMoney = piggyBankSaved * 10n;
+    let bonusMoney = piggyBankSaved * 5n;
     const newBelt = [...belt];
+    let goldenEggMultiplier = 1n;
     for (let i = 0; i < beltSize; i++) {
       if (newBelt[i]?.id === 'golden_egg') {
-        bonusMoney += 1000n;
+        goldenEggMultiplier *= 2n;
         newBelt[i] = null;
+      } else if (newBelt[i]?.id === 'space_cat') {
+        newBelt[i] = {
+          ...newBelt[i]!,
+          currentMultiplier: (newBelt[i]!.currentMultiplier || 1.0) + 0.3
+        };
       }
     }
     setBelt(newBelt);
-    setMoney(prev => prev + bonusMoney);
+    setMoney(prev => (prev + bonusMoney) * goldenEggMultiplier);
     setPiggyBankSaved(0n);
     setHotPotatoBuff(0); 
     setRerollCost(1000n); 
@@ -1154,7 +1162,14 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
       )}
 
       {phase === 'SHOP' && (
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="h-full flex flex-col">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="h-full flex flex-col relative">
+          <button
+            onClick={() => setShowLeaderboard(true)}
+            className="absolute top-0 right-0 p-2 bg-yellow-400 text-black rounded-full hover:bg-yellow-300 transition-colors shadow-lg flex items-center gap-2"
+          >
+            <Trophy size={20} />
+            <span className="font-bold text-sm hidden sm:inline">명예의 전당</span>
+          </button>
           <div className="text-center mb-8">
             <h2 className="text-3xl font-black text-[#00ffcc] mb-2">야옹 상회</h2>
             <div className="flex justify-center gap-6 text-xl font-bold">
@@ -1240,13 +1255,31 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
           <div className="text-2xl text-[#ffb800] mb-8">
             최종 도달: ROUND {round}
           </div>
-          <button 
-            onClick={resetGame}
-            className="px-8 py-4 bg-[#00ffcc] text-black rounded-full font-bold text-xl hover:bg-white transition-all shadow-[0_0_20px_rgba(0,255,204,0.4)]"
-          >
-            다시 도전하기
-          </button>
+          <div className="flex gap-4">
+            <button 
+              onClick={resetGame}
+              className="px-8 py-4 bg-[#00ffcc] text-black rounded-full font-bold text-xl hover:bg-white transition-all shadow-[0_0_20px_rgba(0,255,204,0.4)]"
+            >
+              다시 도전하기
+            </button>
+            <button 
+              onClick={() => setShowLeaderboard(true)}
+              className="px-8 py-4 bg-yellow-400 text-black rounded-full font-bold text-xl hover:bg-yellow-300 transition-all shadow-[0_0_20px_rgba(250,204,21,0.4)] flex items-center gap-2"
+            >
+              <Trophy size={24} />
+              명예의 전당
+            </button>
+          </div>
         </motion.div>
+      )}
+
+      {showLeaderboard && (
+        <CosmicJackpotLeaderboard 
+          onClose={() => setShowLeaderboard(false)} 
+          currentScore={money + atm} 
+          currentRound={round} 
+          isGameOver={phase === 'GAMEOVER'}
+        />
       )}
     </div>
   );
