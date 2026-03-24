@@ -22,6 +22,8 @@ export const COSMIC_ITEMS: CosmicItem[] = [
   { id: 'gold_cat', name: '반짝반짝 금괴 냥이', description: '매 턴 수익 +50원', size: 1, cost: 1, tier: 1, type: 'passive', effectType: 'base', icon: '🐱' },
   { id: 'scrub_towel', name: '뽀득뽀득 때밀이 수건', description: '슬롯 정지 시 함정(💀)을 50% 확률로 체리로 변환', size: 1, cost: 1, tier: 1, type: 'passive', effectType: 'defense', icon: '🧼' },
   { id: 'clover_seed', name: '네잎클로버 씨앗', description: '체리/레몬 확률 -5%, 클로버/종 확률 +5%', size: 1, cost: 1, tier: 1, type: 'luck', effectType: 'luck', icon: '🌱' },
+  { id: 'lucky_coin', name: '행운의 짤랑이 동전', description: '매 턴 행운 +2, 수익 +5원', size: 1, cost: 1, tier: 1, type: 'luck', effectType: 'luck', icon: '🪙✨' },
+  { id: 'clover_tea', name: '따뜻한 클로버 차', description: '매 턴 행운 +5, 수익 +10원', size: 1, cost: 1, tier: 1, type: 'luck', effectType: 'luck', icon: '🍵' },
 
   // Tier 2: UNCOMMON (90% weight)
   { id: 'hamster_worker', name: '성실한 알바생 햄스터', description: '1, 2턴엔 +10원, 마지막 3턴째엔 +100원', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🐹' },
@@ -31,6 +33,8 @@ export const COSMIC_ITEMS: CosmicItem[] = [
   { id: 'carrot_coupon', name: '당근 마켓 단골 쿠폰', description: '상점 리롤 비용 증가폭 50% 감소', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🥕' },
   { id: 'snowball_rice', name: '눈덩이 주먹밥', description: '기본 +10원, 턴마다 생산량 2배 영구 증가', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🍙' },
   { id: 'space_donut', name: '우주 도넛', description: '매 턴 +20원, 양옆이 비어있으면 +80원 추가', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🍩' },
+  { id: 'rabbit_foot', name: '보들보들 토끼 발', description: '행운(Luck) +15 증가', size: 1, cost: 2, tier: 2, type: 'luck', effectType: 'luck', icon: '🦶' },
+  { id: 'golden_feather', name: '반짝이는 황금 깃털', description: '콤보(패턴) 발생 시마다 추가 수익 +100원', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🪶' },
 
   // Tier 3: MILDLY RARE (80% weight)
   { id: 'gold_magnifier', name: '황금 돋보기', description: '바로 왼쪽 칸 아이템의 최종 생산량 x2배', size: 1, cost: 3, tier: 3, type: 'passive', effectType: 'multiplier', icon: '🔍' },

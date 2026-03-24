@@ -45,6 +45,9 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
   const [isBossChallenge, setIsBossChallenge] = useState(false);
   const [isShopOpen, setIsShopOpen] = useState(false);
   
+  const [lastSpinCombo, setLastSpinCombo] = useState(0);
+  const [lastSpinTotal, setLastSpinTotal] = useState(0n);
+
   const [belt, setBelt] = useState<(CosmicItem | null)[]>([null, null, null, null, null]);
   const [beltSize, setBeltSize] = useState(5);
   
@@ -395,19 +398,28 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
 
     // Jackpot: Full Screen
     const firstNonWild = grid.find(c => c !== 'WILD') || 'WILD';
+    let comboCount = 0;
     if (grid.every(c => c === firstNonWild || c === 'WILD')) {
       patternMultiplier = 10.0;
+      comboCount = 8; // Max combos for full screen
       showPopup('🎰 JACKPOT! x10', window.innerWidth / 2, window.innerHeight / 2, true);
     } else {
       // Rows (5 cells each)
       [ [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14] ].forEach(row => {
-        if (checkCombo(row)) patternMultiplier += 1.0;
+        if (checkCombo(row)) {
+          patternMultiplier += 1.0;
+          comboCount++;
+        }
       });
       // Cols (3 cells each)
       [ [0,5,10], [1,6,11], [2,7,12], [3,8,13], [4,9,14] ].forEach(col => {
-        if (checkCombo(col)) patternMultiplier += 1.0;
+        if (checkCombo(col)) {
+          patternMultiplier += 1.0;
+          comboCount++;
+        }
       });
     }
+    setLastSpinCombo(comboCount);
 
     // Trap Check
     const trapCount = results.filter(r => r.isTrap).length;
@@ -463,6 +475,14 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
         for (let t = 0; t < triggerCounts[i]; t++) {
           let added = 0n;
           if (item.id === 'coin_1') added = 10n;
+          else if (item.id === 'lucky_coin') {
+            added = 5n;
+            setLuck(prev => prev + 2);
+          }
+          else if (item.id === 'clover_tea') {
+            added = 10n;
+            setLuck(prev => prev + 5);
+          }
           else if (item.id === 'cash_dog') added = 30n;
           else if (item.id === 'gold_cat') added = 50n;
           else if (item.id === 'hamster_worker') added = turn === 1 ? 100n : 10n;
@@ -475,6 +495,9 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
           else if (item.id === 'space_donut') {
             added = 20n;
             if ((i === 0 || !newBelt[i-1]) && (i === beltSize - 1 || !newBelt[i+1])) added += 80n;
+          }
+          else if (item.id === 'golden_feather') {
+            if (comboCount > 0) added = BigInt(comboCount * 100);
           }
           else if (item.id === 'hungry_pig') {
             added = -10n;
@@ -532,6 +555,10 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
             const addedLuck = Math.floor(Math.random() * 50) + 1;
             setLuck(prev => prev + addedLuck);
             showItemPopup(i, `+${addedLuck} LUCK`, true);
+          }
+          else if (item.id === 'rabbit_foot') {
+            setLuck(prev => prev + 15);
+            showItemPopup(i, '+15 LUCK', true);
           }
         }
       }
@@ -596,6 +623,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     }
 
     const turnFinalScore = step3Global + interestEarned;
+    setLastSpinTotal(turnFinalScore);
     setMoney(prev => prev + turnFinalScore);
     setSnowballStacks(newSnowball);
     setPiggyBankSaved(newPiggyBank);
@@ -1112,19 +1140,42 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
           </div>
 
           {/* Grid */}
-          <div className={`jp-slot-grid ${isTeasing ? 'jp-slot-teasing' : ''}`} id="jp-grid">
-            {gridSymbols.map((sym, i) => {
-              const col = i % 5;
-              const isStopped = reelStopping[col];
-              return (
-                <div 
-                  key={i} 
-                  className={`jp-slot-cell ${i === wildcardIndex ? 'border-2 border-[#ff00ff] shadow-[0_0_10px_#ff00ff]' : ''} ${!isStopped ? 'jp-slot-spinning' : 'jp-slot-stopped'}`}
+          <div className="relative">
+            <div className={`jp-slot-grid ${isTeasing ? 'jp-slot-teasing' : ''}`} id="jp-grid">
+              {gridSymbols.map((sym, i) => {
+                const col = i % 5;
+                const isStopped = reelStopping[col];
+                return (
+                  <div 
+                    key={i} 
+                    className={`jp-slot-cell ${i === wildcardIndex ? 'border-2 border-[#ff00ff] shadow-[0_0_10px_#ff00ff]' : ''} ${!isStopped ? 'jp-slot-spinning' : 'jp-slot-stopped'}`}
+                  >
+                    {sym}
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Spin Result Overlay */}
+            <AnimatePresence>
+              {!isSpinning && lastSpinTotal > 0n && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none flex flex-col items-center"
                 >
-                  {sym}
-                </div>
-              );
-            })}
+                  {lastSpinCombo > 0 && (
+                    <div className="bg-black/80 border-2 border-[#00ffcc] text-[#00ffcc] px-6 py-2 rounded-full font-black text-2xl mb-2 shadow-[0_0_20px_rgba(0,255,204,0.5)]">
+                      {lastSpinCombo} COMBO!
+                    </div>
+                  )}
+                  <div className="bg-black/80 border-2 border-[#ffb800] text-[#ffb800] px-8 py-3 rounded-2xl font-black text-4xl shadow-[0_0_30px_rgba(255,184,0,0.5)]">
+                    +{formatKoreanNumber(lastSpinTotal)}원
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Belt */}
