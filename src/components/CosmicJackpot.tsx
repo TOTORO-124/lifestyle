@@ -12,13 +12,13 @@ interface CosmicJackpotProps {
 }
 
 const SYMBOLS = [
-  { char: '🍒', value: 2n, weight: 1.3, tier: 1, tags: ['fruit'] },
-  { char: '🍋', value: 2n, weight: 1.3, tier: 1, tags: ['fruit'] },
-  { char: '☘️', value: 3n, weight: 1.0, tier: 2, tags: ['luck'] },
-  { char: '🔔', value: 3n, weight: 1.0, tier: 2, tags: ['bell'] },
-  { char: '💎', value: 5n, weight: 0.8, tier: 3, tags: ['gem'] },
-  { char: '💰', value: 5n, weight: 0.8, tier: 3, tags: ['money'] },
-  { char: '🌟', value: 7n, weight: 0.5, tier: 4, tags: ['star'] },
+  { char: '🍒', value: 5n, weight: 1.3, tier: 1, tags: ['fruit'] },
+  { char: '🍋', value: 5n, weight: 1.3, tier: 1, tags: ['fruit'] },
+  { char: '☘️', value: 10n, weight: 1.0, tier: 2, tags: ['luck'] },
+  { char: '🔔', value: 10n, weight: 1.0, tier: 2, tags: ['bell'] },
+  { char: '💎', value: 20n, weight: 0.8, tier: 3, tags: ['gem'] },
+  { char: '💰', value: 20n, weight: 0.8, tier: 3, tags: ['money'] },
+  { char: '🌟', value: 50n, weight: 0.5, tier: 4, tags: ['star'] },
   { char: '💀', value: 0n, weight: 0.15, tier: 0, isTrap: true, tags: ['trap'] }
 ];
 
@@ -201,16 +201,17 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     }
   };
 
-  const getRefundAmount = (tier: number) => {
-    const refundMap: Record<number, bigint> = {
-      1: 500n,
-      2: 1000n,
-      3: 1500n,
-      4: 2000n,
-      5: 1500n,
-      6: 5000n
+  const getRefundCoupons = (tier: number) => {
+    const refundMap: Record<number, number> = {
+      1: 1,
+      2: 1,
+      3: 2,
+      4: 2,
+      5: 3,
+      6: 5,
+      7: 8
     };
-    return refundMap[tier] || 0n;
+    return refundMap[tier] || 1;
   };
 
   const sellItem = (index: number) => {
@@ -218,8 +219,8 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     const item = belt[index];
     if (!item || item.id === 'dummy_slot') return;
 
-    const refund = getRefundAmount(item.tier);
-    setMoney(prev => prev + refund);
+    const refund = getRefundCoupons(item.tier);
+    setCoupons(prev => prev + refund);
     
     const newBelt = [...belt];
     newBelt[index] = null;
@@ -243,7 +244,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
       const wRect = wrapperRef.current.getBoundingClientRect();
       const x = rect.left - wRect.left + rect.width / 2;
       const y = rect.top - wRect.top;
-      showPopup(`+${formatKoreanNumber(refund)}원`, x, y, false);
+      showPopup(`+${refund}장`, x, y, false);
       createPopParticles(x, y);
     }
   };
@@ -407,7 +408,8 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
       maxTurn,
       isBossChallenge,
       shieldGeneratorCharges,
-      snowballStacks
+      snowballStacks,
+      coupons
     });
 
     setLastSpinCombo(synergyResult.comboCount);
@@ -455,6 +457,14 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     if (synergyResult.addedLuck > 0) {
       setLuck(prev => prev + synergyResult.addedLuck);
     }
+    if (synergyResult.addedCoupons > 0) {
+      setCoupons(prev => prev + synergyResult.addedCoupons);
+      showPopup(`🎫 쿠폰 +${synergyResult.addedCoupons}`, window.innerWidth/2, window.innerHeight/2 - 50);
+    }
+    if (synergyResult.addedAtm > 0n) {
+      setAtm(prev => prev + synergyResult.addedAtm);
+      showPopup(`💰 금고 +${formatKoreanNumber(synergyResult.addedAtm)}`, window.innerWidth/2, window.innerHeight/2 + 50);
+    }
     if (fairyMagnifierTurns > 0) setFairyMagnifierTurns(prev => prev - 1);
 
     if (synergyResult.finalScore >= 1000n && !synergyResult.isBankrupt) createCoinWaterfall();
@@ -497,7 +507,11 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
       let w = s.weight;
       // Luck affects weights: tier 0 (trap) weight decreases, high tier increases
       if (s.tier === 0) {
-        w = Math.max(0.01, (w * trapChanceMultiplier) - (currentLuck / 200));
+        let currentTrapMultiplier = trapChanceMultiplier;
+        if (belt.some(it => it?.id === 'atm_security_guard') && atm >= 100000n) {
+          currentTrapMultiplier *= 0.5;
+        }
+        w = Math.max(0.01, (w * currentTrapMultiplier) - (currentLuck / 200));
         if (hasCloverHairpin) w *= 0.5;
         if (hasBasketOfPlenty) w *= 0.5;
         if (hasLuckyCharm) w *= 0.9;
@@ -854,7 +868,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
                     sellItem(i);
                   }}
                 >
-                  판매 ({formatKoreanNumber(getRefundAmount(item.tier))}원)
+                  판매 ({getRefundCoupons(item.tier)}장)
                 </button>
               </div>
             )}
@@ -1014,7 +1028,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
                 onClick={() => deposit(money)}
                 disabled={money <= 0n}
               >
-                전액 입금 (이자 7%)
+                전액 입금 (이자 {7 + belt.reduce((acc, it) => it?.id === 'compound_interest_calculator' ? acc + (it.currentMultiplier || 0) : acc, 0)}%)
               </button>
             </div>
           </div>
