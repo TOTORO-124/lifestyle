@@ -1,55 +1,72 @@
-export type ItemTier = 1 | 2 | 3 | 4 | 5 | 6;
-export type ItemType = 'passive' | 'consumable';
+export type ItemTier = 1 | 2 | 3 | 4 | 5 | 6 | 7; // 1: Common, 2: Uncommon, 3: Mildly Rare, 4: Rare, 5: Very Rare, 6: Legendary, 7: Ultra Legendary
+export type ItemType = 'passive' | 'consumable' | 'luck' | 'wildcard' | 'defense';
+export type EffectType = 'base' | 'multiplier' | 'global' | 'interest' | 'luck' | 'wildcard' | 'defense';
 
 export interface CosmicItem {
   id: string;
   name: string;
   description: string;
   size: number; // 1 or 2
-  cost: number; // Now represents coupons
+  cost: number; // Coupons
   tier: ItemTier;
   type: ItemType;
+  effectType: EffectType;
   icon: string;
+  weight?: number; // For shop generation
 }
 
 export const COSMIC_ITEMS: CosmicItem[] = [
-  // Tier 1: Base Production
-  { id: 'coin_1', name: '짤랑이 꼬마 동전', description: '매 턴 수익 +10원', size: 1, cost: 1, tier: 1, type: 'passive', icon: '🪙' },
-  { id: 'cash_dog', name: '지폐 뭉치 댕댕이', description: '매 턴 수익 +30원', size: 1, cost: 1, tier: 1, type: 'passive', icon: '🐶' },
-  { id: 'gold_cat', name: '반짝반짝 금괴 냥이', description: '매 턴 수익 +50원', size: 1, cost: 1, tier: 1, type: 'passive', icon: '🐱' },
+  // Tier 1: COMMON (100% weight)
+  { id: 'coin_1', name: '짤랑이 꼬마 동전', description: '매 턴 수익 +10원', size: 1, cost: 1, tier: 1, type: 'passive', effectType: 'base', icon: '🪙' },
+  { id: 'cash_dog', name: '지폐 뭉치 댕댕이', description: '매 턴 수익 +30원', size: 1, cost: 1, tier: 1, type: 'passive', effectType: 'base', icon: '🐶' },
+  { id: 'gold_cat', name: '반짝반짝 금괴 냥이', description: '매 턴 수익 +50원', size: 1, cost: 1, tier: 1, type: 'passive', effectType: 'base', icon: '🐱' },
+  { id: 'scrub_towel', name: '뽀득뽀득 때밀이 수건', description: '슬롯 정지 시 함정(💀)을 50% 확률로 체리로 변환', size: 1, cost: 1, tier: 1, type: 'passive', effectType: 'defense', icon: '🧼' },
+  { id: 'clover_seed', name: '네잎클로버 씨앗', description: '체리/레몬 확률 -5%, 클로버/종 확률 +5%', size: 1, cost: 1, tier: 1, type: 'luck', effectType: 'luck', icon: '🌱' },
 
-  // Tier 2: Conditional & Growth
-  { id: 'hamster_worker', name: '성실한 알바생 햄스터', description: '1, 2턴엔 +10원, 마지막 3턴째엔 +100원', size: 1, cost: 2, tier: 2, type: 'passive', icon: '🐹' },
-  { id: 'lucky_clover', name: '행운의 네잎클로버', description: '매 턴 10원~100원 랜덤 생산', size: 1, cost: 2, tier: 2, type: 'passive', icon: '🍀' },
-  { id: 'snowball_rice', name: '눈덩이 주먹밥', description: '기본 +10원, 턴마다 생산량 2배 영구 증가', size: 1, cost: 2, tier: 2, type: 'passive', icon: '🍙' },
+  // Tier 2: UNCOMMON (90% weight)
+  { id: 'hamster_worker', name: '성실한 알바생 햄스터', description: '1, 2턴엔 +10원, 마지막 3턴째엔 +100원', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🐹' },
+  { id: 'lucky_clover', name: '행운의 네잎클로버', description: '매 턴 10원~100원 랜덤 생산', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🍀' },
+  { id: 'milk_drop', name: '찰랑이는 우유 방울', description: '스핀 시 10% 확률로 턴을 소모하지 않음', size: 1, cost: 2, tier: 2, type: 'luck', effectType: 'luck', icon: '🥛' },
+  { id: 'magnet_paw', name: '끈끈이 자석 냥발', description: '패턴이 1칸 차이로 실패 시, 라운드당 1번 강제 완성', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'multiplier', icon: '🐾' },
+  { id: 'carrot_coupon', name: '당근 마켓 단골 쿠폰', description: '상점 리롤 비용 증가폭 50% 감소', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🥕' },
+  { id: 'snowball_rice', name: '눈덩이 주먹밥', description: '기본 +10원, 턴마다 생산량 2배 영구 증가', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🍙' },
+  { id: 'space_donut', name: '우주 도넛', description: '매 턴 +20원, 양옆이 비어있으면 +80원 추가', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🍩' },
 
-  // Tier 3: Positional Synergy
-  { id: 'gold_magnifier', name: '황금 돋보기', description: '바로 왼쪽 칸 아이템의 최종 생산량 x2배', size: 1, cost: 3, tier: 3, type: 'passive', icon: '🔍' },
-  { id: 'twin_mirror', name: '쌍둥이 거울', description: '바로 오른쪽 칸 아이템의 능력을 한 번 더 발동', size: 1, cost: 3, tier: 3, type: 'passive', icon: '🪞' },
-  { id: 'magic_popcorn', name: '마법의 뻥튀기 기계', description: '양옆(좌우) 칸 아이템의 생산량 x3배', size: 1, cost: 3, tier: 3, type: 'passive', icon: '🍿' },
+  // Tier 3: MILDLY RARE (80% weight)
+  { id: 'gold_magnifier', name: '황금 돋보기', description: '바로 왼쪽 칸 아이템의 최종 생산량 x2배', size: 1, cost: 3, tier: 3, type: 'passive', effectType: 'multiplier', icon: '🔍' },
+  { id: 'twin_mirror', name: '쌍둥이 거울', description: '바로 오른쪽 칸 아이템의 능력을 한 번 더 발동', size: 1, cost: 3, tier: 3, type: 'passive', effectType: 'multiplier', icon: '🪞' },
+  { id: 'magic_popcorn', name: '마법의 뻥튀기 기계', description: '양옆(좌우) 칸 아이템의 생산량 x3배', size: 1, cost: 3, tier: 3, type: 'passive', effectType: 'multiplier', icon: '🍿' },
+  { id: 'clover_hairpin', name: '네잎클로버 머리핀', description: '꽝 확률 절반 감소, 벨트 아이템과 콤보 확률 20% 증가', size: 1, cost: 3, tier: 3, type: 'luck', effectType: 'luck', icon: '🎀' },
+  { id: 'alien_jelly', name: '외계인 젤리', description: '매 턴 +10원, 다른 외계인 젤리 1개당 생산량 x2배', size: 1, cost: 3, tier: 3, type: 'passive', effectType: 'multiplier', icon: '👾' },
 
-  // Tier 4: Compound & Broken
-  { id: 'gold_onion', name: '든든한 황금 양파', description: '턴 종료 시 보유 총 잔고의 5% 이자 획득', size: 1, cost: 4, tier: 4, type: 'passive', icon: '🧅' },
-  { id: 'hungry_pig', name: '먹보 아기 돼지', description: '매 턴 10원 차감, 라운드 클리어 시 차감 총액의 10배 지급', size: 1, cost: 4, tier: 4, type: 'passive', icon: '🐷' },
-  { id: 'blackhole_safe', name: '블랙홀 금고', description: '해당 턴 모든 아이템 총 수익 x3배 (2칸 차지)', size: 2, cost: 4, tier: 4, type: 'passive', icon: '🗄️' },
+  // Tier 4: RARE (65% weight)
+  { id: 'gold_onion', name: '든든한 황금 양파', description: '턴 종료 시 금고(ATM) 잔고의 5% 이자 획득', size: 1, cost: 4, tier: 4, type: 'passive', effectType: 'interest', icon: '🧅' },
+  { id: 'hungry_pig', name: '먹보 아기 돼지', description: '매 턴 10원 차감, 라운드 클리어 시 차감 총액의 10배 지급', size: 1, cost: 4, tier: 4, type: 'passive', effectType: 'base', icon: '🐷' },
+  { id: 'golden_horseshoe', name: '황금 편자', description: '모든 확률 발동 아이템의 성공 확률 +25%p', size: 1, cost: 4, tier: 4, type: 'luck', effectType: 'luck', icon: '🧲' },
+  { id: 'bible_shield', name: '성스러운 성경', description: '함정 심볼(해골)의 효과를 1회 무효화하고 파괴됨', size: 1, cost: 4, tier: 4, type: 'defense', effectType: 'defense', icon: '📖' },
+  { id: 'meteor_candy', name: '유성 캔디', description: '슬롯머신에서 7️⃣이 나올 때마다 +500원', size: 1, cost: 4, tier: 4, type: 'passive', effectType: 'base', icon: '🍬' },
+  { id: 'golden_egg', name: '황금 알', description: '매 턴 +10원, 라운드 클리어 시 1000원 지급 후 파괴됨', size: 1, cost: 3, tier: 3, type: 'passive', effectType: 'base', icon: '🥚' },
+  { id: 'lucky_dice', name: '행운의 주사위', description: '매 턴 행운(Luck) +1~50 랜덤 증가', size: 1, cost: 3, tier: 3, type: 'luck', effectType: 'luck', icon: '🎲' },
 
-  // Tier 5: Consumables
-  { id: 'magic_pouch', name: '마법의 주머니', description: '시너지 벨트 최대 칸 수 1칸 영구 증가', size: 1, cost: 3, tier: 5, type: 'consumable', icon: '🎒' },
-  { id: 'hot_potato', name: '따끈한 군고구마', description: '이번 라운드 동안 모든 아이템 기본 생산량 +20원', size: 1, cost: 2, tier: 5, type: 'consumable', icon: '🍠' },
-  { id: 'reset_wand', name: '초기화 마술봉', description: '턴 소모 없이 슬롯 1번 다시 돌리기', size: 1, cost: 2, tier: 5, type: 'consumable', icon: '🪄' },
+  // Tier 5: VERY RARE (50% weight)
+  { id: 'blackhole_safe', name: '블랙홀 금고', description: '해당 턴 모든 아이템 총 수익 x3배 (2칸 차지)', size: 2, cost: 5, tier: 5, type: 'passive', effectType: 'global', icon: '🗄️' },
+  { id: 'rainbow_clay', name: '무지개 찰흙', description: '슬롯 기호 중 하나를 조커로 변경 (최고 효율 기호 취급)', size: 1, cost: 5, tier: 5, type: 'wildcard', effectType: 'wildcard', icon: '🌈' },
+  { id: 'rosary_beads', name: '축복받은 묵주', description: '함정 심볼의 효과를 영구적으로 무효화 (2칸 차지)', size: 2, cost: 6, tier: 5, type: 'defense', effectType: 'defense', icon: '📿' },
+  { id: 'shield_generator', name: '보호막 생성기', description: '함정(💀)을 3개까지 막아줌 (매 라운드 충전)', size: 2, cost: 6, tier: 5, type: 'defense', effectType: 'defense', icon: '🛡️' },
+  { id: 'coffee_boost', name: '로켓 에스프레소', description: '이번 턴 모든 아이템 생산량 x2배 후 파괴됨', size: 1, cost: 3, tier: 5, type: 'passive', effectType: 'global', icon: '☕' },
 
-  // AI Creative Items
-  { id: 'space_donut', name: '우주 도넛', description: '매 턴 +20원, 양옆이 비어있으면 +80원 추가', size: 1, cost: 2, tier: 2, type: 'passive', icon: '🍩' },
-  { id: 'alien_jelly', name: '외계인 젤리', description: '매 턴 +10원, 다른 외계인 젤리 1개당 생산량 x2배', size: 1, cost: 3, tier: 3, type: 'passive', icon: '👾' },
-  { id: 'sleepy_owl', name: '졸린 부엉이', description: '1, 2턴엔 0원, 3턴째에 모아둔 힘으로 +300원', size: 1, cost: 2, tier: 2, type: 'passive', icon: '🦉' },
-  { id: 'coffee_boost', name: '로켓 에스프레소', description: '이번 턴 모든 아이템 생산량 x2배 후 파괴됨', size: 1, cost: 3, tier: 3, type: 'passive', icon: '☕' },
-  { id: 'black_cat', name: '우주 검은 고양이', description: '매 턴 50% 확률로 +100원, 50% 확률로 0원', size: 1, cost: 2, tier: 2, type: 'passive', icon: '🐈‍⬛' },
-  { id: 'meteor_candy', name: '유성 캔디', description: '슬롯머신에서 7️⃣이 나올 때마다 +500원', size: 1, cost: 4, tier: 4, type: 'passive', icon: '🍬' },
-  { id: 'golden_ticket', name: '황금 티켓', description: '라운드 클리어 시 쿠폰 1장 추가 획득', size: 1, cost: 4, tier: 4, type: 'passive', icon: '🎫' },
+  // Tier 6: LEGENDARY (35% weight)
+  { id: 'legendary_bank_key', name: '우주 은행의 마스터키', description: '매 턴 종료 시, 금고 잔고의 50%를 이자로 즉시 지급', size: 2, cost: 10, tier: 6, type: 'passive', effectType: 'interest', icon: '🗝️' },
+  { id: 'legendary_distortion_mirror', name: '차원 왜곡 거울', description: '벨트에 있는 모든 아이템의 최종 수익을 x5배 함', size: 2, cost: 10, tier: 6, type: 'passive', effectType: 'global', icon: '🪞✨' },
+  { id: 'legendary_vvip_card', name: '야옹 상회 VVIP 골드카드', description: '상점 리롤 비용 영구 0원, 매 라운드 시작 시 쿠폰 2장 무료 획득', size: 2, cost: 10, tier: 6, type: 'passive', effectType: 'base', icon: '💳' },
 
-  // Tier 6: Legendary (Boss Rewards)
-  { id: 'legendary_bank_key', name: '우주 은행의 마스터키', description: '매 턴 종료 시, 현재 잔고의 50%를 이자로 즉시 지급', size: 2, cost: 999, tier: 6, type: 'passive', icon: '🗝️' },
-  { id: 'legendary_distortion_mirror', name: '차원 왜곡 거울', description: '벨트에 있는 모든 아이템의 최종 수익을 x5배 함', size: 2, cost: 999, tier: 6, type: 'passive', icon: '🪞✨' },
-  { id: 'legendary_vvip_card', name: '야옹 상회 VVIP 골드카드', description: '상점 리롤 비용 영구 0원, 매 라운드 시작 시 쿠폰 2장 무료 획득', size: 2, cost: 999, tier: 6, type: 'passive', icon: '💳' },
-  { id: 'legendary_slime_king', name: '황금 슬라임 킹', description: '벨트에 있는 1티어 아이템 1개당 전체 수익 x10배 증폭', size: 2, cost: 999, tier: 6, type: 'passive', icon: '👑' },
+  // Tier 7: ULTRA LEGENDARY (20% weight)
+  { id: 'ultra_clover_pit', name: '클로버 핏의 심장', description: '모든 패턴 배수가 영구적으로 +2 증가 (3칸 차지)', size: 3, cost: 15, tier: 7, type: 'passive', effectType: 'global', icon: '🍀❤️' },
+  { id: 'ultra_angel_wing', name: '천사의 날개', description: '함정 심볼이 등장하지 않으며, 모든 수익 x10배', size: 2, cost: 20, tier: 7, type: 'passive', effectType: 'global', icon: '🪽' },
+
+  // Consumables
+  { id: 'magic_pouch', name: '마법의 주머니', description: '시너지 벨트 최대 칸 수 1칸 영구 증가', size: 1, cost: 5, tier: 4, type: 'consumable', effectType: 'base', icon: '🎒' },
+  { id: 'hot_potato', name: '따끈한 군고구마', description: '이번 라운드 동안 모든 아이템 기본 생산량 +20원', size: 1, cost: 2, tier: 2, type: 'consumable', effectType: 'base', icon: '🍠' },
+  { id: 'reset_wand', name: '초기화 마술봉', description: '턴 소모 없이 슬롯 1번 다시 돌리기', size: 1, cost: 2, tier: 2, type: 'consumable', effectType: 'base', icon: '🪄' },
+  { id: 'fairy_magnifier', name: '요정의 돋보기', description: '다음 1턴 동안 슬롯머신에서 최소 2티어 이상 기호만 등장', size: 1, cost: 3, tier: 3, type: 'consumable', effectType: 'luck', icon: '🧚' },
 ];
