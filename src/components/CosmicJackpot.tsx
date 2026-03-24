@@ -65,6 +65,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
   const [luck, setLuck] = useState(0);
   const [fairyMagnifierTurns, setFairyMagnifierTurns] = useState(0);
   const [wildcardIndex, setWildcardIndex] = useState<number | null>(null); // Index in grid that is wildcard
+  const [highlightedIndices, setHighlightedIndices] = useState<number[]>([]);
   
   // CloverPit specific states
   const [activeWhisper, setActiveWhisper] = useState<Whisper | null>(null);
@@ -91,6 +92,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     setMaxTurn(7);
     setQuota(500n);
     setMoney(2000n);
+    setHighlightedIndices([]);
     setDisplayMoney(2000n);
     setAtm(0n);
     setDisplayAtm(0n);
@@ -107,6 +109,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     setPiggyBankSaved(0n);
     setMagnetPawUsed(false);
     setShieldGeneratorCharges(0);
+    setReelStopping([false, false, false, false, false]);
     setGridSymbols(Array(15).fill('❓'));
     generateShop(); // Generate initial shop items
   }, []);
@@ -183,21 +186,22 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     }, 1200);
   };
 
-  const createPopParticles = (x: number, y: number) => {
+  const createPopParticles = (x: number, y: number, count = 12, color = '#ffb800') => {
     if (!wrapperRef.current) return;
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < count; i++) {
       const particle = document.createElement('div');
       particle.className = 'jp-slot-pop-particle';
       particle.style.left = `${x}px`;
       particle.style.top = `${y}px`;
-      const angle = (Math.PI * 2 * i) / 8;
-      const velocity = 30 + Math.random() * 20;
+      particle.style.backgroundColor = color;
+      const angle = Math.random() * Math.PI * 2;
+      const velocity = 40 + Math.random() * 80;
       particle.style.setProperty('--vx', `${Math.cos(angle) * velocity}px`);
       particle.style.setProperty('--vy', `${Math.sin(angle) * velocity}px`);
       wrapperRef.current.appendChild(particle);
       setTimeout(() => {
         if (particle.parentNode) particle.remove();
-      }, 600);
+      }, 800);
     }
   };
 
@@ -245,7 +249,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
       const x = rect.left - wRect.left + rect.width / 2;
       const y = rect.top - wRect.top;
       showPopup(`+${refund}장`, x, y, false);
-      createPopParticles(x, y);
+      createPopParticles(x, y, 10, '#ffb800');
     }
   };
 
@@ -291,6 +295,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     
     setIsSpinning(true);
     setReelStopping([false, false, false, false, false]);
+    setHighlightedIndices([]);
     setIsTeasing(false);
     setSelectedBeltIndex(null);
     
@@ -351,6 +356,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
                     col3.every(s => s.char === col1[0].char);
 
     // Sequential Stopping
+    let totalBaseValue = 0n;
     for (let col = 0; col < 5; col++) {
       const delay = col === 4 && isTease ? 2000 : 400; // Longer delay for tease
       if (col === 3 && isTease) setIsTeasing(true);
@@ -370,9 +376,88 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
         }
         return next;
       });
+
+      // --- Real-time Column Combo Check ---
+      const colIndices = [0 * 5 + col, 1 * 5 + col, 2 * 5 + col];
+      const colChars = colIndices.map(idx => results[idx].char);
+      const firstChar = colChars[0];
+      if (colChars.every(c => c === firstChar && firstChar !== '💀')) {
+        setHighlightedIndices(prev => [...prev, ...colIndices]);
+        const comboBaseValue = BigInt(colChars.length) * results[colIndices[0]].value;
+        totalBaseValue += comboBaseValue;
+        showPopup(`✨ ${col + 1}열 콤보! +${formatKoreanNumber(comboBaseValue)}`, window.innerWidth / 2, window.innerHeight / 2 - 80);
+        createPopParticles(window.innerWidth / 2, window.innerHeight / 2, 15, '#00ffcc');
+      }
       
       // clack sound effect (visual bounce)
       triggerShake();
+    }
+
+    // --- Real-time Row Combo Check ---
+    const rows = [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14]];
+    rows.forEach((rowIndices, idx) => {
+      const rowChars = rowIndices.map(i => results[i].char);
+      const first = rowChars[0];
+      if (rowChars.every(c => c === first && first !== '💀')) {
+        setHighlightedIndices(prev => [...prev, ...rowIndices]);
+        const rowBaseValue = BigInt(rowChars.length) * results[rowIndices[0]].value;
+        totalBaseValue += rowBaseValue;
+        showPopup(`🔥 ${idx + 1}행 콤보! +${formatKoreanNumber(rowBaseValue)}`, window.innerWidth / 2, window.innerHeight / 2 + 80);
+        createPopParticles(window.innerWidth / 2, window.innerHeight / 2, 20, '#ff3366');
+      }
+    });
+
+    // --- Diagonal Combo Check ---
+    const diags = [[0, 6, 12], [1, 7, 13], [2, 8, 14], [10, 6, 2], [11, 7, 3], [12, 8, 4]];
+    diags.forEach((diagIndices, idx) => {
+      const diagChars = diagIndices.map(i => results[i].char);
+      const first = diagChars[0];
+      if (diagChars.every(c => c === first && first !== '💀')) {
+        setHighlightedIndices(prev => [...prev, ...diagIndices]);
+        const diagBaseValue = BigInt(diagChars.length) * results[diagIndices[0]].value;
+        totalBaseValue += diagBaseValue;
+        showPopup(`📐 대각선 콤보! +${formatKoreanNumber(diagBaseValue)}`, window.innerWidth / 2, window.innerHeight / 2 - 120);
+        createPopParticles(window.innerWidth / 2, window.innerHeight / 2, 15, '#ffcc00');
+      }
+    });
+
+    // --- Triangle Pattern Check ---
+    const triangles = [[0, 6, 12, 8, 4], [10, 6, 2, 8, 14]];
+    triangles.forEach((triIndices, idx) => {
+      const triChars = triIndices.map(i => results[i].char);
+      const first = triChars[0];
+      if (triChars.every(c => c === first && first !== '💀')) {
+        setHighlightedIndices(prev => [...prev, ...triIndices]);
+        const triBaseValue = BigInt(triChars.length) * results[triIndices[0]].value;
+        totalBaseValue += triBaseValue;
+        showPopup(`🔺 삼각형 패턴! +${formatKoreanNumber(triBaseValue)}`, window.innerWidth / 2, window.innerHeight / 2);
+        createPopParticles(window.innerWidth / 2, window.innerHeight / 2, 25, '#ff00ff');
+      }
+    });
+
+    // --- Square Pattern Check ---
+    const squares = [
+      [0, 1, 5, 6], [1, 2, 6, 7], [2, 3, 7, 8], [3, 4, 8, 9],
+      [5, 6, 10, 11], [6, 7, 11, 12], [7, 8, 12, 13], [8, 9, 13, 14]
+    ];
+    squares.forEach((sqIndices, idx) => {
+      const sqChars = sqIndices.map(i => results[i].char);
+      const first = sqChars[0];
+      if (sqChars.every(c => c === first && first !== '💀')) {
+        setHighlightedIndices(prev => [...prev, ...sqIndices]);
+        const sqBaseValue = BigInt(sqChars.length) * results[sqIndices[0]].value;
+        totalBaseValue += sqBaseValue;
+        showPopup(`⬜ 네모 패턴! +${formatKoreanNumber(sqBaseValue)}`, window.innerWidth / 2, window.innerHeight / 2 + 120);
+        createPopParticles(window.innerWidth / 2, window.innerHeight / 2, 15, '#3399ff');
+      }
+    });
+
+    // --- Jackpot Check ---
+    const allChars = results.map(r => r.char);
+    const firstSym = allChars[0];
+    if (allChars.every(c => c === firstSym && firstSym !== '💀')) {
+      showPopup('🎰 ALL-IN JACKPOT!!!', window.innerWidth / 2, window.innerHeight / 2, true);
+      createCoinWaterfall();
     }
 
     clearInterval(spinInterval);
@@ -419,6 +504,12 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     setLastSpinCombo(synergyResult.comboCount);
     setReceipt(synergyResult.receipt);
     
+    if (synergyResult.finalScore > 0n) {
+      await sleep(500);
+      showPopup(`💎 +${formatKoreanNumber(synergyResult.finalScore)}!`, window.innerWidth / 2, window.innerHeight / 2, true);
+      createCoinWaterfall();
+    }
+    
     // Debug/Verification log
     console.log('--- SYNERGY RECEIPT ---');
     synergyResult.receipt.forEach(step => {
@@ -460,10 +551,14 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     setBelt(synergyResult.newBelt);
     if (synergyResult.addedLuck > 0) {
       setLuck(prev => prev + synergyResult.addedLuck);
+      showPopup(`🍀 행운 +${synergyResult.addedLuck}`, window.innerWidth/2, window.innerHeight/2 - 100, true);
     }
     if (synergyResult.addedCoupons > 0) {
       setCoupons(prev => prev + synergyResult.addedCoupons);
       showPopup(`🎫 쿠폰 +${synergyResult.addedCoupons}`, window.innerWidth/2, window.innerHeight/2 - 50);
+    }
+    if (synergyResult.interestEarned > 0n) {
+      showPopup(`📈 이자 +${formatKoreanNumber(synergyResult.interestEarned)}`, window.innerWidth/2, window.innerHeight/2 + 100);
     }
     if (synergyResult.addedAtm > 0n) {
       setAtm(prev => prev + synergyResult.addedAtm);
@@ -1056,7 +1151,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
                 return (
                   <div 
                     key={i} 
-                    className={`jp-slot-cell ${i === wildcardIndex ? 'border-2 border-[#ff00ff] shadow-[0_0_10px_#ff00ff]' : ''} ${!isStopped ? 'jp-slot-spinning' : 'jp-slot-stopped'}`}
+                    className={`jp-slot-cell ${i === wildcardIndex ? 'border-2 border-[#ff00ff] shadow-[0_0_10px_#ff00ff]' : ''} ${highlightedIndices.includes(i) ? 'jp-slot-cell-highlight' : ''} ${!isStopped ? 'jp-slot-spinning' : 'jp-slot-stopped'}`}
                   >
                     {sym}
                   </div>

@@ -59,33 +59,52 @@ export const calculateSynergy = (state: SynergyState): SynergyResult => {
   const checkCombo = (indices: number[]) => {
     const chars = indices.map(idx => grid[idx]);
     const first = chars.find(c => c !== 'WILD');
-    if (!first) return true;
+    if (first === '💀') return false; // Skulls don't form combos
+    if (!first) return true; // All WILD is a combo
     return chars.every(c => c === first || c === 'WILD');
   };
 
   let patternMultiplier = 1.0;
   let comboCount = 0;
   
-  const firstNonWild = grid.find(c => c !== 'WILD') || 'WILD';
-  if (grid.every(c => c === firstNonWild || c === 'WILD')) {
-    patternMultiplier = 10.0;
-    comboCount = 8;
-  } else {
-    // Rows
-    [ [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14] ].forEach(row => {
-      if (checkCombo(row)) {
-        patternMultiplier *= 2.0; // Changed from += 1.0 to *= 2.0
-        comboCount++;
-      }
-    });
-    // Cols
+  // Rows (5 symbols)
+  [ [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14] ].forEach(row => {
+    if (checkCombo(row)) {
+      patternMultiplier *= 2.0;
+      comboCount++;
+    }
+  });
+    // Cols (3 symbols)
     [ [0,5,10], [1,6,11], [2,7,12], [3,8,13], [4,9,14] ].forEach(col => {
       if (checkCombo(col)) {
-        patternMultiplier *= 2.0; // Changed from += 1.0 to *= 2.0
+        patternMultiplier *= 1.5;
         comboCount++;
       }
     });
-  }
+    // Diagonals (3 symbols)
+    [ [0,6,12], [1,7,13], [2,8,14], [10,6,2], [11,7,3], [12,8,4] ].forEach(diag => {
+      if (checkCombo(diag)) {
+        patternMultiplier *= 1.5;
+        comboCount++;
+      }
+    });
+    // Triangle Patterns (5 symbols)
+    [ [0,6,12,8,4], [10,6,2,8,14] ].forEach(tri => {
+      if (checkCombo(tri)) {
+        patternMultiplier *= 3.0;
+        comboCount++;
+      }
+    });
+    // Square Patterns (4 symbols)
+    [ 
+      [0,1,5,6], [1,2,6,7], [2,3,7,8], [3,4,8,9],
+      [5,6,10,11], [6,7,11,12], [7,8,12,13], [8,9,13,14]
+    ].forEach(sq => {
+      if (checkCombo(sq)) {
+        patternMultiplier *= 2.0;
+        comboCount++;
+      }
+    });
 
   // Trap Check
   const trapCount = grid.filter(r => r === '💀').length;
