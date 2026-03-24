@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { COSMIC_ITEMS, CosmicItem } from '../data/cosmicJackpotItems';
+import { calculateSynergy, ReceiptStep } from '../utils/synergy';
 import { Coins, ShoppingCart, ArrowRight, RefreshCw, Sparkles, CheckCircle2, X, Shield, Wallet } from 'lucide-react';
 import './CosmicJackpot.css';
 
@@ -10,14 +11,14 @@ interface CosmicJackpotProps {
 }
 
 const SYMBOLS = [
-  { char: '🍒', value: 2n, weight: 1.3, tier: 1 },
-  { char: '🍋', value: 2n, weight: 1.3, tier: 1 },
-  { char: '☘️', value: 3n, weight: 1.0, tier: 2 },
-  { char: '🔔', value: 3n, weight: 1.0, tier: 2 },
-  { char: '💎', value: 5n, weight: 0.8, tier: 3 },
-  { char: '💰', value: 5n, weight: 0.8, tier: 3 },
-  { char: '🌟', value: 7n, weight: 0.5, tier: 4 },
-  { char: '💀', value: 0n, weight: 0.15, tier: 0, isTrap: true }
+  { char: '🍒', value: 2n, weight: 1.3, tier: 1, tags: ['fruit'] },
+  { char: '🍋', value: 2n, weight: 1.3, tier: 1, tags: ['fruit'] },
+  { char: '☘️', value: 3n, weight: 1.0, tier: 2, tags: ['luck'] },
+  { char: '🔔', value: 3n, weight: 1.0, tier: 2, tags: ['bell'] },
+  { char: '💎', value: 5n, weight: 0.8, tier: 3, tags: ['gem'] },
+  { char: '💰', value: 5n, weight: 0.8, tier: 3, tags: ['money'] },
+  { char: '🌟', value: 7n, weight: 0.5, tier: 4, tags: ['star'] },
+  { char: '💀', value: 0n, weight: 0.15, tier: 0, isTrap: true, tags: ['trap'] }
 ];
 
 interface Whisper {
@@ -47,6 +48,8 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
   
   const [lastSpinCombo, setLastSpinCombo] = useState(0);
   const [lastSpinTotal, setLastSpinTotal] = useState(0n);
+  const [receipt, setReceipt] = useState<ReceiptStep[]>([]);
+  const [showReceipt, setShowReceipt] = useState(false);
 
   const [belt, setBelt] = useState<(CosmicItem | null)[]>([null, null, null, null, null]);
   const [beltSize, setBeltSize] = useState(5);
@@ -385,252 +388,74 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     const finalSymbols = results.map((s, idx) => idx === currentWildcardIndex ? '🌈' : s.char);
     setGridSymbols(finalSymbols);
 
-    // --- Pattern Detection (3x5 Grid) ---
-    let patternMultiplier = 1.0;
+    // --- Synergy Chain Reaction ---
     const grid = results.map((r, idx) => idx === currentWildcardIndex ? 'WILD' : r.char);
+
+    const synergyResult = calculateSynergy({
+      grid,
+      belt,
+      atm,
+      luck,
+      globalPatternBonus,
+      piggyBankSaved,
+      hotPotatoBuff,
+      fairyMagnifierTurns,
+      trapChanceMultiplier,
+      turn,
+      maxTurn,
+      isBossChallenge,
+      shieldGeneratorCharges,
+      snowballStacks
+    });
+
+    setLastSpinCombo(synergyResult.comboCount);
+    setReceipt(synergyResult.receipt);
     
-    const checkCombo = (indices: number[]) => {
-      const chars = indices.map(idx => grid[idx]);
-      const first = chars.find(c => c !== 'WILD');
-      if (!first) return true;
-      return chars.every(c => c === first || c === 'WILD');
-    };
+    // Debug/Verification log
+    console.log('--- SYNERGY RECEIPT ---');
+    synergyResult.receipt.forEach(step => {
+      console.log(`[${step.type.toUpperCase()}] ${step.name}: ${step.value} -> Total: ${step.amount}`);
+    });
+    console.log(`FINAL SCORE: ${synergyResult.finalScore}`);
+    console.log('-----------------------');
 
-    // Jackpot: Full Screen
-    const firstNonWild = grid.find(c => c !== 'WILD') || 'WILD';
-    let comboCount = 0;
-    if (grid.every(c => c === firstNonWild || c === 'WILD')) {
-      patternMultiplier = 10.0;
-      comboCount = 8; // Max combos for full screen
+    if (synergyResult.comboCount === 8) {
       showPopup('🎰 JACKPOT! x10', window.innerWidth / 2, window.innerHeight / 2, true);
-    } else {
-      // Rows (5 cells each)
-      [ [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14] ].forEach(row => {
-        if (checkCombo(row)) {
-          patternMultiplier += 1.0;
-          comboCount++;
-        }
-      });
-      // Cols (3 cells each)
-      [ [0,5,10], [1,6,11], [2,7,12], [3,8,13], [4,9,14] ].forEach(col => {
-        if (checkCombo(col)) {
-          patternMultiplier += 1.0;
-          comboCount++;
-        }
-      });
     }
-    setLastSpinCombo(comboCount);
 
-    // Trap Check
-    const trapCount = results.filter(r => r.isTrap).length;
-    if (trapCount >= 3) {
-      let protected_ = false;
-      const newBelt = [...belt];
-      const bibleIdx = newBelt.findIndex(it => it?.id === 'bible_shield');
-      if (bibleIdx !== -1) {
-        newBelt[bibleIdx] = null;
-        setBelt(newBelt);
-        protected_ = true;
+    if (synergyResult.isBankrupt) {
+      if (synergyResult.bibleUsed) {
         showPopup('📖 성경 보호!', window.innerWidth/2, window.innerHeight/2);
-      } else if (newBelt.some(it => it?.id === 'rosary_beads')) {
-        protected_ = true;
-        showPopup('📿 묵주 보호!', window.innerWidth/2, window.innerHeight/2);
-      } else if (shieldGeneratorCharges > 0) {
+      } else if (synergyResult.shieldChargesUsed > 0) {
         setShieldGeneratorCharges(prev => prev - 1);
-        protected_ = true;
         showPopup(`🛡️ 보호막! (${shieldGeneratorCharges - 1} 남음)`, window.innerWidth/2, window.innerHeight/2);
-      }
-
-      if (!protected_) {
+      } else {
         setMoney(0n);
         showPopup('💀 파산!', window.innerWidth/2, window.innerHeight/2);
         triggerShake();
       }
-    }
-
-    // --- Synergy Chain Reaction Animation ---
-    let turnBaseScore = results.reduce((acc, s, idx) => acc + (idx === currentWildcardIndex ? 7n : s.value), 0n);
-    let step1Base = turnBaseScore;
-    let newPiggyBank = piggyBankSaved;
-    let newSnowball = { ...snowballStacks };
-    let newBelt = [...belt];
-
-    const triggerCounts = Array(beltSize).fill(1);
-    for (let i = 0; i < beltSize - 1; i++) {
-      if (newBelt[i]?.id === 'twin_mirror') {
-        triggerCounts[i + 1] += 1;
+    } else {
+      if (synergyResult.bibleUsed) {
+        showPopup('📖 성경 보호!', window.innerWidth/2, window.innerHeight/2);
+      } else if (synergyResult.shieldChargesUsed > 0) {
+        setShieldGeneratorCharges(prev => prev - 1);
+        showPopup(`🛡️ 보호막! (${shieldGeneratorCharges - 1} 남음)`, window.innerWidth/2, window.innerHeight/2);
       }
     }
 
-    // Sequential Item Triggering
-    for (let i = 0; i < beltSize; i++) {
-      const item = newBelt[i];
-      if (!item) continue;
-
-      // Visual highlight for triggering item
-      setSelectedBeltIndex(i);
-      await sleep(200);
-
-      if (item.effectType === 'base') {
-        for (let t = 0; t < triggerCounts[i]; t++) {
-          let added = 0n;
-          if (item.id === 'coin_1') added = 10n;
-          else if (item.id === 'lucky_coin') {
-            added = 5n;
-            setLuck(prev => prev + 2);
-          }
-          else if (item.id === 'clover_tea') {
-            added = 10n;
-            setLuck(prev => prev + 5);
-          }
-          else if (item.id === 'cash_dog') added = 30n;
-          else if (item.id === 'gold_cat') added = 50n;
-          else if (item.id === 'hamster_worker') added = turn === 1 ? 100n : 10n;
-          else if (item.id === 'lucky_clover') added = BigInt(Math.floor(Math.random() * 91) + 10);
-          else if (item.id === 'snowball_rice') {
-            const currentMult = newSnowball[i] || 1n;
-            added = 10n * currentMult;
-            newSnowball[i] = currentMult * 2n;
-          }
-          else if (item.id === 'space_donut') {
-            added = 20n;
-            if ((i === 0 || !newBelt[i-1]) && (i === beltSize - 1 || !newBelt[i+1])) added += 80n;
-          }
-          else if (item.id === 'golden_feather') {
-            if (comboCount > 0) added = BigInt(comboCount * 100);
-          }
-          else if (item.id === 'hungry_pig') {
-            added = -10n;
-            newPiggyBank += 10n;
-          }
-          else if (item.id === 'golden_egg') {
-            added = 10n;
-          }
-          else if (item.id === 'meteor_candy') {
-            const sevens = results.filter(r => r.char === '🌟').length;
-            added = BigInt(sevens * 500);
-          }
-          else if (item.id === 'legendary_vvip_card') added = 200n;
-
-          if (hotPotatoBuff > 0) added += 20n;
-
-          if (added !== 0n) {
-            step1Base += added;
-            showItemPopup(i, added > 0n ? `+${formatKoreanNumber(added)}` : `${formatKoreanNumber(added)}`);
-          }
-        }
-      }
-      
-      // Local Multipliers
-      if (item.effectType === 'multiplier') {
-        for (let t = 0; t < triggerCounts[i]; t++) {
-          if (item.id === 'gold_magnifier' && i > 0 && newBelt[i-1]) {
-            step1Base *= 2n;
-            showItemPopup(i, 'x2', true);
-            triggerShake();
-          }
-          else if (item.id === 'magic_popcorn') {
-            let mult = 1n;
-            if (i > 0 && newBelt[i-1]) mult *= 3n;
-            if (i < beltSize - 1 && newBelt[i+1]) mult *= 3n;
-            if (mult > 1n) {
-              step1Base *= mult;
-              showItemPopup(i, `x${mult} POP!`, true);
-              triggerShake();
-            }
-          }
-          else if (item.id === 'alien_jelly') {
-            const alienCount = newBelt.filter(it => it?.id === 'alien_jelly').length;
-            const mult = BigInt(Math.pow(2, alienCount - 1));
-            if (mult > 1n) {
-              step1Base *= mult;
-              showItemPopup(i, `x${mult} JELLY!`, true);
-            }
-          }
-        }
-      }
-      if (item.effectType === 'luck') {
-        for (let t = 0; t < triggerCounts[i]; t++) {
-          if (item.id === 'lucky_dice') {
-            const addedLuck = Math.floor(Math.random() * 50) + 1;
-            setLuck(prev => prev + addedLuck);
-            showItemPopup(i, `+${addedLuck} LUCK`, true);
-          }
-          else if (item.id === 'rabbit_foot') {
-            setLuck(prev => prev + 15);
-            showItemPopup(i, '+15 LUCK', true);
-          }
-        }
-      }
+    setLastSpinTotal(synergyResult.finalScore);
+    if (!synergyResult.isBankrupt) {
+      setMoney(prev => prev + synergyResult.finalScore);
     }
-    setSelectedBeltIndex(null);
-
-    // --- Global Multiplier ---
-    let step3Global = step1Base;
-    let currentGlobalPatternBonus = globalPatternBonus;
-    if (newBelt.some(it => it?.id === 'ultra_clover_pit')) {
-      currentGlobalPatternBonus += 2.0;
+    setSnowballStacks(synergyResult.newSnowball);
+    setPiggyBankSaved(synergyResult.newPiggyBank);
+    setBelt(synergyResult.newBelt);
+    if (synergyResult.addedLuck > 0) {
+      setLuck(prev => prev + synergyResult.addedLuck);
     }
-    step3Global = BigInt(Math.floor(Number(step3Global) * (patternMultiplier + currentGlobalPatternBonus)));
-
-    for (let i = 0; i < beltSize; i++) {
-      const item = newBelt[i];
-      if (!item || item.effectType !== 'global') continue;
-
-      for (let t = 0; t < triggerCounts[i]; t++) {
-        if (item.id === 'blackhole_safe') {
-          step3Global *= 3n;
-          showItemPopup(i, 'x3 BLACKHOLE', true);
-          triggerShake();
-          newBelt[i] = null;
-          if (i + 1 < beltSize && newBelt[i+1]?.id === 'dummy_slot') newBelt[i+1] = null;
-        }
-        else if (item.id === 'legendary_distortion_mirror') {
-          step3Global *= 5n;
-          showItemPopup(i, 'x5 왜곡!', true);
-          triggerShake();
-        }
-        else if (item.id === 'coffee_boost') {
-          step3Global *= 2n;
-          showItemPopup(i, 'x2 BOOST!', true);
-          triggerShake();
-          newBelt[i] = null;
-        }
-        else if (item.id === 'ultra_angel_wing') {
-          step3Global *= 10n;
-        }
-      }
-    }
-
-    // --- Interest ---
-    let interestEarned = 0n;
-    // Base 7% interest on ATM balance
-    interestEarned += atm * 7n / 100n;
-
-    for (let i = 0; i < beltSize; i++) {
-      const item = newBelt[i];
-      if (!item || item.effectType !== 'interest') continue;
-      for (let t = 0; t < triggerCounts[i]; t++) {
-        let interest = 0n;
-        if (item.id === 'gold_onion') interest = atm * 5n / 100n;
-        else if (item.id === 'legendary_bank_key') interest = atm * 50n / 100n;
-        
-        if (interest > 0n) {
-          interestEarned += interest;
-          showItemPopup(i, `+${formatKoreanNumber(interest)} 이자`, true);
-        }
-      }
-    }
-
-    const turnFinalScore = step3Global + interestEarned;
-    setLastSpinTotal(turnFinalScore);
-    setMoney(prev => prev + turnFinalScore);
-    setSnowballStacks(newSnowball);
-    setPiggyBankSaved(newPiggyBank);
-    setBelt(newBelt);
     if (fairyMagnifierTurns > 0) setFairyMagnifierTurns(prev => prev - 1);
 
-    if (turnFinalScore >= 1000n) createCoinWaterfall();
+    if (synergyResult.finalScore >= 1000n && !synergyResult.isBankrupt) createCoinWaterfall();
     setIsSpinning(false);
   };
 
@@ -647,11 +472,19 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     const hasCloverHairpin = belt.some(i => i?.id === 'clover_hairpin');
     const hasLuckyClover = belt.some(i => i?.id === 'lucky_clover');
     const hasCloverSeed = belt.some(i => i?.id === 'clover_seed');
+    const hasBasketOfPlenty = belt.some(i => i?.id === 'basket_of_plenty');
+    const hasGoldenBellTower = belt.some(i => i?.id === 'golden_bell_tower');
+    const hasLuckyCharm = belt.some(i => i?.id === 'lucky_charm');
+    const hasStarFragment = belt.some(i => i?.id === 'star_fragment');
+    const hasFourLeafClover = belt.some(i => i?.id === 'four_leaf_clover');
+    const hasGoldenPigStatue = belt.some(i => i?.id === 'golden_pig_statue');
     
     // Base luck from items
     let currentLuck = luck;
     if (hasCloverHairpin) currentLuck += 20;
     if (hasLuckyClover) currentLuck += 5;
+    if (hasLuckyCharm) currentLuck += 3;
+    if (hasFourLeafClover) currentLuck += 10;
 
     let pool = [...SYMBOLS];
     if (fairyMagnifierTurns > 0) pool = pool.filter(s => s.tier >= 2);
@@ -661,13 +494,43 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     const weights = pool.map(s => {
       let w = s.weight;
       // Luck affects weights: tier 0 (trap) weight decreases, high tier increases
-      if (s.tier === 0) w = Math.max(0.01, (w * trapChanceMultiplier) - (currentLuck / 200));
+      if (s.tier === 0) {
+        w = Math.max(0.01, (w * trapChanceMultiplier) - (currentLuck / 200));
+        if (hasCloverHairpin) w *= 0.5;
+        if (hasBasketOfPlenty) w *= 0.5;
+        if (hasLuckyCharm) w *= 0.9;
+      }
       if (s.tier >= 3) w = w + (currentLuck / 100);
       
       // Clover Seed: Cherry/Lemon -5%, Clover/Bell +5%
       if (hasCloverSeed) {
         if (s.char === '🍒' || s.char === '🍋') w = Math.max(0.1, w - 0.05);
         if (s.char === '☘️' || s.char === '🔔') w += 0.05;
+      }
+
+      // Basket of Plenty: Fruit +20%
+      if (hasBasketOfPlenty && s.tags?.includes('fruit')) {
+        w *= 1.2;
+      }
+
+      // Golden Bell Tower: Bell +30%
+      if (hasGoldenBellTower && s.tags?.includes('bell')) {
+        w *= 1.3;
+      }
+
+      // Four Leaf Clover: Clover +20%
+      if (hasFourLeafClover && s.char === '☘️') {
+        w *= 1.2;
+      }
+
+      // Golden Pig Statue: Money +15%
+      if (hasGoldenPigStatue && s.char === '💰') {
+        w *= 1.15;
+      }
+
+      // Star Fragment: Star +5%
+      if (hasStarFragment && s.char === '🌟') {
+        w *= 1.05;
       }
 
       totalWeight += w;
@@ -751,10 +614,19 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
   };
 
   const handleSubmit = async () => {
-    if (atm < quota) {
-      // Wallet money doesn't count for quota in CloverPit
-      setPhase('GAMEOVER');
-      return;
+    let finalAtm = atm;
+    let finalMoney = money;
+
+    if (finalAtm < quota) {
+      const needed = quota - finalAtm;
+      if (finalMoney >= needed) {
+        finalMoney -= needed;
+        finalAtm += needed;
+        setMoney(finalMoney);
+      } else {
+        setPhase('GAMEOVER');
+        return;
+      }
     }
 
     // Clear Round
@@ -766,7 +638,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
     // 3 spins: 2 coupons + (remaining turns * 2)
     const earnedCoupons = maxTurn === 7 ? (1 + turn) : (2 + turn * 2);
 
-    setAtm(prev => prev - quota); // Pay from ATM
+    setAtm(finalAtm - quota); // Pay from ATM
     setCoupons(prev => prev + earnedCoupons);
     
     // Golden Egg and Piggy Bank Payout
@@ -1163,16 +1035,55 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
                   initial={{ opacity: 0, scale: 0.5, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.5 }}
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none flex flex-col items-center"
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-col items-center"
                 >
-                  {lastSpinCombo > 0 && (
-                    <div className="bg-black/80 border-2 border-[#00ffcc] text-[#00ffcc] px-6 py-2 rounded-full font-black text-2xl mb-2 shadow-[0_0_20px_rgba(0,255,204,0.5)]">
-                      {lastSpinCombo} COMBO!
+                  <div className="pointer-events-none flex flex-col items-center">
+                    {lastSpinCombo > 0 && (
+                      <div className="bg-black/80 border-2 border-[#00ffcc] text-[#00ffcc] px-6 py-2 rounded-full font-black text-2xl mb-2 shadow-[0_0_20px_rgba(0,255,204,0.5)]">
+                        {lastSpinCombo} COMBO!
+                      </div>
+                    )}
+                    <div className="bg-black/80 border-2 border-[#ffb800] text-[#ffb800] px-8 py-3 rounded-2xl font-black text-4xl shadow-[0_0_30px_rgba(255,184,0,0.5)]">
+                      +{formatKoreanNumber(lastSpinTotal)}원
                     </div>
-                  )}
-                  <div className="bg-black/80 border-2 border-[#ffb800] text-[#ffb800] px-8 py-3 rounded-2xl font-black text-4xl shadow-[0_0_30px_rgba(255,184,0,0.5)]">
-                    +{formatKoreanNumber(lastSpinTotal)}원
                   </div>
+                  
+                  <button 
+                    className="mt-4 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-full text-sm font-bold border border-gray-600 transition-colors"
+                    onClick={() => setShowReceipt(!showReceipt)}
+                  >
+                    {showReceipt ? '영수증 닫기' : '영수증 보기'}
+                  </button>
+
+                  <AnimatePresence>
+                    {showReceipt && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-4 bg-black/90 border border-gray-700 rounded-xl p-4 w-72 max-h-64 overflow-y-auto text-sm shadow-2xl"
+                      >
+                        <h3 className="text-[#ffb800] font-bold mb-3 text-center border-b border-gray-700 pb-2">🧾 정산 영수증</h3>
+                        <div className="flex flex-col gap-2">
+                          {receipt.map((step, idx) => (
+                            <div key={idx} className="flex justify-between items-center border-b border-gray-800 pb-1">
+                              <span className="text-gray-300 truncate max-w-[140px]">{step.name}</span>
+                              <div className="flex flex-col items-end">
+                                <span className={step.type === 'multiplier' || step.type === 'global' ? 'text-[#00ffcc]' : 'text-[#ffb800]'}>
+                                  {step.value}
+                                </span>
+                                <span className="text-xs text-gray-500">{formatKoreanNumber(step.amount)}</span>
+                              </div>
+                            </div>
+                          ))}
+                          <div className="mt-2 pt-2 border-t-2 border-dashed border-gray-600 flex justify-between items-center font-bold">
+                            <span className="text-white">최종 금액</span>
+                            <span className="text-[#ffb800] text-lg">{formatKoreanNumber(lastSpinTotal)}</span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1193,16 +1104,16 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
             
             <button 
               className={`jp-slot-submit-btn flex-1 py-4 text-xl font-bold rounded-full transition-all duration-300 ${
-                atm >= quota 
+                (atm + money) >= quota 
                   ? 'bg-gradient-to-r from-yellow-400 to-amber-600 text-white shadow-[0_0_20px_rgba(251,191,36,0.6)] animate-pulse' 
                   : isForcedSubmit 
                     ? 'bg-red-500 text-white animate-bounce'
                     : 'bg-gray-700 text-gray-400 cursor-not-allowed'
               }`}
               onClick={handleSubmit}
-              disabled={atm < quota && !isForcedSubmit}
+              disabled={(atm + money) < quota && !isForcedSubmit}
             >
-              {atm >= quota ? '✨ 할당량 납부' : isForcedSubmit ? '💀 파산 확정' : '🔒 금고 부족'}
+              {(atm + money) >= quota ? '✨ 할당량 납부' : isForcedSubmit ? '💀 파산 확정' : '🔒 금액 부족'}
             </button>
           </div>
         </motion.div>

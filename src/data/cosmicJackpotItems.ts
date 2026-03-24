@@ -1,6 +1,6 @@
 export type ItemTier = 1 | 2 | 3 | 4 | 5 | 6 | 7; // 1: Common, 2: Uncommon, 3: Mildly Rare, 4: Rare, 5: Very Rare, 6: Legendary, 7: Ultra Legendary
-export type ItemType = 'passive' | 'consumable' | 'luck' | 'wildcard' | 'defense';
-export type EffectType = 'base' | 'multiplier' | 'global' | 'interest' | 'luck' | 'wildcard' | 'defense';
+export type ItemType = 'passive' | 'consumable' | 'luck' | 'wildcard' | 'defense' | 'active' | 'growth' | 'booster';
+export type EffectType = 'base' | 'multiplier' | 'global' | 'interest' | 'luck' | 'wildcard' | 'defense' | 'active' | 'growth' | 'booster';
 
 export interface CosmicItem {
   id: string;
@@ -13,6 +13,10 @@ export interface CosmicItem {
   effectType: EffectType;
   icon: string;
   weight?: number; // For shop generation
+  currentBase?: bigint; // For growth items
+  currentMultiplier?: number; // For growth items
+  activeGauge?: number; // For active items
+  maxGauge?: number; // For active items
 }
 
 export const COSMIC_ITEMS: CosmicItem[] = [
@@ -24,8 +28,17 @@ export const COSMIC_ITEMS: CosmicItem[] = [
   { id: 'clover_seed', name: '네잎클로버 씨앗', description: '체리/레몬 확률 -5%, 클로버/종 확률 +5%', size: 1, cost: 1, tier: 1, type: 'luck', effectType: 'luck', icon: '🌱' },
   { id: 'lucky_coin', name: '행운의 짤랑이 동전', description: '매 턴 행운 +2, 수익 +5원', size: 1, cost: 1, tier: 1, type: 'luck', effectType: 'luck', icon: '🪙✨' },
   { id: 'clover_tea', name: '따뜻한 클로버 차', description: '매 턴 행운 +5, 수익 +10원', size: 1, cost: 1, tier: 1, type: 'luck', effectType: 'luck', icon: '🍵' },
+  { id: 'lucky_charm', name: '행운의 부적', description: '해골(💀) 확률 -10%, 행운 +3', size: 1, cost: 1, tier: 1, type: 'luck', effectType: 'luck', icon: '🧧' },
+  { id: 'star_fragment', name: '반짝이는 별조각', description: '별(🌟) 등장 확률 +5%, 매 턴 수익 +5원', size: 1, cost: 1, tier: 1, type: 'luck', effectType: 'luck', icon: '✨' },
 
   // Tier 2: UNCOMMON (90% weight)
+  { id: 'basket_of_plenty', name: '풍요의 바구니', description: '과일(체리/레몬) 등장 가중치 +20%, 해골 가중치 절반', size: 1, cost: 2, tier: 2, type: 'luck', effectType: 'luck', icon: '🧺' },
+  { id: 'golden_bell_tower', name: '황금 종탑', description: '종 확률 +30%, 종 패턴 완성 시 기본 가치 2배', size: 1, cost: 2, tier: 2, type: 'luck', effectType: 'luck', icon: '🛕' },
+  { id: 'four_leaf_clover', name: '진짜 네잎클로버', description: '행운 +10, 클로버(☘️) 등장 확률 +20%', size: 1, cost: 2, tier: 2, type: 'luck', effectType: 'luck', icon: '🍀' },
+  { id: 'golden_pig_statue', name: '황금 돼지 동상', description: '돈(💰) 등장 확률 +15%, 매 턴 수익 +15원', size: 1, cost: 2, tier: 2, type: 'luck', effectType: 'luck', icon: '🐖' },
+  { id: 'acorn_squirrel', name: '무럭무럭 도토리 다람쥐', description: '턴 소모마다 기본 가치가 영구적으로 +2원 성장', size: 1, cost: 2, tier: 2, type: 'growth', effectType: 'growth', icon: '🐿️', currentBase: 2n },
+  { id: 'sponge_slime', name: '스펀지 슬라임', description: '체리나 레몬 등장 시 흡수하여 배수 +0.1배 영구 상승', size: 1, cost: 2, tier: 2, type: 'growth', effectType: 'growth', icon: '🦠', currentMultiplier: 1.0 },
+  { id: 'time_watch', name: '낡은 시간 여행 시계', description: '게이지 3: 사용 시 턴 무효화 후 재스핀', size: 1, cost: 2, tier: 2, type: 'active', effectType: 'active', icon: '⌚', activeGauge: 0, maxGauge: 3 },
   { id: 'hamster_worker', name: '성실한 알바생 햄스터', description: '1, 2턴엔 +10원, 마지막 3턴째엔 +100원', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🐹' },
   { id: 'lucky_clover', name: '행운의 네잎클로버', description: '매 턴 10원~100원 랜덤 생산', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🍀' },
   { id: 'milk_drop', name: '찰랑이는 우유 방울', description: '스핀 시 10% 확률로 턴을 소모하지 않음', size: 1, cost: 2, tier: 2, type: 'luck', effectType: 'luck', icon: '🥛' },
@@ -37,6 +50,9 @@ export const COSMIC_ITEMS: CosmicItem[] = [
   { id: 'golden_feather', name: '반짝이는 황금 깃털', description: '콤보(패턴) 발생 시마다 추가 수익 +100원', size: 1, cost: 2, tier: 2, type: 'passive', effectType: 'base', icon: '🪶' },
 
   // Tier 3: MILDLY RARE (80% weight)
+  { id: 'space_cat', name: '별빛 삼키는 우주 고양이', description: '라운드 클리어 시 전체 수익 배수 +0.3배 영구 성장', size: 1, cost: 3, tier: 3, type: 'growth', effectType: 'growth', icon: '🐈‍⬛', currentMultiplier: 1.0 },
+  { id: 'plasma_gun', name: '과부하 플라즈마 건', description: '게이지 5: 사용 시 이번 턴 최종 곱연산 강제 x10배', size: 1, cost: 3, tier: 3, type: 'active', effectType: 'active', icon: '🔫', activeGauge: 0, maxGauge: 5 },
+  { id: '4d_pocket', name: '4차원 주머니', description: '구매 즉시 시너지 벨트 최대 칸 수 1칸 영구 확장', size: 1, cost: 3, tier: 3, type: 'consumable', effectType: 'base', icon: '🎒' },
   { id: 'gold_magnifier', name: '황금 돋보기', description: '바로 왼쪽 칸 아이템의 최종 생산량 x2배', size: 1, cost: 3, tier: 3, type: 'passive', effectType: 'multiplier', icon: '🔍' },
   { id: 'twin_mirror', name: '쌍둥이 거울', description: '바로 오른쪽 칸 아이템의 능력을 한 번 더 발동', size: 1, cost: 3, tier: 3, type: 'passive', effectType: 'multiplier', icon: '🪞' },
   { id: 'magic_popcorn', name: '마법의 뻥튀기 기계', description: '양옆(좌우) 칸 아이템의 생산량 x3배', size: 1, cost: 3, tier: 3, type: 'passive', effectType: 'multiplier', icon: '🍿' },
@@ -44,7 +60,9 @@ export const COSMIC_ITEMS: CosmicItem[] = [
   { id: 'alien_jelly', name: '외계인 젤리', description: '매 턴 +10원, 다른 외계인 젤리 1개당 생산량 x2배', size: 1, cost: 3, tier: 3, type: 'passive', effectType: 'multiplier', icon: '👾' },
 
   // Tier 4: RARE (65% weight)
+  { id: 'multiplier_prism', name: '배수 증폭 프리즘', description: '양옆의 배수(x) 아이템의 배수 수치를 2배로 증폭', size: 1, cost: 4, tier: 4, type: 'booster', effectType: 'booster', icon: '💎' },
   { id: 'gold_onion', name: '든든한 황금 양파', description: '턴 종료 시 금고(ATM) 잔고의 5% 이자 획득', size: 1, cost: 4, tier: 4, type: 'passive', effectType: 'interest', icon: '🧅' },
+
   { id: 'hungry_pig', name: '먹보 아기 돼지', description: '매 턴 10원 차감, 라운드 클리어 시 차감 총액의 10배 지급', size: 1, cost: 4, tier: 4, type: 'passive', effectType: 'base', icon: '🐷' },
   { id: 'golden_horseshoe', name: '황금 편자', description: '모든 확률 발동 아이템의 성공 확률 +25%p', size: 1, cost: 4, tier: 4, type: 'luck', effectType: 'luck', icon: '🧲' },
   { id: 'bible_shield', name: '성스러운 성경', description: '함정 심볼(해골)의 효과를 1회 무효화하고 파괴됨', size: 1, cost: 4, tier: 4, type: 'defense', effectType: 'defense', icon: '📖' },
