@@ -321,7 +321,7 @@ export const sessionService = {
         }
         break;
       case GameType.OFFICE_LIFE:
-        // Already handled by processOfficeLifeAITurn
+        // AI logic removed
         break;
     }
   },
@@ -854,7 +854,7 @@ export const sessionService = {
     });
   },
 
-  async startOmokGame(sessionId: string, blackPlayerId: string, whitePlayerId: string, isAIMatch?: boolean, difficulty?: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
+  async startOmokGame(sessionId: string, blackPlayerId: string, whitePlayerId: string, difficulty?: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
     if (!db) return;
     
     // Initialize 15x15 board
@@ -868,7 +868,6 @@ export const sessionService = {
       winner: null,
       winningLine: null,
       isDraw: false,
-      isAIMatch: isAIMatch || false,
       difficulty: difficulty || 1,
       ruleType,
       startTime: Date.now(),
@@ -881,14 +880,7 @@ export const sessionService = {
     };
 
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, `오목 대전이 시작되었습니다.${isAIMatch ? ` (AI 난이도: ${difficulty}, ${ruleType === 'RENJU' ? '렌주 룰' : '자유 룰'})` : ''}`, 'success');
-
-    // If black is AI, trigger first move
-    if (blackPlayerId === 'AI') {
-      setTimeout(() => {
-        this.processOmokAIMove(sessionId);
-      }, 1000);
-    }
+    await this.addLog(sessionId, `오목 대전이 시작되었습니다. (${ruleType === 'RENJU' ? '렌주 룰' : '자유 룰'})`, 'success');
   },
 
   async startBingoSetup(sessionId: string, settings: any) {
@@ -1211,23 +1203,20 @@ export const sessionService = {
       updates['omokGame/winningLine'] = winInfo;
       updates['status'] = SessionStatus.SUMMARY;
 
-      // Record leaderboard if won against AI at max difficulty (Level 7)
-      if (game.isAIMatch && game.difficulty === 7 && playerId !== 'AI') {
-        const startTime = game.startTime || Date.now();
-        const timeTaken = Math.floor((Date.now() - startTime) / 1000);
-        const moveCount = (game.moveCount || 0) + 1;
-        // Score calculation: Base 100,000 - time penalty - move penalty
-        const score = Math.max(1000, 100000 - (timeTaken * 10) - (moveCount * 200));
-        updates['omokGame/lastScore'] = score;
-        
-        const player = session.players?.[playerId];
-        if (player) {
-          this.recordLeaderboard(sessionId, 'OMOK_AI', playerId, player.nickname, score, {
-            timeTaken,
-            moveCount,
-            difficulty: 7
-          });
-        }
+      // Record leaderboard if won
+      const startTime = game.startTime || Date.now();
+      const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+      const moveCount = (game.moveCount || 0) + 1;
+      const score = Math.max(1000, 100000 - (timeTaken * 10) - (moveCount * 200));
+      updates['omokGame/lastScore'] = score;
+      
+      const player = session.players?.[playerId];
+      if (player) {
+        this.recordLeaderboard(sessionId, 'OMOK', playerId, player.nickname, score, {
+          timeTaken,
+          moveCount,
+          difficulty: game.difficulty || 1
+        });
       }
     } else {
       // Check Draw (Board full)
@@ -1237,175 +1226,38 @@ export const sessionService = {
         updates['status'] = SessionStatus.SUMMARY;
       } else {
         updates['omokGame/currentPlayerId'] = nextPlayerId;
-        // Trigger AI if next player is AI
-        if (nextPlayerId === 'AI') {
-          setTimeout(() => {
-            this.processOmokAIMove(sessionId);
-          }, 1000);
-        }
       }
     }
 
     await update(sessionRef, updates);
-    const playerName = playerId === 'AI' ? '컴퓨터' : (session.players?.[playerId]?.nickname || '알 수 없는 플레이어');
+    const playerName = session.players?.[playerId]?.nickname || '알 수 없는 플레이어';
     await this.addLog(sessionId, `${playerName}님이 (${x}, ${y}) 위치에 돌을 놓았습니다.`);
     
     if (updates['omokGame/winner']) {
       await this.addLog(sessionId, `${playerName}님이 오목 대전에서 승리했습니다!`, 'success');
-      if (playerId !== 'AI') await this.updateStats(sessionId, playerId);
+      await this.updateStats(sessionId, playerId);
     }
     
     if (updates['omokGame/isDraw']) await this.addLog(sessionId, `오목 대전이 무승부로 종료되었습니다.`, 'warning');
   },
 
   async processOmokAIMove(sessionId: string) {
-    if (!db) return;
-    const snapshot = await get(ref(db, `sessions/${sessionId}`));
-    const session = snapshot.val();
-    if (!session || !session.omokGame || session.omokGame.currentPlayerId !== 'AI') return;
-
-    const game = session.omokGame;
-    const board = this.ensureOmokMatrix(game.board);
-    const isBlack = game.blackPlayerId === 'AI';
-    const aiStone = isBlack ? 1 : 2;
-    const playerStone = isBlack ? 2 : 1;
-    const difficulty = game.difficulty || 1;
-    const ruleType = game.ruleType || 'RENJU';
-
-    let bestMove = { x: 7, y: 7 };
-    
-    if (game.moveCount === 0) {
-      bestMove = { x: 7, y: 7 };
-    } else {
-      bestMove = this.getOmokBestMove(board, aiStone, playerStone, difficulty, ruleType);
-    }
-
-    await this.placeOmokStone(sessionId, 'AI', bestMove.x, bestMove.y);
+    // AI logic removed
   },
 
   getOmokBestMove(board: number[][], aiStone: number, playerStone: number, difficulty: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
-    const searchPoints = this.getOmokSearchPoints(board);
-    
-    // For lower difficulties, use simple greedy evaluation
-    if (difficulty <= 3) {
-      const evaluatedPoints = searchPoints.map(p => {
-        if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, p.x, p.y, 1)) {
-          return { ...p, score: -1 };
-        }
-        const attackScore = this.evaluateOmokPoint(board, p.x, p.y, aiStone);
-        const defenseScore = this.evaluateOmokPoint(board, p.x, p.y, playerStone);
-        
-        let score = attackScore + defenseScore * 1.2;
-        
-        if (attackScore >= 10000000) score += 100000000;
-        if (defenseScore >= 10000000) score += 50000000;
-        
-        return { ...p, score };
-      }).filter(p => p.score >= 0);
-
-      if (evaluatedPoints.length === 0) return { x: 7, y: 7 };
-      evaluatedPoints.sort((a, b) => b.score - a.score);
-
-      let poolSize = 1;
-      switch (difficulty) {
-        case 1: poolSize = Math.min(20, evaluatedPoints.length); break;
-        case 2: poolSize = Math.min(10, evaluatedPoints.length); break;
-        case 3: poolSize = Math.min(5, evaluatedPoints.length); break;
-      }
-      const idx = Math.floor(Math.random() * poolSize);
-      return { x: evaluatedPoints[idx].x, y: evaluatedPoints[idx].y };
-    }
-
-    // For higher difficulties, use Minimax with Alpha-Beta Pruning
-    let depth = 2;
-    if (difficulty === 4) depth = 2;
-    else if (difficulty === 5) depth = 3;
-    else if (difficulty === 6) depth = 4;
-    else if (difficulty >= 7) depth = 5; // Strong but playable speed
-
-    // Move ordering: sort search points by heuristic score first to improve pruning
-    const orderedPoints = searchPoints.map(p => {
-      const attackScore = this.evaluateOmokPoint(board, p.x, p.y, aiStone);
-      const defenseScore = this.evaluateOmokPoint(board, p.x, p.y, playerStone);
-      return { ...p, score: attackScore + defenseScore };
-    }).sort((a, b) => b.score - a.score).slice(0, 12); // Branching factor
-
-    let bestScore = -Infinity;
-    let bestMove = orderedPoints[0] || { x: 7, y: 7 };
-
-    for (const p of orderedPoints) {
-      if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, p.x, p.y, 1)) continue;
-      
-      board[p.y][p.x] = aiStone;
-      const score = this.minimaxOmok(board, depth - 1, -Infinity, Infinity, false, aiStone, playerStone, ruleType);
-      board[p.y][p.x] = 0;
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestMove = p;
-      }
-    }
-
-    return { x: bestMove.x, y: bestMove.y };
+    // AI logic removed
+    return { x: 7, y: 7 };
   },
 
   minimaxOmok(board: number[][], depth: number, alpha: number, beta: number, isMaximizing: boolean, aiStone: number, playerStone: number, ruleType: string): number {
-    // Check for terminal state
-    if (this.checkOmokAnyWin(board)) {
-      return isMaximizing ? -1000000000 : 1000000000;
-    }
-    if (depth === 0) {
-      return this.evaluateOmokBoard(board, aiStone, playerStone);
-    }
-
-    const searchPoints = this.getOmokSearchPoints(board);
-    // Sort points for better pruning
-    const orderedPoints = searchPoints.map(p => {
-      const attackScore = this.evaluateOmokPoint(board, p.x, p.y, isMaximizing ? aiStone : playerStone);
-      const defenseScore = this.evaluateOmokPoint(board, p.x, p.y, isMaximizing ? playerStone : aiStone);
-      return { ...p, score: attackScore + defenseScore };
-    }).sort((a, b) => b.score - a.score).slice(0, 8); // Branching factor
-
-    if (isMaximizing) {
-      let maxEval = -Infinity;
-      for (const p of orderedPoints) {
-        if (ruleType !== 'FREE' && aiStone === 1 && this.checkOmokForbiddenMove(board, p.x, p.y, 1)) continue;
-        board[p.y][p.x] = aiStone;
-        const ev = this.minimaxOmok(board, depth - 1, alpha, beta, false, aiStone, playerStone, ruleType);
-        board[p.y][p.x] = 0;
-        maxEval = Math.max(maxEval, ev);
-        alpha = Math.max(alpha, ev);
-        if (beta <= alpha) break;
-      }
-      return maxEval;
-    } else {
-      let minEval = Infinity;
-      for (const p of orderedPoints) {
-        board[p.y][p.x] = playerStone;
-        const ev = this.minimaxOmok(board, depth - 1, alpha, beta, true, aiStone, playerStone, ruleType);
-        board[p.y][p.x] = 0;
-        minEval = Math.min(minEval, ev);
-        beta = Math.min(beta, ev);
-        if (beta <= alpha) break;
-      }
-      return minEval;
-    }
+    // AI logic removed
+    return 0;
   },
 
   evaluateOmokBoard(board: number[][], aiStone: number, playerStone: number): number {
-    let score = 0;
-    // Only evaluate points that have stones
-    for (let y = 0; y < 15; y++) {
-      for (let x = 0; x < 15; x++) {
-        const stone = board[y][x];
-        if (stone === aiStone) {
-          score += this.evaluateOmokPoint(board, x, y, aiStone);
-        } else if (stone === playerStone) {
-          score -= this.evaluateOmokPoint(board, x, y, playerStone) * 1.1;
-        }
-      }
-    }
-    return score;
+    // AI logic removed
+    return 0;
   },
 
   checkOmokAnyWin(board: number[][]) {
@@ -1421,114 +1273,17 @@ export const sessionService = {
   },
 
   getOmokSearchPoints(board: number[][]) {
-    const points: {x: number, y: number}[] = [];
-    const visited = Array(15).fill(0).map(() => Array(15).fill(false));
-    
-    let hasStones = false;
-    for (let y = 0; y < 15; y++) {
-      for (let x = 0; x < 15; x++) {
-        if (board[y][x] !== 0) {
-          hasStones = true;
-          // Check 2-cell radius
-          for (let dy = -2; dy <= 2; dy++) {
-            for (let dx = -2; dx <= 2; dx++) {
-              const nx = x + dx, ny = y + dy;
-              if (nx >= 0 && nx < 15 && ny >= 0 && ny < 15 && board[ny][nx] === 0 && !visited[ny][nx]) {
-                visited[ny][nx] = true;
-                points.push({ x: nx, y: ny });
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    if (!hasStones) return [{ x: 7, y: 7 }];
-    return points;
+    // AI logic removed
+    return [{ x: 7, y: 7 }];
   },
 
   evaluateOmokPoint(board: number[][], x: number, y: number, stone: number) {
-    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
-    let totalScore = 0;
-    const opponent = stone === 1 ? 2 : 1;
-
-    const distToCenter = Math.abs(x - 7) + Math.abs(y - 7);
-    totalScore += (14 - distToCenter);
-
-    const checkPattern = (line: string, pattern: string) => {
-      let idx = line.indexOf(pattern);
-      while (idx !== -1) {
-        if (idx <= 5 && idx + pattern.length > 5) return true;
-        idx = line.indexOf(pattern, idx + 1);
-      }
-      return false;
-    };
-
-    for (const [dx, dy] of directions) {
-      let line = "";
-      for (let i = -5; i <= 5; i++) {
-        const nx = x + dx * i;
-        const ny = y + dy * i;
-        if (nx === x && ny === y) {
-          line += "S";
-          continue;
-        }
-        if (nx < 0 || nx >= 15 || ny < 0 || ny >= 15) {
-          line += "X";
-        } else if (board[ny][nx] === stone) {
-          line += "S";
-        } else if (board[ny][nx] === opponent) {
-          line += "O";
-        } else {
-          line += ".";
-        }
-      }
-      
-      if (checkPattern(line, "SSSSS")) {
-        totalScore += 100000000;
-        continue;
-      }
-      
-      if (checkPattern(line, ".SSSS.")) {
-        totalScore += 10000000;
-        continue;
-      }
-      
-      if (checkPattern(line, "SSSS.") || checkPattern(line, ".SSSS") || 
-          checkPattern(line, "S.SSS") || checkPattern(line, "SS.SS") || checkPattern(line, "SSS.S")) {
-        totalScore += 1000000;
-      }
-      
-      if (checkPattern(line, ".SSS..") || checkPattern(line, "..SSS.") || 
-          checkPattern(line, ".S.SS.") || checkPattern(line, ".SS.S.")) {
-        totalScore += 100000;
-      }
-      
-      if (checkPattern(line, "SSS..") || checkPattern(line, "..SSS") || checkPattern(line, "S.SS") || checkPattern(line, "SS.S")) {
-        totalScore += 10000;
-      }
-      
-      if (checkPattern(line, ".SS..") || checkPattern(line, "..SS.") || checkPattern(line, ".S.S.")) {
-        totalScore += 1000;
-      }
-    }
-
-    return totalScore;
+    // AI logic removed
+    return 0;
   },
 
   getOmokPatternScore(count: number, block: number) {
-    if (count >= 5) return 1000000; // Win
-    if (block === 0) {
-      if (count === 4) return 100000; // Open 4
-      if (count === 3) return 10000;  // Open 3
-      if (count === 2) return 1000;   // Open 2
-      if (count === 1) return 100;
-    } else if (block === 1) {
-      if (count === 4) return 10000;  // Closed 4
-      if (count === 3) return 1000;   // Closed 3
-      if (count === 2) return 100;    // Closed 2
-      if (count === 1) return 10;
-    }
+    // AI logic removed
     return 0;
   },
 
@@ -2356,7 +2111,7 @@ export const sessionService = {
       const snapshot = await get(ref(db, `sessions/${sessionId}`));
       const session = snapshot.val();
       if (session) {
-        await this.processOfficeLifeAITurn(sessionId, session);
+        // AI logic removed
       }
     }
   },
@@ -2689,14 +2444,14 @@ export const sessionService = {
           const updatedSnapshot = await get(ref(db, `sessions/${sessionId}`));
           const updatedSession = updatedSnapshot.val();
           if (updatedSession) {
-            await this.processOfficeLifeAITurn(sessionId, updatedSession);
+            // AI logic removed
           }
         }
       } else {
         // If not all selected, find the next AI that needs to select a role
         for (const pid of turnOrder) {
           if (session.players?.[pid]?.isAI && !latestGame.playerStates?.[pid]?.roleId) {
-             await this.processOfficeLifeAITurn(sessionId, session, pid);
+             // AI logic removed
              break;
           }
         }
@@ -2764,53 +2519,7 @@ export const sessionService = {
     
     await update(ref(db, `sessions/${sessionId}/officeLifeGame`), game);
 
-    // Trigger AI turn if next player is AI
-    const nextPlayerId = turnOrder[game.currentTurnIndex];
-    if (session.players?.[nextPlayerId]?.isAI && game.status === 'PLAYING') {
-      await this.processOfficeLifeAITurn(sessionId, session);
-    }
-  },
-
-  async processOfficeLifeAITurn(sessionId: string, session: Session, targetPlayerId?: string) {
-    if (!db || !session.officeLifeGame) return;
-    const game = session.officeLifeGame;
-    const turnOrder = game.turnOrder || [];
-    const currentPlayerId = targetPlayerId || turnOrder[game.currentTurnIndex || 0];
-    const player = session.players?.[currentPlayerId];
-
-    if (!player || !player.isAI) return;
-
-    setTimeout(async () => {
-      // Re-fetch session to get latest waitingForAction
-      const snapshot = await get(ref(db, `sessions/${sessionId}`));
-      const currentSession = snapshot.val() as Session;
-      if (!currentSession || !currentSession.officeLifeGame) return;
-      const currentGame = currentSession.officeLifeGame;
-
-      if (currentGame.waitingForAction === 'NONE' || !currentGame.waitingForAction) {
-        await this.addLog(sessionId, `${player.nickname}님이 주사위를 굴립니다...`, 'info');
-        await this.rollOfficeLifeDice(sessionId, currentPlayerId, currentSession);
-      } else if (currentGame.waitingForAction === 'BUY_PROJECT') {
-        const shouldBuy = Math.random() > 0.3;
-        if (shouldBuy) {
-          await this.buyOfficeLifeProject(sessionId, currentPlayerId, currentSession);
-        }
-        await this.endOfficeLifeTurn(sessionId, currentPlayerId, currentSession);
-      } else if (currentGame.waitingForAction === 'CHANCE_CARD') {
-        await this.drawOfficeLifeChanceCard(sessionId, currentPlayerId, currentSession);
-        await this.endOfficeLifeTurn(sessionId, currentPlayerId, currentSession);
-      } else if (currentGame.waitingForAction === 'BUY_ITEM') {
-        await this.endOfficeLifeTurn(sessionId, currentPlayerId, currentSession);
-      } else if (currentGame.waitingForAction === 'PROMOTION_TEST') {
-        await this.takeOfficeLifePromotionTest(sessionId, currentPlayerId, true, currentSession);
-      } else if (currentGame.waitingForAction === 'END_TURN') {
-        await this.endOfficeLifeTurn(sessionId, currentPlayerId, currentSession);
-      } else if (currentGame.waitingForAction === 'SELECT_ROLE') {
-        const roles = ['PLANNER', 'DEV', 'DESIGN', 'SALES'];
-        const randomRole = roles[Math.floor(Math.random() * roles.length)];
-        await this.selectOfficeLifeRole(sessionId, currentPlayerId, randomRole, currentSession);
-      }
-    }, 2000);
+    // AI logic removed
   },
 
   // --- Cosmic Jackpot ---
