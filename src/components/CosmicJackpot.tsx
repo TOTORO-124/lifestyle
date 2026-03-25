@@ -1074,14 +1074,14 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
               transition={{ type: 'spring', damping: 8, stiffness: 300 }}
               className="relative flex items-center justify-center h-full w-full"
             >
-              <span className="text-4xl md:text-5xl z-10 drop-shadow-sm">{cell.symbol.icon}</span>
+              <span className="text-2xl sm:text-4xl md:text-5xl z-10 drop-shadow-sm">{cell.symbol.icon}</span>
               {cell.hasBattery && (
                 <motion.div 
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   className="absolute top-1 right-1 z-20"
                 >
-                  <Zap size={16} className="text-yellow-400 fill-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.8)]" />
+                  <Zap size={12} className="sm:size-4 text-yellow-400 fill-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.8)]" />
                 </motion.div>
               )}
             </motion.div>
@@ -1166,7 +1166,7 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
   };
 
   const renderBelt = () => (
-    <div className="jp-slot-belt flex gap-3 overflow-x-auto no-scrollbar pt-32 pb-4 px-2 -mt-28">
+    <div className="jp-slot-belt flex gap-2 sm:gap-3 overflow-x-auto no-scrollbar py-2 px-1">
       {belt.map((item, idx) => (
         <div key={idx} className="relative">
           <motion.div
@@ -1174,13 +1174,13 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
             onMouseEnter={() => setHoveredBeltIndex(idx)}
             onMouseLeave={() => setHoveredBeltIndex(null)}
             onClick={() => sellItem(idx)}
-            className={`w-16 h-16 md:w-20 md:h-20 flex-shrink-0 rounded-[24px] border-4 flex flex-col items-center justify-center cursor-pointer transition-all relative ${
+            className={`w-12 h-12 sm:w-16 md:w-20 flex-shrink-0 rounded-[16px] sm:rounded-[24px] border-2 sm:border-4 flex flex-col items-center justify-center cursor-pointer transition-all relative ${
               selectedBeltIndex === idx ? 'border-[#FFB7B2] bg-[#FFB7B2]/10 shadow-md' : 'border-[#E0D7C6] bg-white'
             }`}
           >
             {item ? (
               <>
-                <div className="text-2xl md:text-3xl">{item.icon}</div>
+                <div className="text-xl sm:text-2xl md:text-3xl">{item.icon}</div>
                 {item.type === 'active' && (
                   <div className="absolute bottom-2 left-2 right-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                     <motion.div 
@@ -1284,6 +1284,22 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
           width: 100%;
           max-width: 900px;
           margin: 0 auto;
+        }
+
+        @media (max-width: 640px) {
+          .jp-slot-grid {
+            gap: 6px;
+            padding: 10px;
+            border-width: 4px;
+            border-radius: 20px;
+          }
+          .jp-slot-cell {
+            border-radius: 12px;
+          }
+          .reel-symbol {
+            height: 40px;
+            font-size: 1.5rem;
+          }
         }
 
         .reel-container {
@@ -1719,21 +1735,21 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
               <button
                 disabled={isSpinning || turn <= 0 || (money < spinCost && atm < (spinCost - money))}
                 onClick={spin}
-                className={`flex-1 py-6 rounded-[32px] font-black text-2xl flex items-center justify-center gap-3 transition-all ${
+                className={`flex-1 py-4 sm:py-6 rounded-[24px] sm:rounded-[32px] font-black text-xl sm:text-2xl flex items-center justify-center gap-3 transition-all ${
                   isSpinning || turn <= 0 || (money < spinCost && atm < (spinCost - money))
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
                   : 'bg-[#FFB7B2] text-white hover:scale-[1.02] active:scale-95 shadow-lg'
                 }`}
               >
-                {isSpinning ? <RefreshCw className="animate-spin" /> : 'SPIN'}
-                <span className="text-sm opacity-70 font-mono">-{formatKoreanNumber(spinCost)}</span>
+                {isSpinning ? <RefreshCw className="animate-spin" size={20} /> : 'SPIN'}
+                <span className="text-xs sm:text-sm opacity-70 font-mono">-{formatKoreanNumber(spinCost)}</span>
               </button>
 
               <div className="relative group">
                 <button
                   disabled={isSpinning}
                   onClick={handleSubmit}
-                  className={`px-8 h-full rounded-[32px] border-4 font-black text-sm transition-all shadow-sm ${
+                  className={`px-4 sm:px-8 h-full rounded-[24px] sm:rounded-[32px] border-2 sm:border-4 font-black text-xs sm:text-sm transition-all shadow-sm ${
                     isSpinning 
                     ? 'bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed' 
                     : 'bg-white border-[#E0D7C6] text-gray-600 hover:bg-[#F9F6F0]'
@@ -1749,24 +1765,24 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
               </div>
             </div>
 
-            <div className="bg-white p-5 rounded-[32px] border-4 border-[#E0D7C6] flex justify-between items-center shadow-sm">
-              <div className="flex items-center gap-3">
-                <Shield className="text-[#FFB7B2]" size={24} />
+            <div className="bg-white p-3 sm:p-5 rounded-[24px] sm:rounded-[32px] border-2 sm:border-4 border-[#E0D7C6] flex justify-between items-center shadow-sm">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Shield className="text-[#FFB7B2]" size={20} />
                 <div>
-                  <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Required Quota</div>
-                  <div className="text-xl font-black text-[#FFB7B2]">{formatKoreanNumber(quota)}원</div>
+                  <div className="text-[7px] sm:text-[8px] font-black text-gray-400 uppercase tracking-widest">Required Quota</div>
+                  <div className="text-lg sm:text-xl font-black text-[#FFB7B2]">{formatKoreanNumber(quota)}원</div>
                 </div>
               </div>
               <div className="text-right flex flex-col items-end">
-                <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest">ATM Balance</div>
-                <div className="flex items-center gap-2">
-                  <div className="text-xl font-black text-gray-700">{formatKoreanNumber(atm)}원</div>
+                <div className="text-[7px] sm:text-[8px] font-black text-gray-400 uppercase tracking-widest">ATM Balance</div>
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <div className="text-lg sm:text-xl font-black text-gray-700">{formatKoreanNumber(atm)}원</div>
                   <button 
                     onClick={depositSmartToAtm}
                     disabled={money <= BigInt(turn) * spinCost || isSpinning}
-                    className="group relative bg-gray-100 hover:bg-gray-200 disabled:opacity-30 p-1.5 rounded-xl transition-all"
+                    className="group relative bg-gray-100 hover:bg-gray-200 disabled:opacity-30 p-1 rounded-xl transition-all"
                   >
-                    <ArrowUpRight size={18} className="text-gray-500" />
+                    <ArrowUpRight size={16} className="text-gray-500" />
                     {/* Tooltip */}
                     <div className="absolute bottom-full right-0 mb-3 w-40 bg-gray-800 text-white p-2 rounded-xl text-[8px] font-bold opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] text-center shadow-xl">
                       남은 스핀 비용({formatKoreanNumber(BigInt(turn) * spinCost)}원)을 제외한 모든 금액을 ATM에 입금합니다.
