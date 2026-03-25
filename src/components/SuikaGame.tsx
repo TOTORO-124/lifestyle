@@ -458,7 +458,7 @@ export const SuikaGame: React.FC<SuikaGameProps> = ({ onGameOver, onBack, bestSc
       <div className="flex-1 relative flex flex-col items-center justify-center p-2 overflow-hidden w-full">
         {/* Game Area Wrapper */}
         <div 
-          className="relative border-8 border-[#8b4513] rounded-3xl overflow-hidden cursor-crosshair shadow-2xl glass-panel touch-none w-full max-w-[400px] aspect-[2/3] flex flex-col"
+          className="relative border-8 border-[#8b4513] rounded-3xl overflow-hidden cursor-crosshair shadow-2xl glass-panel touch-none h-full max-h-[600px] aspect-[2/3] max-w-full flex flex-col"
           onMouseMove={handleMouseMove}
           onTouchMove={handleMouseMove}
           onClick={dropFruit}

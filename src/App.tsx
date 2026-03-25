@@ -611,14 +611,14 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-8 z-10 overflow-auto">
+        <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-6 p-3 lg:p-8 z-10 overflow-auto">
           {/* Left Side: Profile & Stats */}
-          <div className="w-full lg:w-80 space-y-6">
+          <div className="w-full lg:w-80 flex flex-col gap-4 lg:gap-6 order-1 lg:order-none">
             {currentUser && (
               <UserProfileCard uid={currentUser.uid} />
             )}
             
-            <div className="bg-white border border-[#d1d1d1] rounded-lg shadow-sm p-4 relative overflow-hidden">
+            <div className="bg-white border border-[#d1d1d1] rounded-lg shadow-sm p-4 relative overflow-hidden hidden lg:block">
               <div className="absolute top-0 right-0 w-16 h-16 bg-yellow-50 -mr-8 -mt-8 rotate-45" />
               <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                 <Trophy size={14} className="text-yellow-500" />
@@ -652,9 +652,9 @@ export default function App() {
           </div>
 
           {/* Right Side: Game Selection */}
-          <div className="flex-1">
+          <div className="flex-1 order-2 lg:order-none">
             {activeSheet === 'GAME' ? (
-            <div className="max-w-md w-full bg-white border border-[#d1d1d1] shadow-md rounded">
+            <div className="w-full bg-white border border-[#d1d1d1] shadow-md rounded lg:max-w-2xl mx-auto">
               <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666] flex justify-between items-center">
                 <span>사용자_인증_프롬프트</span>
                 <MoreVertical size={12} />
@@ -676,13 +676,13 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-6">
-                <div className="space-y-4">
+              <div className="p-3 lg:p-6 space-y-3 lg:space-y-6">
+                <div className="space-y-3">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-[#666] uppercase">사용자 이름</label>
                     <input
                       type="text"
-                      className="office-input border-[#d1d1d1]"
+                      className="office-input border-[#d1d1d1] py-1.5 lg:py-2"
                       placeholder="닉네임을 입력하세요..."
                       value={nickname}
                       onChange={(e) => setNickname(e.target.value)}
@@ -696,106 +696,106 @@ export default function App() {
                   </div>
 
                   {menuMode === 'create' ? (
-                    <div className="space-y-4 pt-2">
+                    <div className="space-y-3 pt-2">
                       <p className="text-[10px] text-[#999] font-medium italic">새로운 오피스 시트 세션을 생성하고 팀원들을 초대합니다.</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-4 gap-2 lg:gap-3">
                         <button 
                           onClick={() => handleCreateSession(GameType.LIAR)} 
-                          className="office-btn-primary py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
+                          className="office-btn-primary py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">라이어 시트</span>
-                          <span className="text-[9px] font-normal opacity-80">거짓말쟁이 찾기</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">라이어 시트</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">거짓말쟁이 찾기</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.MAFIA)} 
-                          className="office-btn py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
+                          className="office-btn py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">마피아 시트</span>
-                          <span className="text-[9px] font-normal opacity-80">범인 색출 작전</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">마피아 시트</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">범인 색출 작전</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.OMOK)} 
-                          className="office-btn py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
+                          className="office-btn py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">오목 (1:1)</span>
-                          <span className="text-[9px] font-normal opacity-80">전략 보드 시트</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">오목 (1:1)</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">전략 보드 시트</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.BINGO)} 
-                          className="office-btn py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
+                          className="office-btn py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">빙고 (다수)</span>
-                          <span className="text-[9px] font-normal opacity-80">데이터 매칭 감사</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">빙고 (다수)</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">데이터 매칭 감사</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.DRAW)} 
-                          className="office-btn py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
+                          className="office-btn py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">캐치마인드</span>
-                          <span className="text-[9px] font-normal opacity-80">비주얼 브리핑</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">캐치마인드</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">비주얼 브리핑</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.MINESWEEPER)} 
-                          className="office-btn py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
+                          className="office-btn py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">지뢰 찾기</span>
-                          <span className="text-[9px] font-normal opacity-80">데이터 오류 검수</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">지뢰 찾기</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">데이터 오류 검수</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.OFFICE_2048)} 
-                          className="office-btn py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
+                          className="office-btn py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">2048</span>
-                          <span className="text-[9px] font-normal opacity-80">직급 승진 대작전</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">2048</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">직급 승진 대작전</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.SUDOKU)} 
-                          className="office-btn py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
+                          className="office-btn py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">스도쿠</span>
-                          <span className="text-[9px] font-normal opacity-80">데이터 무결성 검증</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">스도쿠</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">데이터 무결성 검증</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.OFFICE_LIFE)} 
-                          className="office-btn py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
+                          className="office-btn py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">승진 대작전</span>
-                          <span className="text-[9px] font-normal opacity-80">오피스 라이프 보드</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">승진 대작전</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">오피스 라이프 보드</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.COSMIC_JACKPOT)} 
-                          className="office-btn-primary py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group bg-gradient-to-br from-[#217346] to-[#1a5c38]"
+                          className="office-btn-primary py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group bg-gradient-to-br from-[#217346] to-[#1a5c38]"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform flex items-center gap-1">
-                            <Sparkles size={12} className="text-yellow-400" /> 우주적 잭팟
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform flex items-center gap-1">
+                            <Sparkles size={10} className="text-yellow-400" /> 우주적 잭팟
                           </span>
-                          <span className="text-[9px] font-normal opacity-80">로그라이크 슬롯머신</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">로그라이크 슬롯머신</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.YUT_NORI)} 
-                          className="office-btn-primary py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group bg-gradient-to-br from-[#217346] to-[#1a5c38]"
+                          className="office-btn-primary py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group bg-gradient-to-br from-[#217346] to-[#1a5c38]"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">윷놀이</span>
-                          <span className="text-[9px] font-normal opacity-80">전통 보드게임</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">윷놀이</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">전통 보드게임</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.SUIKA)} 
-                          className="office-btn-primary py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group bg-gradient-to-br from-[#217346] to-[#1a5c38]"
+                          className="office-btn-primary py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group bg-gradient-to-br from-[#217346] to-[#1a5c38]"
                           disabled={loading}
                         >
-                          <span className="font-bold group-hover:scale-110 transition-transform">초고속 승진</span>
-                          <span className="text-[9px] font-normal opacity-80">직급 쌓기 챌린지</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">초고속 승진</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">직급 쌓기 챌린지</span>
                         </button>
                       </div>
                     </div>
@@ -830,9 +830,9 @@ export default function App() {
               <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 text-[10px] font-bold text-[#666]">
                 프로젝트_시트 (글로벌)
               </div>
-              <div className="p-6">
-                <p className="text-xs text-gray-500 mb-6 italic">* 전사 시트에서 기록된 실시간 순위입니다. (글로벌 통합)</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="p-3 lg:p-6">
+                <p className="text-[10px] lg:text-xs text-gray-500 mb-4 lg:mb-6 italic">* 전사 시트에서 기록된 실시간 순위입니다. (글로벌 통합)</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
@@ -889,7 +889,7 @@ export default function App() {
             설정
           </button>
           <div className="flex-1" />
-          <div className="px-4 text-[10px] text-[#999]">100% 준비됨</div>
+          <div className="px-4 text-[10px] text-[#999] hidden sm:block">100% 준비됨</div>
         </footer>
       </div>
     );
@@ -2254,9 +2254,9 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="p-10 md:p-16 flex flex-col items-center gap-10">
+                  <div className="p-4 md:p-16 flex flex-col items-center gap-6 md:gap-10 overflow-x-auto w-full">
                     <div 
-                      className="grid gap-1 bg-[#d1d1d1] p-1 rounded shadow-2xl border border-[#d1d1d1]"
+                      className="grid gap-0.5 md:gap-1 bg-[#d1d1d1] p-0.5 md:p-1 rounded shadow-2xl border border-[#d1d1d1] mx-auto"
                       style={{ 
                         gridTemplateColumns: `repeat(${session.minesweeperGame?.board?.[0]?.length || (session.minesweeperGame?.board && (Object.values(session.minesweeperGame.board)[0] as any)?.length) || 0}, minmax(0, 1fr))`,
                         width: 'fit-content'
@@ -2343,8 +2343,8 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-10 md:p-16 flex flex-col items-center gap-10">
-                    <div className="grid grid-cols-4 gap-3 bg-[#bbada0] p-3 rounded-xl w-full aspect-square shadow-2xl border-4 border-[#bbada0]">
+                  <div className="p-4 md:p-16 flex flex-col items-center gap-6 md:gap-10">
+                    <div className="grid grid-cols-4 gap-2 md:gap-3 bg-[#bbada0] p-2 md:p-3 rounded-xl w-full aspect-square shadow-2xl border-2 md:border-4 border-[#bbada0]">
                       {(Array.isArray(session.office2048Game?.board) ? session.office2048Game.board : Object.values(session.office2048Game?.board || {})).map((row: any, r: number) => (
                         (Array.isArray(row) ? row : Object.values(row || {})).map((val: any, c: number) => {
                           const getRank = (v: number) => {
@@ -2428,8 +2428,8 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-10 md:p-16 flex flex-col md:flex-row items-center justify-center gap-12">
-                    <div className="grid grid-cols-9 border-4 border-[#333] w-fit shadow-2xl rounded-sm overflow-hidden">
+                  <div className="p-4 md:p-16 flex flex-col lg:flex-row items-center justify-center gap-6 md:gap-12">
+                    <div className="grid grid-cols-9 border-2 md:border-4 border-[#333] w-fit shadow-2xl rounded-sm overflow-hidden">
                       {(Array.isArray(session.sudokuGame?.currentBoard) ? session.sudokuGame.currentBoard : Object.values(session.sudokuGame?.currentBoard || {})).map((row: any, r: number) => (
                         (Array.isArray(row) ? row : Object.values(row || {})).map((val: any, c: number) => {
                           const isInitial = session.sudokuGame?.initialBoard?.[r]?.[c] !== 0 && session.sudokuGame?.initialBoard?.[r]?.[c] !== undefined;
@@ -2439,7 +2439,7 @@ export default function App() {
                             <button 
                               key={`${r}-${c}`}
                               onClick={() => !isSpectator && !isInitial && setSelectedSudokuCell({r, c})}
-                              className={`w-8 h-8 md:w-10 md:h-10 border border-[#ccc] flex items-center justify-center text-sm md:text-base font-bold transition-all
+                              className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 border border-[#ccc] flex items-center justify-center text-sm md:text-base font-bold transition-all
                                 ${r % 3 === 2 && r !== 8 ? 'border-b-2 border-b-[#333]' : ''}
                                 ${c % 3 === 2 && c !== 8 ? 'border-r-2 border-r-[#333]' : ''}
                                 ${isInitial ? 'bg-[#f8f9fa] text-[#333]' : 'bg-white text-[#217346]'}
@@ -2456,7 +2456,7 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col gap-4">
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-5 lg:grid-cols-3 gap-2">
                         {[1,2,3,4,5,6,7,8,9].map(num => (
                           <button 
                             key={num}
@@ -2465,7 +2465,7 @@ export default function App() {
                                 sessionService.updateSudokuCell(session.id, selectedSudokuCell.r, selectedSudokuCell.c, num, session);
                               }
                             }}
-                            className="office-btn w-10 h-10 font-bold"
+                            className="office-btn w-10 h-10 sm:w-12 sm:h-12 font-bold text-sm sm:text-base"
                           >
                             {num}
                           </button>
@@ -2476,7 +2476,7 @@ export default function App() {
                               sessionService.updateSudokuCell(session.id, selectedSudokuCell.r, selectedSudokuCell.c, 0, session);
                             }
                           }}
-                          className="office-btn w-10 h-10 font-bold text-red-600"
+                          className="office-btn w-10 h-10 sm:w-12 sm:h-12 font-bold text-red-600 text-sm sm:text-base"
                         >
                           X
                         </button>

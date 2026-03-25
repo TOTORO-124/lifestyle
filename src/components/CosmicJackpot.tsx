@@ -1255,7 +1255,7 @@ export const CosmicJackpot: React.FC = () => {
 
         .jp-game-container {
           width: 100%;
-          min-height: 100%;
+          height: 100%;
           background: #FDFBF7;
           color: #4A4A4A;
           font-family: 'Inter', sans-serif;

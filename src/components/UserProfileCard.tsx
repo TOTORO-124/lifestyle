@@ -93,10 +93,10 @@ export const UserProfileCard: React.FC<Props> = ({ uid, onUpdate }) => {
         </div>
       </div>
 
-      <div className="p-4 flex gap-4">
-        <div className="w-20 h-24 bg-gray-100 border-2 border-gray-200 rounded flex flex-col items-center justify-center relative overflow-hidden group">
+      <div className="p-3 lg:p-4 flex gap-3 lg:gap-4">
+        <div className="w-16 h-20 lg:w-20 lg:h-24 bg-gray-100 border-2 border-gray-200 rounded flex flex-col items-center justify-center relative overflow-hidden group shrink-0">
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/20" />
-          <User size={40} className="text-gray-400 mb-1" />
+          <User size={32} className="text-gray-400 mb-1 lg:w-10 lg:h-10" />
           <div className="absolute bottom-0 w-full bg-[#217346]/80 text-white text-[8px] py-1 text-center font-bold">
             LV.{profile.level}
           </div>
@@ -117,7 +117,7 @@ export const UserProfileCard: React.FC<Props> = ({ uid, onUpdate }) => {
                   <button onClick={handleNameChange} className="text-[#217346]"><ShieldCheck size={16} /></button>
                 </div>
               ) : (
-                <h3 className="font-black text-lg text-gray-800 truncate max-w-[120px]">{profile.nickname}</h3>
+                <h3 className="font-black text-base lg:text-lg text-gray-800 truncate max-w-[100px] lg:max-w-[120px]">{profile.nickname}</h3>
               )}
               <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 text-[9px] font-bold rounded border border-yellow-200 flex items-center gap-1 shrink-0">
                 <Award size={10} />
