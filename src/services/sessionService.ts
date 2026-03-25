@@ -2527,8 +2527,25 @@ export const sessionService = {
     if (!db) return;
     await update(ref(db, `sessions/${sessionId}`), {
       status: SessionStatus.PLAYING,
+      gameType: GameType.COSMIC_JACKPOT,
+      cosmicJackpot: {
+        round: 1,
+        money: 1000,
+        quota: 1000,
+        status: 'PLAYING'
+      }
     });
     await this.addLog(sessionId, `우주적 잭팟 머신이 시작되었습니다.`, 'success');
+  },
+
+  async updateCosmicJackpotStats(sessionId: string, money: bigint, round: number) {
+    if (!db) return;
+    const sessionRef = ref(db, `sessions/${sessionId}/cosmicJackpot`);
+    await update(sessionRef, {
+      money: Number(money),
+      round: round,
+      status: 'FINISHED'
+    });
   },
 
 

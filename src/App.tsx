@@ -572,7 +572,7 @@ export default function App() {
 
   if (!sessionId) {
     return (
-      <div className="min-h-screen desk-texture flex flex-col relative overflow-hidden">
+      <div className="h-[100dvh] desk-texture flex flex-col relative overflow-hidden">
         {/* Desk Background Decorations */}
         <div className="absolute top-20 -left-10 opacity-10 rotate-12 pointer-events-none hidden lg:block">
           <Coffee size={200} />
@@ -834,9 +834,10 @@ export default function App() {
                 <p className="text-[10px] lg:text-xs text-gray-500 mb-4 lg:mb-6 italic">* 전사 시트에서 기록된 실시간 순위입니다. (글로벌 통합)</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
-                  <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
+                  <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="GLOBAL" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
                   <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (국가대표급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
+                  <Leaderboard entries={globalLeaderboards?.SUIKA || []} title="초고속 승진 (승진게임)" sessionId="GLOBAL" gameType="SUIKA" />
                   <Leaderboard entries={globalLeaderboards?.COSMIC_JACKPOT || []} title="우주적 잭팟 마스터" sessionId="GLOBAL" gameType="COSMIC_JACKPOT" />
                 </div>
               </div>
@@ -979,12 +980,12 @@ export default function App() {
       )}
 
       <main className={`flex-1 min-h-0 relative ${
-        (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.YUT_NORI || session.gameType === GameType.SUIKA) && session.status !== SessionStatus.LOBBY 
+        activeSheet === 'GAME' && (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.YUT_NORI || session.gameType === GameType.SUIKA) && session.status !== SessionStatus.LOBBY 
           ? 'p-0 overflow-hidden' 
           : 'p-3 sm:p-6 overflow-auto'
       }`}>
         <div className={`${
-          (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.YUT_NORI || session.gameType === GameType.SUIKA) && session.status !== SessionStatus.LOBBY 
+          activeSheet === 'GAME' && (session.gameType === GameType.OFFICE_LIFE || session.gameType === GameType.YUT_NORI || session.gameType === GameType.SUIKA) && session.status !== SessionStatus.LOBBY 
             ? 'relative flex flex-col h-full' 
             : 'max-w-5xl mx-auto space-y-4 sm:space-y-6'
         }`}>
@@ -2321,6 +2322,9 @@ export default function App() {
               </div>
             ) : session.gameType === GameType.COSMIC_JACKPOT ? (
               <CosmicJackpot 
+                sessionId={session.id}
+                playerId={currentUser.uid}
+                nickname={currentUser.nickname}
                 onGameOver={() => {
                   sessionService.advanceStatus(session.id, SessionStatus.SUMMARY);
                 }} 
@@ -3277,11 +3281,22 @@ export default function App() {
                           </div>
                         </div>
                       ) : session.gameType === GameType.COSMIC_JACKPOT ? (
-                        <div className="space-y-4">
-                          <div className="text-xs text-[#666]">최종 결과:</div>
-                          <div className="text-4xl font-black text-[#217346]">게임 종료</div>
-                          <div className="text-sm text-[#666]">
-                            슬롯머신 시뮬레이션이 완료되었습니다.
+                        <div className="space-y-6">
+                          <div className="text-center space-y-2">
+                            <div className="text-xs text-[#666] font-bold uppercase tracking-widest">최종_수익_보고</div>
+                            <div className="text-4xl font-black text-[#217346] tracking-tighter">
+                              {session.cosmicJackpot?.money ? Number(session.cosmicJackpot.money).toLocaleString() : '0'}
+                            </div>
+                            <div className="text-[10px] text-gray-400 font-medium italic">우주적 잭팟 시뮬레이션 종료</div>
+                          </div>
+                          
+                          <div className="pt-4">
+                            <Leaderboard 
+                              entries={globalLeaderboards?.COSMIC_JACKPOT || []} 
+                              title="우주적 잭팟" 
+                              sessionId="GLOBAL"
+                              gameType="COSMIC_JACKPOT"
+                            />
                           </div>
                         </div>
                       ) : session.gameType === GameType.SUIKA ? (
@@ -3657,6 +3672,7 @@ export default function App() {
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
                   <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (국가대표급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
                   <Leaderboard entries={globalLeaderboards?.SUIKA || []} title="초고속 승진 (승진게임)" sessionId="GLOBAL" gameType="SUIKA" />
+                  <Leaderboard entries={globalLeaderboards?.COSMIC_JACKPOT || []} title="우주적 잭팟 마스터" sessionId="GLOBAL" gameType="COSMIC_JACKPOT" />
                 </div>
               </div>
             </div>

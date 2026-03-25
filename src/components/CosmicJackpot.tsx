@@ -21,6 +21,7 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 import { COSMIC_ITEMS, CosmicItem } from '../data/cosmicJackpotItems';
+import { sessionService } from '../services/sessionService';
 
 // --- Types & Constants ---
 
@@ -104,9 +105,12 @@ const getWeightedRandomSymbol = (
 interface CosmicJackpotProps {
   onGameOver?: () => void;
   onClear?: () => void;
+  sessionId?: string;
+  playerId?: string;
+  nickname?: string;
 }
 
-export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClear }) => {
+export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClear, sessionId, playerId, nickname }) => {
   // Game State
   const [phase, setPhase] = useState<GamePhase>('TURN_SELECTION');
   const [showShopModal, setShowShopModal] = useState(false);
@@ -882,6 +886,20 @@ export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClea
       setShowShopModal(false);
       if (onGameOver) onGameOver();
       setPhase('GAMEOVER');
+      
+      // Record leaderboard on game over
+      if (sessionId && playerId && nickname) {
+        sessionService.recordLeaderboard(
+          sessionId, 
+          'COSMIC_JACKPOT', 
+          playerId, 
+          nickname, 
+          Number(totalEarnings)
+        );
+        
+        // Also update session stats for the summary view
+        sessionService.updateCosmicJackpotStats(sessionId, totalEarnings, round);
+      }
     }
   };
 
