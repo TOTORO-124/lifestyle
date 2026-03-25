@@ -101,9 +101,14 @@ const getWeightedRandomSymbol = (
 
 // --- Main Component ---
 
-export const CosmicJackpot: React.FC = () => {
+interface CosmicJackpotProps {
+  onGameOver?: () => void;
+  onClear?: () => void;
+}
+
+export const CosmicJackpot: React.FC<CosmicJackpotProps> = ({ onGameOver, onClear }) => {
   // Game State
-  const [phase, setPhase] = useState<GamePhase>('SHOP');
+  const [phase, setPhase] = useState<GamePhase>('TURN_SELECTION');
   const [showShopModal, setShowShopModal] = useState(false);
   const [round, setRound] = useState(1);
   const [money, setMoney] = useState<bigint>(1000n);
@@ -875,6 +880,7 @@ export const CosmicJackpot: React.FC = () => {
       }
     } else {
       setShowShopModal(false);
+      if (onGameOver) onGameOver();
       setPhase('GAMEOVER');
     }
   };

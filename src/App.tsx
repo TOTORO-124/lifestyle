@@ -1420,7 +1420,7 @@ export default function App() {
                                   setError('두 플레이어 모두 컴퓨터일 수는 없습니다.');
                                   return;
                                 }
-                                sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId, isOmokAIMatch, omokDifficulty, omokRuleType);
+                                sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId, omokDifficulty, omokRuleType);
                               }}
                               className="w-full office-btn-primary py-2 text-[10px] font-bold flex items-center justify-center gap-2"
                             >
