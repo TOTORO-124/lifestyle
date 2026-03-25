@@ -11,6 +11,8 @@ export interface CosmicItem {
   gauge?: number;
   maxGauge?: number;
   currentMultiplier?: number;
+  currentBaseBonus?: number;
+  currentMultiplierBonus?: number;
   trait?: string;
   effectType?: 'base' | 'multiplier' | 'global' | 'interest' | 'growth' | 'luck' | 'active';
   activeGauge?: number;
@@ -239,4 +241,56 @@ export const COSMIC_ITEMS: CosmicItem[] = [
     symbolId: 'diamond',
     boostAmount: 1.3
   },
+  {
+    id: 'golden_fertilizer',
+    name: '황금 비료',
+    icon: '🍎',
+    description: '스핀을 돌릴 때마다 기본 가치가 +2씩 영구 누적됩니다.',
+    cost: 3,
+    tier: 2,
+    type: 'growth',
+    size: 1,
+    rarity: 'Uncommon',
+    effectType: 'base',
+    currentBaseBonus: 0
+  },
+  {
+    id: 'compound_bankbook',
+    name: '복리 적금 통장',
+    icon: '📈',
+    description: '조기 제출 시 배수가 +0.5x씩 영구 성장합니다.',
+    cost: 4,
+    tier: 3,
+    type: 'growth',
+    size: 1,
+    rarity: 'Rare',
+    effectType: 'multiplier',
+    currentMultiplierBonus: 1.0
+  },
+  {
+    id: 'greedy_pickaxe',
+    name: '탐욕의 곡괭이',
+    icon: '⛏️',
+    description: '다이아/보물 등장 시 기본 가치가 +5씩 영구 누적됩니다.',
+    cost: 3,
+    tier: 2,
+    type: 'growth',
+    size: 1,
+    rarity: 'Uncommon',
+    effectType: 'base',
+    currentBaseBonus: 0
+  },
+  {
+    id: 'patient_snail',
+    name: '인내의 달팽이',
+    icon: '🐌',
+    description: '상점 리롤 시 배수가 +0.2x씩 영구 성장합니다.',
+    cost: 3,
+    tier: 2,
+    type: 'growth',
+    size: 1,
+    rarity: 'Uncommon',
+    effectType: 'multiplier',
+    currentMultiplierBonus: 1.0
+  }
 ];

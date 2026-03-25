@@ -104,6 +104,7 @@ const getWeightedRandomSymbol = (
 export const CosmicJackpot: React.FC = () => {
   // Game State
   const [phase, setPhase] = useState<GamePhase>('SHOP');
+  const [showShopModal, setShowShopModal] = useState(false);
   const [round, setRound] = useState(1);
   const [money, setMoney] = useState<bigint>(1000n);
   const [atm, setAtm] = useState<bigint>(0n);
@@ -185,12 +186,12 @@ export const CosmicJackpot: React.FC = () => {
   const [shake, setShake] = useState(false);
   const [selectedBeltIndex, setSelectedBeltIndex] = useState<number | null>(null);
 
-  const [floatingTexts, setFloatingTexts] = useState<{ id: string; text: string; x: number; y: number }[]>([]);
+  const [floatingTexts, setFloatingTexts] = useState<{ id: string; text: string; x: number; y: number; isJackpot?: boolean }[]>([]);
   const [showBigWin, setShowBigWin] = useState(false);
 
-  const addFloatingText = useCallback((text: string, x: number = 50, y: number = 50) => {
+  const addFloatingText = useCallback((text: string, x: number = 50, y: number = 50, isJackpot: boolean = false) => {
     const id = Math.random().toString();
-    setFloatingTexts(prev => [...prev, { id, text, x, y }]);
+    setFloatingTexts(prev => [...prev, { id, text, x, y, isJackpot }]);
     setTimeout(() => {
       setFloatingTexts(prev => prev.filter(ft => ft.id !== id));
     }, 3000); // 3 seconds to ensure animation finishes
@@ -239,10 +240,10 @@ export const CosmicJackpot: React.FC = () => {
   }, [belt]);
 
   useEffect(() => {
-    if (phase === 'SHOP' && shopItems.length === 0) {
+    if (showShopModal && shopItems.length === 0) {
       generateShop();
     }
-  }, [phase, shopItems.length, generateShop]);
+  }, [showShopModal, shopItems.length, generateShop]);
 
   const triggerShake = () => {
     setShake(true);
@@ -255,7 +256,7 @@ export const CosmicJackpot: React.FC = () => {
     return BigInt(symbol.value + (symbolValueModifiers[symbol.id] || 0));
   };
 
-  const calculateSynergy = (currentGrid: SlotCell[][]) => {
+  const calculateSynergy = (currentGrid: SlotCell[][], currentBelt: (CosmicItem | null)[] = belt) => {
     let baseValue = 0n;
     const steps: any[] = [];
     const patterns: any[] = [];
@@ -272,12 +273,23 @@ export const CosmicJackpot: React.FC = () => {
         let val = getSymbolValue(symbol);
         
         // Item Effect: Lucky Clover
-        if (symbol.id === 'clover' && belt.some(i => i?.id === 'lucky_clover')) {
+        if (symbol.id === 'clover' && currentBelt.some(i => i?.id === 'lucky_clover')) {
           val += 5n; // Buffed from +2 to +5
         }
         
         baseValue += val;
       });
+    });
+
+    // Add Growth Base Bonuses
+    currentBelt.forEach(item => {
+      if (!item) return;
+      if (item.id === 'golden_fertilizer' && item.currentBaseBonus && item.currentBaseBonus > 0) {
+        baseValue += BigInt(item.currentBaseBonus);
+      }
+      if (item.id === 'greedy_pickaxe' && item.currentBaseBonus && item.currentBaseBonus > 0) {
+        baseValue += BigInt(item.currentBaseBonus);
+      }
     });
 
     steps.push({ name: '심볼 기본 합계', value: baseValue.toString(), amount: baseValue, type: 'base' });
@@ -292,7 +304,7 @@ export const CosmicJackpot: React.FC = () => {
     let totalMultiplier = 1.0;
 
     // 3. Pattern Recognition (Horizontal, Vertical, Diagonal)
-    const patternBonus = belt.some(i => i?.id === 'magnifying_glass') ? 0.5 : 0.0;
+    const patternBonus = currentBelt.some(i => i?.id === 'magnifying_glass') ? 0.5 : 0.0;
     
     // Horizontal: 3+ consecutive in a row
     for (let r = 0; r < ROWS; r++) {
@@ -393,7 +405,7 @@ export const CosmicJackpot: React.FC = () => {
     }
 
     // 4. Item Synergy Multipliers
-    belt.forEach(item => {
+    currentBelt.forEach(item => {
       if (!item) return;
       
       // Diamond Polisher: x3 for Diamonds
@@ -441,8 +453,52 @@ export const CosmicJackpot: React.FC = () => {
       steps.push({ name: '라운드 전략 배수', value: `x${roundMultiplier.toFixed(1)}`, type: 'global' });
     }
 
+    // Add Growth Multiplier Bonuses
+    currentBelt.forEach(item => {
+      if (!item) return;
+      if (item.id === 'compound_bankbook' && item.currentMultiplierBonus && item.currentMultiplierBonus > 1.0) {
+        totalMultiplier *= item.currentMultiplierBonus;
+        steps.push({ name: '복리 적금 통장', value: `x${item.currentMultiplierBonus.toFixed(1)}`, type: 'item' });
+      }
+      if (item.id === 'patient_snail' && item.currentMultiplierBonus && item.currentMultiplierBonus > 1.0) {
+        totalMultiplier *= item.currentMultiplierBonus;
+        steps.push({ name: '인내의 달팽이', value: `x${item.currentMultiplierBonus.toFixed(1)}`, type: 'item' });
+      }
+    });
+
+    // Tiered Jackpot & Critical Multiplier
+    let finalMultiplier = totalMultiplier;
+    let criticalLog = '';
+    let jackpotTier = 0;
+    
+    if (totalMultiplier >= 100.0) {
+      jackpotTier = 3;
+      if (Math.random() < 0.5) {
+        finalMultiplier *= 10.0;
+        criticalLog = '🎲 [크리티컬 판정] COSMIC 잭팟 추가 배수 당첨! (x10)';
+      }
+    } else if (totalMultiplier >= 30.0) {
+      jackpotTier = 2;
+      if (Math.random() < 0.3) {
+        finalMultiplier *= 3.0;
+        criticalLog = '🎲 [크리티컬 판정] SUPER 잭팟 추가 배수 당첨! (x3)';
+      }
+    } else if (totalMultiplier >= 10.0) {
+      jackpotTier = 1;
+      if (Math.random() < 0.2) {
+        finalMultiplier *= 2.0;
+        criticalLog = '🎲 [크리티컬 판정] NICE 잭팟 추가 배수 당첨! (x2)';
+      }
+    }
+
+    if (criticalLog) {
+      console.log(criticalLog);
+      triggerShake();
+      steps.push({ name: '크리티컬 힛!', value: `x${(finalMultiplier / totalMultiplier).toFixed(1)}`, type: 'global' });
+    }
+
     // Final Calculation using BigInt fixed-point
-    const finalTotal = (baseValue * BigInt(Math.round(totalMultiplier * 1000))) / 1000n;
+    const finalTotal = (baseValue * BigInt(Math.round(finalMultiplier * 1000))) / 1000n;
     
     const popups = patterns.map((p) => ({
       id: Math.random().toString(),
@@ -453,12 +509,12 @@ export const CosmicJackpot: React.FC = () => {
     }));
 
     // 6. Growth: Piggy Bank
-    if (belt.some(i => i?.id === 'piggy_bank')) {
+    if (currentBelt.some(i => i?.id === 'piggy_bank')) {
       const savings = finalTotal / 20n; // 5%
       steps.push({ name: '저금통 적립 (5%)', value: `-${formatKoreanNumber(savings)}`, type: 'growth' });
     }
 
-    return { total: finalTotal, steps, batteryCount, popups, patterns };
+    return { total: finalTotal, steps, batteryCount, popups, patterns, jackpotTier, criticalLog, finalMultiplier, totalMultiplier };
   };
 
   const spin = async () => {
@@ -503,6 +559,8 @@ export const CosmicJackpot: React.FC = () => {
         effectiveWeightModifiers[item.symbolId] = (effectiveWeightModifiers[item.symbolId] || 1.0) * (item.nerfAmount || 0.5);
       }
     });
+
+    console.log('[RNG] Effective Weight Modifiers for this spin:', effectiveWeightModifiers);
 
     // Pre-calculate the entire result
     const finalGrid = Array(COLS).fill(0).map(() => 
@@ -563,8 +621,29 @@ export const CosmicJackpot: React.FC = () => {
     setIsSpinning(false);
     setSpinsCount(prev => prev + 1);
 
+    // Update Growth Items
+    let gemCount = 0;
+    finalGrid.forEach(col => col.forEach(cell => {
+      if (cell.symbol.id === 'gem') gemCount++;
+    }));
+
+    const updatedBelt = belt.map(item => {
+      if (!item) return item;
+      let updatedItem = { ...item };
+      
+      if (item.id === 'golden_fertilizer') {
+        updatedItem.currentBaseBonus = (updatedItem.currentBaseBonus || 0) + 1;
+      }
+      if (item.id === 'greedy_pickaxe' && gemCount > 0) {
+        updatedItem.currentBaseBonus = (updatedItem.currentBaseBonus || 0) + (5 * gemCount);
+      }
+      
+      return updatedItem;
+    });
+    setBelt(updatedBelt);
+
     // Calculate
-    const { total, steps, batteryCount, popups, patterns } = calculateSynergy(finalGrid);
+    const { total, steps, batteryCount, popups, patterns, jackpotTier, criticalLog, finalMultiplier, totalMultiplier } = calculateSynergy(finalGrid, updatedBelt);
     
     // Sequential Popups (Chain Reaction Burst)
     if (popups.length > 0) {
@@ -578,6 +657,19 @@ export const CosmicJackpot: React.FC = () => {
         setWinningPatterns([]);
         setComboPopups([]);
       }, 2000);
+    }
+
+    if (jackpotTier > 0) {
+      let jackpotText = '';
+      if (jackpotTier === 3) jackpotText = 'COSMIC 잭팟!!!';
+      else if (jackpotTier === 2) jackpotText = 'SUPER 잭팟!!';
+      else if (jackpotTier === 1) jackpotText = 'NICE 잭팟!';
+
+      if (criticalLog) {
+        jackpotText += ` x${finalMultiplier / totalMultiplier} 연속 폭발!!`;
+      }
+      
+      addFloatingText(jackpotText, 50, 50, true);
     }
 
     setLastSpinTotal(total);
@@ -632,6 +724,7 @@ export const CosmicJackpot: React.FC = () => {
     setMaxTurns(count);
     setSelectedTurnMode(count);
     setRoundMultiplier(count === 3 ? 1.5 : 1.0);
+    setShowShopModal(false);
     setPhase('SLOT');
     setGrid(Array(COLS).fill(0).map(() => Array(ROWS).fill({ symbol: SYMBOLS[0], hasBattery: false })));
   };
@@ -647,7 +740,17 @@ export const CosmicJackpot: React.FC = () => {
     }
 
     const newBelt = [...belt];
-    newBelt[emptyIdx] = item;
+    let purchasedItem = { ...item };
+    
+    // Initialize growth stats if they exist
+    if (purchasedItem.currentBaseBonus !== undefined) {
+      purchasedItem.currentBaseBonus = purchasedItem.currentBaseBonus; // Keep initial value from definition
+    }
+    if (purchasedItem.currentMultiplierBonus !== undefined) {
+      purchasedItem.currentMultiplierBonus = purchasedItem.currentMultiplierBonus; // Keep initial value from definition
+    }
+
+    newBelt[emptyIdx] = purchasedItem;
     setBelt(newBelt);
     setCoupons(prev => prev - item.cost);
     setShopItems(prev => prev.filter(i => i.id !== item.id));
@@ -681,6 +784,17 @@ export const CosmicJackpot: React.FC = () => {
     setMoney(prev => prev - rerollCost);
     setRerollCost(prev => prev * 2n);
     generateShop();
+
+    // Growth: Patient Snail
+    setBelt(prev => prev.map(item => {
+      if (item?.id === 'patient_snail') {
+        return {
+          ...item,
+          currentMultiplierBonus: (item.currentMultiplierBonus || 1.0) + 0.5
+        };
+      }
+      return item;
+    }));
   };
 
   const depositSmartToAtm = () => {
@@ -724,7 +838,20 @@ export const CosmicJackpot: React.FC = () => {
       const totalCoupons = baseCoupons + bonusCoupons;
       setCoupons(prev => prev + totalCoupons);
 
-      // 3. Transition to Shop
+      // Growth: Compound Bankbook
+      if (turn > 0) {
+        setBelt(prev => prev.map(item => {
+          if (item?.id === 'compound_bankbook') {
+            return {
+              ...item,
+              currentMultiplierBonus: (item.currentMultiplierBonus || 1.0) + 0.1
+            };
+          }
+          return item;
+        }));
+      }
+
+      // 3. Transition to Whisper
       setTurn(0);
       const nextRound = round + 1;
       setRound(nextRound);
@@ -737,7 +864,9 @@ export const CosmicJackpot: React.FC = () => {
         setQuota(quota * 15n / 10n + 500n);
       }
       
-      setPhase('SHOP');
+      generateWhispers();
+      setShowShopModal(false);
+      setPhase('WHISPER');
       setShopItems([]); 
       
       // Visual feedback for coupons
@@ -745,6 +874,7 @@ export const CosmicJackpot: React.FC = () => {
         addFloatingText(`조기 제출 보상: 쿠폰 +${totalCoupons}장!`, 50 + (Math.random() * 10 - 5), 40 + (Math.random() * 10 - 5));
       }
     } else {
+      setShowShopModal(false);
       setPhase('GAMEOVER');
     }
   };
@@ -832,7 +962,7 @@ export const CosmicJackpot: React.FC = () => {
       {
         id: 'w6',
         title: '무한의 루프',
-        description: '매 라운드 시작 시 쿠폰 +3장을 획득합니다.',
+        description: '즉시 쿠폰 +3장을 획득합니다.',
         type: 'normal',
         rarity: 'Common',
         effect: () => {
@@ -848,11 +978,13 @@ export const CosmicJackpot: React.FC = () => {
 
   const selectWhisper = (option: any) => {
     option.effect();
+    setShowShopModal(false);
     setPhase('TURN_SELECTION');
   };
 
   const resetGame = () => {
-    setPhase('SHOP');
+    setShowShopModal(false);
+    setPhase('TURN_SELECTION');
     setRound(1);
     setMoney(1000n);
     setAtm(0n);
@@ -884,8 +1016,8 @@ export const CosmicJackpot: React.FC = () => {
   };
 
   const startNextRound = () => {
-    generateWhispers();
-    setPhase('WHISPER');
+    setShowShopModal(false);
+    setPhase('TURN_SELECTION');
   };
 
   const activateItem = (item: CosmicItem) => {
@@ -1094,6 +1226,12 @@ export const CosmicJackpot: React.FC = () => {
                 {item.id === 'piggy_bank' && (
                   <div className="text-[10px] font-bold text-[#B2E2F2]">Savings: {formatKoreanNumber(growthStats.piggyBankSavings)}원</div>
                 )}
+                {item.currentBaseBonus !== undefined && (
+                  <div className="text-[10px] font-bold text-[#B2E2F2]">누적 기본값: +{item.currentBaseBonus}</div>
+                )}
+                {item.currentMultiplierBonus !== undefined && (
+                  <div className="text-[10px] font-bold text-[#B2E2F2]">누적 배수: x{item.currentMultiplierBonus.toFixed(1)}</div>
+                )}
                 <div className="mt-2 pt-2 border-t border-gray-100 text-[8px] text-gray-400 font-bold">CLICK TO SELL (+1장)</div>
                 <div className={`tooltip-arrow ${
                   idx === 0 ? 'left-8 translate-x-0' : 
@@ -1117,7 +1255,7 @@ export const CosmicJackpot: React.FC = () => {
 
         .jp-game-container {
           width: 100%;
-          height: 100%;
+          min-height: 100%;
           background: #FDFBF7;
           color: #4A4A4A;
           font-family: 'Inter', sans-serif;
@@ -1323,7 +1461,13 @@ export const CosmicJackpot: React.FC = () => {
       `}</style>
 
       {phase === 'TURN_SELECTION' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#FDFBF7]">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#FDFBF7] relative overflow-y-auto">
+          <button
+            onClick={() => setShowShopModal(true)}
+            className="absolute top-6 right-6 bg-white px-4 py-2 rounded-full border-2 border-[#E0D7C6] text-gray-600 font-bold text-sm hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2"
+          >
+            <span>🏪</span> 상점 보기
+          </button>
           <motion.div 
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -1365,23 +1509,41 @@ export const CosmicJackpot: React.FC = () => {
       )}
 
       {phase === 'SLOT' && (
-        <div className="flex-1 flex flex-col p-4 md:p-8 max-w-4xl mx-auto w-full relative">
+        <div className="flex-1 flex flex-col p-4 md:p-8 max-w-4xl mx-auto w-full relative overflow-y-auto">
           {/* Header Stats */}
-          <div className="flex justify-between items-end mb-6">
-            <div>
-              <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Wallet</div>
-              <motion.div 
-                animate={{ 
-                  scale: isCountingUp ? 1.2 : 1,
-                  color: isCountingUp ? '#FFD700' : '#FFB7B2',
-                  textShadow: isCountingUp ? '0 0 20px rgba(255, 215, 0, 0.8)' : 'none'
-                }}
-                className="text-3xl font-black tracking-tighter"
-              >
-                {formatKoreanNumber(displayMoney)}원
-              </motion.div>
+          <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-4 mb-6 relative">
+            <div className="flex justify-between w-full md:w-auto">
+              <div>
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Wallet</div>
+                <motion.div 
+                  animate={{ 
+                    scale: isCountingUp ? 1.2 : 1,
+                    color: isCountingUp ? '#FFD700' : '#FFB7B2',
+                    textShadow: isCountingUp ? '0 0 20px rgba(255, 215, 0, 0.8)' : 'none'
+                  }}
+                  className="text-2xl md:text-3xl font-black tracking-tighter"
+                >
+                  {formatKoreanNumber(displayMoney)}원
+                </motion.div>
+              </div>
+              
+              <div className="text-right md:hidden">
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Turns Left</div>
+                <div className="text-2xl font-black text-[#B2E2F2] tracking-tighter">{turn} / {maxTurns}</div>
+              </div>
             </div>
-            <div className="text-right">
+            
+            <button
+              onClick={() => setShowShopModal(true)}
+              disabled={isSpinning}
+              className={`md:absolute md:left-1/2 md:-translate-x-1/2 md:bottom-0 bg-white px-4 py-2 rounded-full border-2 border-[#E0D7C6] text-gray-600 font-bold text-sm transition-colors shadow-sm flex items-center gap-2 z-10 w-full md:w-auto justify-center ${
+                isSpinning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'
+              }`}
+            >
+              <span>🏪</span> 상점 보기
+            </button>
+
+            <div className="text-right hidden md:block">
               <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Turns Left</div>
               <div className="text-3xl font-black text-[#B2E2F2] tracking-tighter">{turn} / {maxTurns}</div>
             </div>
@@ -1449,10 +1611,14 @@ export const CosmicJackpot: React.FC = () => {
                 <motion.div
                   key={ft.id}
                   initial={{ opacity: 0, y: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, y: -100, scale: 1.5 }}
+                  animate={{ opacity: 1, y: -100, scale: ft.isJackpot ? 2 : 1.5 }}
                   exit={{ opacity: 0 }}
                   style={{ left: `${ft.x}%`, top: `${ft.y}%` }}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 text-[#FFB7B2] font-black text-4xl italic drop-shadow-[0_0_10px_rgba(255,183,178,0.8)] text-center whitespace-nowrap"
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50 font-black italic text-center whitespace-nowrap ${
+                    ft.isJackpot 
+                      ? 'text-[#FFD700] text-5xl drop-shadow-[0_0_20px_rgba(255,215,0,0.8)]' 
+                      : 'text-[#FFB7B2] text-4xl drop-shadow-[0_0_10px_rgba(255,183,178,0.8)]'
+                  }`}
                 >
                   {ft.text}
                 </motion.div>
@@ -1608,19 +1774,19 @@ export const CosmicJackpot: React.FC = () => {
         </div>
       )}
 
-      {phase === 'SHOP' && (
-        <div className="flex-1 flex flex-row p-4 md:p-8 overflow-hidden bg-[#FDFBF7]">
-          <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pr-4">
-            <div className="flex justify-between items-center mb-10">
+      {showShopModal && (
+        <div className="absolute inset-0 z-[100] flex flex-row p-4 md:p-8 overflow-hidden bg-[#FDFBF7]">
+          <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pr-0 md:pr-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
             <div>
-              <h2 className="text-4xl font-black text-[#FFB7B2] tracking-tighter italic">COSMIC SHOP</h2>
-              <p className="text-gray-500 text-sm">최고의 시너지를 구성하여 잭팟을 노리세요.</p>
+              <h2 className="text-3xl md:text-4xl font-black text-[#FFB7B2] tracking-tighter italic">COSMIC SHOP</h2>
+              <p className="text-gray-500 text-xs md:text-sm">최고의 시너지를 구성하여 잭팟을 노리세요.</p>
             </div>
-            <div className="flex gap-4">
-              <div className="bg-white px-6 py-3 rounded-[24px] flex flex-col items-end gap-1 border-2 border-[#E0D7C6] shadow-sm">
+            <div className="flex flex-wrap gap-2 md:gap-4 w-full md:w-auto">
+              <div className="bg-white px-4 md:px-6 py-2 md:py-3 rounded-[24px] flex flex-col items-end gap-1 border-2 border-[#E0D7C6] shadow-sm flex-1 md:flex-none">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm opacity-50 text-gray-400">ATM</span>
-                  <span className="text-lg font-black text-gray-700">{formatKoreanNumber(atm)}원</span>
+                  <span className="text-xs md:text-sm opacity-50 text-gray-400">ATM</span>
+                  <span className="text-sm md:text-lg font-black text-gray-700">{formatKoreanNumber(atm)}원</span>
                 </div>
                 <div className="flex gap-2">
                   <button 
@@ -1637,11 +1803,11 @@ export const CosmicJackpot: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="bg-white px-6 py-3 rounded-[24px] flex items-center gap-3 border-2 border-[#E0D7C6] shadow-sm">
-                <span className="text-xl">🎫</span>
-                <span className="text-xl font-black text-[#FFB7B2]">{coupons}장</span>
+              <div className="bg-white px-4 md:px-6 py-2 md:py-3 rounded-[24px] flex items-center gap-2 md:gap-3 border-2 border-[#E0D7C6] shadow-sm">
+                <span className="text-lg md:text-xl">🎫</span>
+                <span className="text-lg md:text-xl font-black text-[#FFB7B2]">{coupons}장</span>
               </div>
-              <div className="bg-white px-6 py-3 rounded-[24px] flex items-center gap-3 border-2 border-[#E0D7C6] shadow-sm">
+              <div className="bg-white px-4 md:px-6 py-2 md:py-3 rounded-[24px] flex items-center gap-2 md:gap-3 border-2 border-[#E0D7C6] shadow-sm">
                 <Wallet className="text-[#FFB7B2]" size={20} />
                 <span className="text-xl font-black text-gray-700">{formatKoreanNumber(displayMoney)}원</span>
               </div>
@@ -1699,10 +1865,10 @@ export const CosmicJackpot: React.FC = () => {
               상점 리롤 ({formatKoreanNumber(rerollCost)}원)
             </button>
             <button 
-              onClick={() => startNextRound()}
-              className="flex-1 py-5 rounded-[24px] font-black bg-[#FFB7B2] text-white hover:opacity-90 flex justify-center items-center gap-3 shadow-lg"
+              onClick={() => setShowShopModal(false)}
+              className="flex-1 py-5 rounded-[24px] font-black bg-[#B2E2F2] text-gray-700 hover:opacity-90 flex justify-center items-center gap-3 shadow-lg"
             >
-              다음 라운드 시작
+              돌아가기
               <ArrowRight size={20} />
             </button>
           </div>
@@ -1714,7 +1880,7 @@ export const CosmicJackpot: React.FC = () => {
       )}
 
       {phase === 'WHISPER' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#FDFBF7] relative overflow-hidden">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#FDFBF7] relative overflow-y-auto">
           {/* Background Decorations */}
           <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
             <div className="absolute top-10 left-10 text-8xl">✨</div>
@@ -1766,7 +1932,7 @@ export const CosmicJackpot: React.FC = () => {
       )}
 
       {phase === 'GAMEOVER' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#FDFBF7]">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#FDFBF7] overflow-y-auto">
           <motion.div
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
