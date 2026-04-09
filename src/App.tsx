@@ -293,7 +293,15 @@ export default function App() {
           if (profile && profile.nickname && profile.nickname !== '익명 사원') {
             setNickname(profile.nickname);
           }
+        }).catch(err => {
+          if (err.message.toLowerCase().includes('permission')) {
+            setError('Permission denied');
+          }
         });
+      }
+    }).catch(err => {
+      if (err.message.toLowerCase().includes('permission')) {
+        setError('Permission denied');
       }
     });
   }, []);
@@ -301,6 +309,10 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = sessionService.subscribeToGlobalLeaderboards((data) => {
       setGlobalLeaderboards(data);
+    }, (err) => {
+      if (err.message.toLowerCase().includes('permission')) {
+        setError('Permission denied');
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -320,6 +332,10 @@ export default function App() {
             return;
           }
           setSession(data);
+        }
+      }, (err) => {
+        if (err.message.toLowerCase().includes('permission')) {
+          setError('Permission denied');
         }
       });
       return () => unsubscribe();
@@ -570,6 +586,61 @@ export default function App() {
     );
   }
 
+  if (error && error.toLowerCase().includes('permission')) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-xl w-full space-y-6 bg-white p-8 border border-red-200 rounded-lg shadow-sm">
+          <div className="text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100 text-red-600">
+              <AlertTriangle size={24} />
+            </div>
+            <h1 className="text-xl font-bold text-slate-900">Firebase 권한 오류 (Permission Denied)</h1>
+            <div className="text-sm text-slate-600 leading-relaxed text-left space-y-4">
+              <p>
+                Firebase Realtime Database의 보안 규칙이 설정되지 않아 접근이 차단되었습니다.
+                다음 단계를 따라 규칙을 업데이트해주세요:
+              </p>
+              <ol className="list-decimal pl-5 space-y-2 font-medium">
+                <li><a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Firebase 콘솔</a>에 접속합니다.</li>
+                <li>현재 프로젝트를 선택합니다.</li>
+                <li>왼쪽 메뉴에서 <strong>Build &gt; Realtime Database</strong>를 클릭합니다.</li>
+                <li>상단의 <strong>Rules(규칙)</strong> 탭을 클릭합니다.</li>
+                <li>기존 규칙을 모두 지우고 아래의 규칙으로 교체합니다:</li>
+              </ol>
+              <pre className="bg-slate-100 p-4 rounded text-xs overflow-auto border border-slate-200">
+{`{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "sessions": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "leaderboards": {
+      ".read": true,
+      ".write": "auth != null"
+    }
+  }
+}`}
+              </pre>
+              <p>6. <strong>Publish(게시)</strong> 버튼을 눌러 저장한 후, 이 페이지를 새로고침하세요.</p>
+            </div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-4 px-6 py-2 bg-[#217346] text-white rounded font-bold hover:bg-[#1a5c38] transition-colors"
+            >
+              새로고침
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!sessionId) {
     return (
       <div className="h-[100dvh] desk-texture flex flex-col relative overflow-hidden">
@@ -611,7 +682,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-6 p-3 lg:p-8 z-10 overflow-auto">
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 lg:gap-6 p-3 lg:p-8 z-10 overflow-auto">
           {/* Left Side: Profile & Stats */}
           <div className="w-full lg:w-80 flex flex-col gap-4 lg:gap-6 order-1 lg:order-none">
             {currentUser && (
@@ -834,7 +905,7 @@ export default function App() {
                 <p className="text-[10px] lg:text-xs text-gray-500 mb-4 lg:mb-6 italic">* 전사 시트에서 기록된 실시간 순위입니다. (글로벌 통합)</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
-                  <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="GLOBAL" />
+                  <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
                   <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
                   <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (국가대표급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
                   <Leaderboard entries={globalLeaderboards?.SUIKA || []} title="초고속 승진 (승진게임)" sessionId="GLOBAL" gameType="SUIKA" />

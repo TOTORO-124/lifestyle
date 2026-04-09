@@ -331,11 +331,14 @@ export const sessionService = {
     await remove(ref(db, `sessions/${sessionId}/players/${playerId}`));
   },
 
-  subscribeToSession(sessionId: string, callback: (session: Session | null) => void) {
+  subscribeToSession(sessionId: string, callback: (session: Session | null) => void, onError?: (error: Error) => void) {
     if (!isConfigured || !db) return () => {};
     const sessionRef = ref(db, `sessions/${sessionId}`);
     return onValue(sessionRef, (snapshot) => {
       callback(snapshot.val());
+    }, (error) => {
+      if (onError) onError(error);
+      else console.error("Session subscription error:", error);
     });
   },
 
@@ -1641,11 +1644,14 @@ export const sessionService = {
     }
   },
 
-  subscribeToGlobalLeaderboards(callback: (leaderboards: Record<string, LeaderboardEntry[]>) => void) {
+  subscribeToGlobalLeaderboards(callback: (leaderboards: Record<string, LeaderboardEntry[]>) => void, onError?: (error: Error) => void) {
     if (!isConfigured || !db) return () => {};
     const leaderboardsRef = ref(db, 'leaderboards');
     return onValue(leaderboardsRef, (snapshot) => {
       callback(snapshot.val() || {});
+    }, (error) => {
+      if (onError) onError(error);
+      else console.error("Leaderboard subscription error:", error);
     });
   },
 
