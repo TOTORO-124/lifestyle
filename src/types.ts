@@ -6,7 +6,7 @@ export enum GameType {
   DRAW = 'DRAW',
   MINESWEEPER = 'MINESWEEPER',
   OFFICE_2048 = 'OFFICE_2048',
-  SUDOKU = 'SUDOKU',
+  FLAPPY_BIRD = 'FLAPPY_BIRD',
   OFFICE_LIFE = 'OFFICE_LIFE',
   COSMIC_JACKPOT = 'COSMIC_JACKPOT',
   YUT_NORI = 'YUT_NORI',
@@ -170,13 +170,18 @@ export interface Office2048GameState {
   status: 'PLAYING' | 'WON' | 'LOST';
 }
 
-export interface SudokuGameState {
-  initialBoard: (number | null)[][];
-  currentBoard: (number | null)[][];
-  solution: number[][];
-  difficulty: 'EASY' | 'MEDIUM' | 'HARD';
-  status: 'PLAYING' | 'WON';
-  mistakes: number;
+export interface FlappyBirdGameState {
+  status: 'PLAYING' | 'FINISHED';
+  mode: 'SOLO' | 'AI' | 'PVP';
+  difficulty?: 'EASY' | 'NORMAL' | 'HARD' | 'DEVIL';
+  seed: number;
+  players: Record<string, {
+    y: number;
+    score: number;
+    isAlive: boolean;
+  }>;
+  winnerId?: string;
+  startTime: number;
 }
 
 export interface OfficeLifeGameState {
@@ -388,7 +393,7 @@ export interface Session {
   drawGame?: DrawGameState;
   minesweeperGame?: MinesweeperGameState;
   office2048Game?: Office2048GameState;
-  sudokuGame?: SudokuGameState;
+  flappyBirdGame?: FlappyBirdGameState;
   officeLifeGame?: OfficeLifeGameState;
   cyberArenaGame?: CyberArenaGameState;
   suikaGame?: SuikaGameState;
@@ -407,7 +412,8 @@ export interface Session {
     drawRounds?: number;
     drawTime?: number;
     minesweeperDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
-    sudokuDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+    flappyBirdMode?: 'SOLO' | 'AI' | 'PVP';
+    flappyBirdDifficulty?: 'EASY' | 'NORMAL' | 'HARD' | 'DEVIL';
     officeLifeMode?: 'INDIVIDUAL' | 'TEAM';
     yutNoriMode?: 'INDIVIDUAL' | 'TEAM';
     yutNoriPieceCount?: number;

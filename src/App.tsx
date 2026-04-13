@@ -14,6 +14,7 @@ import { OfficeLifeBoard } from './components/OfficeLifeBoard';
 import { UserProfileCard } from './components/UserProfileCard';
 import { YutNori } from './components/YutNori';
 import { CosmicJackpot } from './components/CosmicJackpot';
+import FlappyBird from './components/FlappyBird';
 import Leaderboard from './components/Leaderboard';
 
 import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS, SYNERGIES } from './data/cyberArenaData';
@@ -388,12 +389,8 @@ export default function App() {
         if (e.key === 'ArrowDown') sessionService.moveOffice2048(session.id, 'DOWN', session);
         if (e.key === 'ArrowLeft') sessionService.moveOffice2048(session.id, 'LEFT', session);
         if (e.key === 'ArrowRight') sessionService.moveOffice2048(session.id, 'RIGHT', session);
-      } else if (session.gameType === GameType.SUDOKU && selectedSudokuCell) {
-        if (e.key >= '1' && e.key <= '9') {
-          sessionService.updateSudokuCell(session.id, selectedSudokuCell.r, selectedSudokuCell.c, parseInt(e.key), session);
-        } else if (e.key === 'Backspace' || e.key === 'Delete') {
-          sessionService.updateSudokuCell(session.id, selectedSudokuCell.r, selectedSudokuCell.c, null, session);
-        }
+      } else if (session.gameType === GameType.FLAPPY_BIRD) {
+        // Flappy Bird keyboard is handled inside the component
       }
     };
 
@@ -505,8 +502,12 @@ export default function App() {
         await sessionService.startMinesweeperGame(session.id, session.settings.minesweeperDifficulty || 'EASY');
       } else if (session.gameType === GameType.OFFICE_2048) {
         await sessionService.startOffice2048Game(session.id);
-      } else if (session.gameType === GameType.SUDOKU) {
-        await sessionService.startSudokuGame(session.id, session.settings.sudokuDifficulty || 'EASY');
+      } else if (session.gameType === GameType.FLAPPY_BIRD) {
+        if (session.settings.flappyBirdMode === 'PVP' && Object.keys(session.players || {}).length !== 2) {
+          setError('1:1 대전은 정확히 2명의 플레이어가 필요합니다.');
+          return;
+        }
+        await sessionService.startFlappyBirdGame(session.id, session.settings.flappyBirdMode || 'SOLO', session.settings.flappyBirdDifficulty || 'NORMAL');
       } else if (session.gameType === GameType.OFFICE_LIFE) {
         await sessionService.startOfficeLifeGame(session.id, session.players, session.turnOrder, session.settings.officeLifeMode || 'INDIVIDUAL');
       } else if (session.gameType === GameType.COSMIC_JACKPOT) {
@@ -827,12 +828,12 @@ export default function App() {
                           <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">직급 승진 대작전</span>
                         </button>
                         <button 
-                          onClick={() => handleCreateSession(GameType.SUDOKU)} 
+                          onClick={() => handleCreateSession(GameType.FLAPPY_BIRD)} 
                           className="office-btn py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">스도쿠</span>
-                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">데이터 무결성 검증</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">플래피버드</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">장애물 피하기</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.OFFICE_LIFE)} 
@@ -877,7 +878,7 @@ export default function App() {
                         <input
                           type="text"
                           className="office-input flex-1"
-                          placeholder="세션_코드 (예: -Nxyz...)"
+                          placeholder="세션_코드 (6자리 숫자)"
                           value={joinCode}
                           onChange={(e) => setJoinCode(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleJoinSession()}
@@ -906,7 +907,7 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
-                  <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
+                  <Leaderboard entries={globalLeaderboards?.FLAPPY_BIRD || []} title="플래피버드" sessionId="GLOBAL" gameType="FLAPPY_BIRD" />
                   <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (국가대표급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
                   <Leaderboard entries={globalLeaderboards?.SUIKA || []} title="초고속 승진 (승진게임)" sessionId="GLOBAL" gameType="SUIKA" />
                   <Leaderboard entries={globalLeaderboards?.COSMIC_JACKPOT || []} title="우주적 잭팟 마스터" sessionId="GLOBAL" gameType="COSMIC_JACKPOT" />
@@ -1615,20 +1616,38 @@ export default function App() {
                         </div>
                       )}
 
-                      {session.gameType === GameType.SUDOKU && (
+                      {session.gameType === GameType.FLAPPY_BIRD && (
                         <div className="space-y-3">
                           <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-[#999]">난이도</label>
+                            <label className="text-[9px] font-bold text-[#999]">모드</label>
                             <select 
                               className="office-input text-xs"
-                              value={session.settings.sudokuDifficulty || 'EASY'}
-                              onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, sudokuDifficulty: e.target.value })}
+                              value={session.settings.flappyBirdMode || 'SOLO'}
+                              onChange={(e) => {
+                                const mode = e.target.value as 'SOLO' | 'AI' | 'PVP';
+                                sessionService.updateSettings(session.id, { ...session.settings, flappyBirdMode: mode });
+                              }}
                             >
-                              <option value="EASY">쉬움</option>
-                              <option value="MEDIUM">보통</option>
-                              <option value="HARD">어려움</option>
+                              <option value="SOLO">솔로 플레이</option>
+                              <option value="AI">vs 컴퓨터</option>
+                              <option value="PVP">1:1 실시간 대전</option>
                             </select>
                           </div>
+                          {session.settings.flappyBirdMode === 'AI' && (
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-[#999]">난이도</label>
+                              <select 
+                                className="office-input text-xs"
+                                value={session.settings.flappyBirdDifficulty || 'NORMAL'}
+                                onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, flappyBirdDifficulty: e.target.value as any })}
+                              >
+                                <option value="EASY">쉬움</option>
+                                <option value="NORMAL">보통</option>
+                                <option value="HARD">어려움</option>
+                                <option value="DEVIL">악마</option>
+                              </select>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -2492,95 +2511,9 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            ) : session.gameType === GameType.SUDOKU ? (
-              <div className="max-w-2xl mx-auto space-y-6">
-                <div className="bg-white border border-[#d1d1d1] rounded shadow-lg overflow-hidden">
-                  <div className="bg-[#f8f9fa] border-b border-[#d1d1d1] px-4 py-2 flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-[#666]">데이터_무결성_검증_진행</span>
-                    <div className="flex gap-4">
-                      <div className="text-[10px] text-[#666]">난이도: <span className="font-bold text-[#217346]">{session.sudokuGame?.difficulty}</span></div>
-                      <div className="text-[10px] text-[#666]">실수: <span className="font-bold text-red-600">{session.sudokuGame?.mistakes}/3</span></div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 md:p-16 flex flex-col lg:flex-row items-center justify-center gap-6 md:gap-12">
-                    <div className="grid grid-cols-9 border-2 md:border-4 border-[#333] w-fit shadow-2xl rounded-sm overflow-hidden">
-                      {(Array.isArray(session.sudokuGame?.currentBoard) ? session.sudokuGame.currentBoard : Object.values(session.sudokuGame?.currentBoard || {})).map((row: any, r: number) => (
-                        (Array.isArray(row) ? row : Object.values(row || {})).map((val: any, c: number) => {
-                          const isInitial = session.sudokuGame?.initialBoard?.[r]?.[c] !== 0 && session.sudokuGame?.initialBoard?.[r]?.[c] !== undefined;
-                          const isWrong = val !== 0 && val !== undefined && val !== session.sudokuGame?.solution?.[r]?.[c];
-                          const isSelected = selectedSudokuCell?.r === r && selectedSudokuCell?.c === c;
-                          return (
-                            <button 
-                              key={`${r}-${c}`}
-                              onClick={() => !isSpectator && !isInitial && setSelectedSudokuCell({r, c})}
-                              className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 border border-[#ccc] flex items-center justify-center text-sm md:text-base font-bold transition-all
-                                ${r % 3 === 2 && r !== 8 ? 'border-b-2 border-b-[#333]' : ''}
-                                ${c % 3 === 2 && c !== 8 ? 'border-r-2 border-r-[#333]' : ''}
-                                ${isInitial ? 'bg-[#f8f9fa] text-[#333]' : 'bg-white text-[#217346]'}
-                                ${isWrong ? 'bg-red-100 text-red-600' : ''}
-                                ${isSelected ? 'ring-2 ring-inset ring-[#217346] bg-[#e8f0fe] z-10' : ''}
-                                ${isSpectator ? 'cursor-default' : ''}
-                              `}
-                            >
-                              {val || ''}
-                            </button>
-                          );
-                        })
-                      ))}
-                    </div>
-
-                    <div className="flex flex-col gap-4">
-                      <div className="grid grid-cols-5 lg:grid-cols-3 gap-2">
-                        {[1,2,3,4,5,6,7,8,9].map(num => (
-                          <button 
-                            key={num}
-                            onClick={() => {
-                              if (selectedSudokuCell) {
-                                sessionService.updateSudokuCell(session.id, selectedSudokuCell.r, selectedSudokuCell.c, num, session);
-                              }
-                            }}
-                            className="office-btn w-10 h-10 sm:w-12 sm:h-12 font-bold text-sm sm:text-base"
-                          >
-                            {num}
-                          </button>
-                        ))}
-                        <button 
-                          onClick={() => {
-                            if (selectedSudokuCell) {
-                              sessionService.updateSudokuCell(session.id, selectedSudokuCell.r, selectedSudokuCell.c, 0, session);
-                            }
-                          }}
-                          className="office-btn w-10 h-10 sm:w-12 sm:h-12 font-bold text-red-600 text-sm sm:text-base"
-                        >
-                          X
-                        </button>
-                      </div>
-                      <button 
-                        onClick={() => sessionService.startSudokuGame(session.id, session.sudokuGame?.difficulty || 'EASY')}
-                        className="office-btn-primary py-2 text-xs font-bold"
-                      >
-                        새 시트
-                      </button>
-                    </div>
-                    {session.sudokuGame?.status === 'WON' && (
-                      <div className="w-full max-w-xs space-y-4">
-                        <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-center animate-bounce">
-                          <Trophy className="mx-auto text-green-600 mb-2" />
-                          <p className="text-green-800 font-bold">데이터 무결성 검증 완료! 완벽한 보고서입니다.</p>
-                        </div>
-                        <Leaderboard 
-                          entries={globalLeaderboards?.SUDOKU || []} 
-                          title="데이터 무결성" 
-                          sessionId="GLOBAL"
-                          gameType="SUDOKU"
-                        />
-                      </div>
-                    )}
-                  </div>
-                  
-                  <p className="text-center text-[10px] text-[#999] pb-4">빈 칸을 클릭하고 숫자를 입력하여 데이터를 검증하세요.</p>
-                </div>
+            ) : session.gameType === GameType.FLAPPY_BIRD ? (
+              <div className="w-full h-full flex items-center justify-center bg-slate-900">
+                <FlappyBird session={session} currentUser={currentUser} />
               </div>
             ) : session.gameType === GameType.DRAW ? (
               <div className="max-w-3xl mx-auto space-y-6">
@@ -3740,7 +3673,7 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
-                  <Leaderboard entries={globalLeaderboards?.SUDOKU || []} title="데이터 무결성 (스도쿠)" sessionId="GLOBAL" gameType="SUDOKU" />
+                  <Leaderboard entries={globalLeaderboards?.FLAPPY_BIRD || []} title="플래피버드" sessionId="GLOBAL" gameType="FLAPPY_BIRD" />
                   <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (국가대표급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
                   <Leaderboard entries={globalLeaderboards?.SUIKA || []} title="초고속 승진 (승진게임)" sessionId="GLOBAL" gameType="SUIKA" />
                   <Leaderboard entries={globalLeaderboards?.COSMIC_JACKPOT || []} title="우주적 잭팟 마스터" sessionId="GLOBAL" gameType="COSMIC_JACKPOT" />

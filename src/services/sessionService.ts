@@ -1,7 +1,7 @@
 import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
-import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, CyberArenaGameState, ArenaProjectile, ArenaCharacter, ArenaItem, HallOfFameEntry } from '../types';
+import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, CyberArenaGameState, ArenaProjectile, ArenaCharacter, ArenaItem, HallOfFameEntry, FlappyBirdGameState } from '../types';
 import { LIAR_TOPICS } from '../data/topics';
 import { DRAW_TOPICS } from '../data/drawTopics';
 import { BINGO_TOPICS } from '../data/bingoTopics';
@@ -70,9 +70,15 @@ export const sessionService = {
     const user = await this.authenticate();
     if (!user || !db) throw new Error('Firebase configuration required');
 
-    const sessionRef = push(ref(db, 'sessions'));
-    const sessionId = sessionRef.key!;
-// ... (rest of the code remains same, just ensuring db is checked)
+    let sessionId = '';
+    let isUnique = false;
+    while (!isUnique) {
+      sessionId = Math.floor(100000 + Math.random() * 900000).toString();
+      const snap = await get(ref(db, `sessions/${sessionId}`));
+      if (!snap.exists()) {
+        isUnique = true;
+      }
+    }
 
     const initialSession: Partial<Session> = {
       id: sessionId,
@@ -102,7 +108,7 @@ export const sessionService = {
       lastActive: Date.now(),
     };
 
-    await set(sessionRef, initialSession);
+    await set(ref(db, `sessions/${sessionId}`), initialSession);
     await set(ref(db, `sessions/${sessionId}/players/${user.uid}`), hostPlayer);
 
     return sessionId;
@@ -1917,126 +1923,47 @@ export const sessionService = {
     }
   },
 
-  // --- Sudoku ---
-  async startSudokuGame(sessionId: string, difficulty: 'EASY' | 'MEDIUM' | 'HARD') {
+  // --- Flappy Bird ---
+  async startFlappyBirdGame(sessionId: string, mode: 'SOLO' | 'AI' | 'PVP', difficulty?: 'EASY' | 'NORMAL' | 'HARD' | 'DEVIL') {
     if (!db) return;
-    
-    const solution = Array(9).fill(null).map(() => Array(9).fill(0));
-    const fill = (r: number, c: number): boolean => {
-      if (c === 9) { r++; c = 0; }
-      if (r === 9) return true;
-      const nums = [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
-      for (const num of nums) {
-        if (this.isSudokuSafe(solution, r, c, num)) {
-          solution[r][c] = num;
-          if (fill(r, c + 1)) return true;
-          solution[r][c] = 0;
-        }
-      }
-      return false;
-    };
-    fill(0, 0);
+    const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
+    const session = sessionSnap.val() as Session;
+    if (!session) return;
 
-    const initialBoard = solution.map(row => [...row]);
-    const removeCount = { 'EASY': 30, 'MEDIUM': 45, 'HARD': 60 }[difficulty];
-    let removed = 0;
-    while (removed < removeCount) {
-      const r = Math.floor(Math.random() * 9);
-      const c = Math.floor(Math.random() * 9);
-      if (initialBoard[r][c] !== 0) {
-        initialBoard[r][c] = 0;
-        removed++;
-      }
-    }
+    const players: Record<string, any> = {};
+    Object.keys(session.players).forEach(pid => {
+      players[pid] = { y: 300, score: 0, isAlive: true };
+    });
 
-    const sudokuGame: any = {
-      initialBoard,
-      currentBoard: initialBoard.map(row => [...row]),
-      solution,
-      difficulty,
+    const game: FlappyBirdGameState = {
       status: 'PLAYING',
-      mistakes: 0
+      mode,
+      difficulty,
+      seed: Math.floor(Math.random() * 1000000),
+      players,
+      startTime: Date.now()
     };
 
     await update(ref(db, `sessions/${sessionId}`), {
-      status: SessionStatus.PLAYING,
-      sudokuGame
+      flappyBirdGame: game,
+      status: SessionStatus.PLAYING
     });
-    await this.addLog(sessionId, `스도쿠(데이터 검증) 시트가 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, `Flappy Bird 게임이 시작되었습니다.`, 'success');
   },
 
-  isSudokuSafe(board: number[][], r: number, c: number, num: number) {
-    for (let i = 0; i < 9; i++) if (board[r][i] === num || board[i][c] === num) return false;
-    const br = Math.floor(r / 3) * 3, bc = Math.floor(c / 3) * 3;
-    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if (board[br + i][bc + j] === num) return false;
-    return true;
+  async updateFlappyBirdPlayer(sessionId: string, playerId: string, y: number, score: number, isAlive: boolean) {
+    if (!db) return;
+    await update(ref(db, `sessions/${sessionId}/flappyBirdGame/players/${playerId}`), {
+      y, score, isAlive
+    });
   },
 
-  async updateSudokuCell(sessionId: string, r: number, c: number, num: number, session: Session) {
-    if (!db || !session.sudokuGame || session.sudokuGame.status !== 'PLAYING') return;
-    
-    const game = JSON.parse(JSON.stringify(session.sudokuGame));
-    
-    // Helper to ensure 9x9 matrix from Firebase object/array
-    const ensureSudokuMatrix = (data: any) => {
-      const matrix = Array(9).fill(0).map(() => Array(9).fill(0));
-      if (!data) return matrix;
-      const rows = Array.isArray(data) ? data : Object.values(data);
-      rows.forEach((row: any, ri: number) => {
-        if (ri >= 9) return;
-        const cells = Array.isArray(row) ? row : Object.values(row);
-        cells.forEach((cell: any, ci: number) => {
-          if (ci >= 9) return;
-          matrix[ri][ci] = cell || 0;
-        });
-      });
-      return matrix;
-    };
-
-    game.initialBoard = ensureSudokuMatrix(game.initialBoard);
-    game.currentBoard = ensureSudokuMatrix(game.currentBoard);
-    game.solution = ensureSudokuMatrix(game.solution);
-    
-    if (game.initialBoard[r][c] !== 0) return;
-
-    if (num !== 0 && num !== game.solution[r][c]) {
-      game.mistakes++;
-      await this.addLog(sessionId, `잘못된 숫자를 입력했습니다. (실수: ${game.mistakes}/3)`, 'warning');
-      if (game.mistakes >= 3) {
-        game.status = 'LOST';
-        await this.addLog(sessionId, `실수 횟수 초과로 데이터 검증에 실패했습니다.`, 'error');
-      }
-    }
-    
-    game.currentBoard[r][c] = num;
-    
-    let won = true;
-    if (game.status !== 'LOST') {
-      for (let i = 0; i < 9; i++) {
-        for (let j = 0; j < 9; j++) {
-          if (game.currentBoard[i][j] !== game.solution[i][j]) won = false;
-        }
-      }
-    } else {
-      won = false;
-    }
-
-    if (won) {
-      game.status = 'WON';
-      await this.addLog(sessionId, `스도쿠를 완벽하게 해결했습니다!`, 'success');
-      
-      // Record leaderboard
-      const difficultyBonus = { 'EASY': 1000, 'MEDIUM': 5000, 'HARD': 15000 }[game.difficulty as 'EASY' | 'MEDIUM' | 'HARD'];
-      const score = Math.max(0, difficultyBonus + 10000 - (game.mistakes * 1000));
-      const user = auth?.currentUser;
-      if (user && session.players?.[user.uid]) {
-        await this.recordLeaderboard(sessionId, 'SUDOKU', user.uid, session.players[user.uid]?.nickname || '플레이어', score);
-      } else {
-        await this.recordLeaderboard(sessionId, 'SUDOKU', session.players?.[session.hostId]?.id || '', session.players?.[session.hostId]?.nickname || '', score);
-      }
-    }
-
-    await update(ref(db, `sessions/${sessionId}`), { sudokuGame: game });
+  async endFlappyBirdGame(sessionId: string, winnerId?: string) {
+    if (!db) return;
+    await update(ref(db, `sessions/${sessionId}/flappyBirdGame`), {
+      status: 'FINISHED',
+      winnerId: winnerId || null
+    });
   },
 
   // --- Office Life ---
