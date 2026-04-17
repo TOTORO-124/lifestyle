@@ -198,8 +198,9 @@ export default function App() {
     
     // Reveal -> Playing/Night
     if (session.status === SessionStatus.REVEAL) {
-      const allConfirmed = players.every(p => p.hasConfirmedRole);
-      if (allConfirmed && players.length > 0) {
+      const activePlayers = players.filter(p => !p.isAI && p.isAlive && p.role !== 'SPECTATOR');
+      const allConfirmed = activePlayers.length > 0 && activePlayers.every(p => p.hasConfirmedRole);
+      if (allConfirmed) {
         if (session.gameType === GameType.MAFIA) {
           sessionService.startNightPhase(session.id, session.players);
         } else {
@@ -406,6 +407,23 @@ export default function App() {
     await sessionService.sendMessage(session.id, currentUser.uid, nickname, chatMessage);
     setChatMessage('');
   };
+
+  useEffect(() => {
+    if (!session || !isHost) return;
+
+    if (session.status === SessionStatus.VOTING) {
+      const alivePlayers = (Object.values(session.players || {}) as Player[]).filter(p => !p.isAI && p.isAlive);
+      const allVoted = alivePlayers.length > 0 && alivePlayers.every(p => p.voteTarget);
+      
+      if (allVoted) {
+        if (session.gameType === GameType.LIAR && session.liarGame) {
+          sessionService.processLiarVote(session.id, session.players, session.liarGame);
+        } else if (session.gameType === GameType.MAFIA) {
+          sessionService.processMafiaVote(session.id, session.players);
+        }
+      }
+    }
+  }, [session?.players, session?.status, isHost, session?.gameType, session?.id, session?.liarGame]);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -1167,9 +1185,7 @@ export default function App() {
                               {!player.isHost && (
                                 <button 
                                   onClick={() => {
-                                    if (confirm(`${player.nickname}님을 강퇴하시겠습니까?`)) {
-                                      sessionService.kickPlayer(session.id, player.id);
-                                    }
+                                    sessionService.kickPlayer(session.id, player.id);
                                   }}
                                   className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
                                   title="강퇴"
@@ -1729,7 +1745,7 @@ export default function App() {
                     <div className="p-4 bg-gray-100 rounded text-center">
                       <div className="animate-pulse text-sm font-bold text-gray-500">다른 플레이어 대기 중...</div>
                       <div className="text-[10px] text-gray-400 mt-1">
-                        {(Object.values(session?.players || {}) as Player[]).filter(p => p.hasConfirmedRole).length} / {(Object.values(session?.players || {}) as Player[]).length} 명 확인 완료
+                        {(Object.values(session?.players || {}) as Player[]).filter(p => !p.isAI && p.isAlive && p.role !== 'SPECTATOR' && p.hasConfirmedRole).length} / {(Object.values(session?.players || {}) as Player[]).filter(p => !p.isAI && p.isAlive && p.role !== 'SPECTATOR').length} 명 확인 완료
                       </div>
                       {isHost && (
                         <button 
@@ -1885,7 +1901,10 @@ export default function App() {
                           }
 
                           const isComplete = bingoBoard.every(row => row.every(cell => cell.trim() !== ''));
-                          if (!isComplete && !window.confirm('빈 칸이 있습니다. 그대로 제출하시겠습니까?')) return;
+                          if (!isComplete) {
+                            setError('빈 칸을 모두 채워야 제출할 수 있습니다.');
+                            return;
+                          }
                           sessionService.submitBingoBoard(session.id, currentUser.uid, bingoBoard, Object.keys(session?.players || {}).length);
                           setBingoSubmitted(true);
                         }}
@@ -2927,17 +2946,15 @@ export default function App() {
                     {isHost && (
                       <button 
                         onClick={() => {
-                          if (confirm('투표를 강제로 종료하시겠습니까? 투표하지 않은 플레이어는 기권 처리됩니다.')) {
-                            if (session.gameType === GameType.LIAR && session.liarGame) {
-                              sessionService.processLiarVote(session.id, session.players, session.liarGame);
-                            } else if (session.gameType === GameType.MAFIA) {
-                              sessionService.processMafiaVote(session.id, session.players);
-                            }
+                          if (session.gameType === GameType.LIAR && session.liarGame) {
+                            sessionService.processLiarVote(session.id, session.players, session.liarGame);
+                          } else if (session.gameType === GameType.MAFIA) {
+                            sessionService.processMafiaVote(session.id, session.players);
                           }
                         }}
                         className="text-xs text-red-500 underline hover:text-red-700"
                       >
-                        강제 투표 종료 (미투표자 무시)
+                        강제 투표 종료 {((Object.values(session.players || {}) as Player[]).filter(p => p.isAlive && !p.voteTarget).length === 0) ? '(모두 투표 완료)' : '(미투표자 무시)'}
                       </button>
                     )}
                   </div>
