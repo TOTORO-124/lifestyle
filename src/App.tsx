@@ -187,6 +187,8 @@ export default function App() {
     return () => clearInterval(interval);
   }, [session?.status, session?.gameType, session?.drawGame?.timer, isHost]);
 
+  const isTransitioningRef = React.useRef(false);
+
   // Synchronized Transitions
   useEffect(() => {
     if (!session || !session.players) return;
@@ -194,13 +196,18 @@ export default function App() {
     // Only host triggers transitions
     if (session.hostId !== currentUser?.uid) return;
 
+    if (session.status !== SessionStatus.VOTING && session.status !== SessionStatus.REVEAL && session.status !== SessionStatus.NIGHT) {
+      isTransitioningRef.current = false;
+    }
+
     const players = Object.values(session?.players || {}) as Player[];
     
     // Reveal -> Playing/Night
-    if (session.status === SessionStatus.REVEAL) {
+    if (session.status === SessionStatus.REVEAL && !isTransitioningRef.current) {
       const activePlayers = players.filter(p => !p.isAI && p.isAlive && p.role !== 'SPECTATOR');
       const allConfirmed = activePlayers.length > 0 && activePlayers.every(p => p.hasConfirmedRole);
       if (allConfirmed) {
+        isTransitioningRef.current = true;
         if (session.gameType === GameType.MAFIA) {
           sessionService.startNightPhase(session.id, session.players);
         } else {
@@ -210,13 +217,12 @@ export default function App() {
     }
 
     // Voting -> Vote Result
-    if (session.status === SessionStatus.VOTING) {
-      const alivePlayers = players.filter(p => p.isAlive);
-      // Only require votes from connected players
-      const activePlayers = alivePlayers.filter(p => p.isConnected !== false);
+    if (session.status === SessionStatus.VOTING && !isTransitioningRef.current) {
+      const activePlayers = players.filter(p => p.isAlive && (!p.isAI ? p.isConnected !== false : true));
       const allVoted = activePlayers.every(p => p.voteTarget);
       
       if (allVoted && activePlayers.length > 0) {
+        isTransitioningRef.current = true;
         if (session.gameType === GameType.LIAR && session.liarGame) {
           sessionService.processLiarVote(session.id, session.players, session.liarGame);
         } else if (session.gameType === GameType.MAFIA) {
@@ -226,17 +232,18 @@ export default function App() {
     }
 
     // Mafia Night -> Day Transition
-    if (session.status === SessionStatus.NIGHT && session.gameType === GameType.MAFIA && session.mafiaGame) {
+    if (session.status === SessionStatus.NIGHT && session.gameType === GameType.MAFIA && session.mafiaGame && !isTransitioningRef.current) {
       const alivePlayers = players.filter(p => p.isAlive);
       const aliveMafia = alivePlayers.filter(p => p.role === 'MAFIA');
       const aliveDoctor = alivePlayers.filter(p => p.role === 'DOCTOR');
       const alivePolice = alivePlayers.filter(p => p.role === 'POLICE');
 
       const mafiaDone = aliveMafia.every(m => session.mafiaGame?.mafiaTargets?.[m.id]);
-      const doctorDone = aliveDoctor.length === 0 || session.mafiaGame.doctorTarget;
-      const policeDone = alivePolice.length === 0 || session.mafiaGame.policeTarget;
+      const doctorDone = aliveDoctor.length === 0 || session.mafiaGame?.doctorTarget;
+      const policeDone = alivePolice.length === 0 || session.mafiaGame?.policeTarget;
 
       if (mafiaDone && doctorDone && policeDone) {
+        isTransitioningRef.current = true;
         sessionService.processNightPhase(session.id, session.players, session.mafiaGame);
       }
     }
@@ -407,23 +414,6 @@ export default function App() {
     await sessionService.sendMessage(session.id, currentUser.uid, nickname, chatMessage);
     setChatMessage('');
   };
-
-  useEffect(() => {
-    if (!session || !isHost) return;
-
-    if (session.status === SessionStatus.VOTING) {
-      const alivePlayers = (Object.values(session.players || {}) as Player[]).filter(p => !p.isAI && p.isAlive);
-      const allVoted = alivePlayers.length > 0 && alivePlayers.every(p => p.voteTarget);
-      
-      if (allVoted) {
-        if (session.gameType === GameType.LIAR && session.liarGame) {
-          sessionService.processLiarVote(session.id, session.players, session.liarGame);
-        } else if (session.gameType === GameType.MAFIA) {
-          sessionService.processMafiaVote(session.id, session.players);
-        }
-      }
-    }
-  }, [session?.players, session?.status, isHost, session?.gameType, session?.id, session?.liarGame]);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -2889,7 +2879,7 @@ export default function App() {
                     {(Object.values(session?.players || {}) as Player[]).filter(p => p.isAlive).map(p => (
                       <button
                         key={p.id}
-                        disabled={me?.voteTarget !== undefined || !me?.isAlive}
+                        disabled={!!me?.voteTarget || !me?.isAlive}
                         onClick={() => setSelectedVoteTarget(p.id)}
                         className={`group relative p-4 border-2 transition-all text-left rounded-xl overflow-hidden ${
                           (me?.voteTarget === p.id || selectedVoteTarget === p.id)

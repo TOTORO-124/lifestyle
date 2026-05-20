@@ -792,19 +792,27 @@ export const sessionService = {
 
     let maxVotes = 0;
     let votedPlayerId: string | null = null;
+    let isTie = false;
 
     Object.entries(voteCounts).forEach(([pid, count]) => {
       if (count > maxVotes) {
         maxVotes = count;
         votedPlayerId = pid;
+        isTie = false;
+      } else if (count === maxVotes && maxVotes > 0) {
+        isTie = true;
       }
     });
 
+    if (isTie) {
+      votedPlayerId = null;
+    }
+
     const updates: any = {};
+    updates['liarGame/lastVotedPlayerId'] = votedPlayerId || null;
     
     if (votedPlayerId) {
       updates[`players/${votedPlayerId}/isAlive`] = false;
-      updates['liarGame/lastVotedPlayerId'] = votedPlayerId;
 
       // Check win condition
       const isLiarDead = votedPlayerId === liarGame.liarPlayerId;
