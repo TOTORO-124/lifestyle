@@ -399,10 +399,16 @@ export const sessionService = {
     };
 
     // Reset player states
-    playerIds.forEach(pid => {
-      updates[`players/${pid}/hasConfirmedRole`] = false;
-      updates[`players/${pid}/voteTarget`] = null;
-      updates[`players/${pid}/isAlive`] = true;
+    Object.keys(players || {}).forEach(pid => {
+      if (playerIds.includes(pid)) {
+        updates[`players/${pid}/hasConfirmedRole`] = false;
+        updates[`players/${pid}/voteTarget`] = null;
+        updates[`players/${pid}/isAlive`] = true;
+        updates[`players/${pid}/role`] = 'CITIZEN'; // Base role for clarity
+      } else {
+        updates[`players/${pid}/isAlive`] = false;
+        updates[`players/${pid}/role`] = 'SPECTATOR';
+      }
     });
 
     await update(ref(db, `sessions/${sessionId}`), updates);
@@ -656,19 +662,23 @@ export const sessionService = {
       };
 
       // Award Global XP and Wins
-      const userRef = ref(db, `users/${pid}`);
-      const userSnap = await get(userRef);
-      if (userSnap.exists()) {
-        const profile = userSnap.val();
-        const xpGain = 100 + (score > 0 ? Math.floor(score / 10) : 0);
-        const newXp = (profile.xp || 0) + xpGain;
-        const newLevel = Math.floor(newXp / 1000) + 1;
-        
-        await update(userRef, {
-          xp: newXp,
-          level: newLevel,
-          totalWins: (profile.totalWins || 0) + 1
-        });
+      try {
+        const userRef = ref(db, `users/${pid}`);
+        const userSnap = await get(userRef);
+        if (userSnap.exists()) {
+          const profile = userSnap.val();
+          const xpGain = 100 + (score > 0 ? Math.floor(score / 10) : 0);
+          const newXp = (profile.xp || 0) + xpGain;
+          const newLevel = Math.floor(newXp / 1000) + 1;
+          
+          await update(userRef, {
+            xp: newXp,
+            level: newLevel,
+            totalWins: (profile.totalWins || 0) + 1
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to update global user stats (likely permission denied for updating other users XP):', err);
       }
     }
 

@@ -2944,7 +2944,7 @@ export default function App() {
                         }}
                         className="text-xs text-red-500 underline hover:text-red-700"
                       >
-                        강제 투표 종료 {((Object.values(session.players || {}) as Player[]).filter(p => p.isAlive && !p.voteTarget).length === 0) ? '(모두 투표 완료)' : '(미투표자 무시)'}
+                        강제 투표 종료 {((Object.values(session.players || {}) as Player[]).filter(p => p.isAlive && (!p.isAI ? p.isConnected !== false : true) && !p.voteTarget).length === 0) ? '(모두 투표 완료)' : '(미투표자 무시)'}
                       </button>
                     )}
                   </div>
