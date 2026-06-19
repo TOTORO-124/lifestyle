@@ -64,19 +64,36 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
       
       if (remaining === 0) {
         clearInterval(interval);
-        const myTeamId = session.players[currentUser.uid]?.teamId || 'TEAM_A';
-        const isMyTurn = gameState.mode === 'TEAM' ? gameState.turnOrder[gameState.currentTurnIndex] === myTeamId : gameState.turnOrder[gameState.currentTurnIndex] === currentUser.uid;
+        const currentTurnId = gameState.turnOrder[gameState.currentTurnIndex];
+        const activeTurnUserIdInTeam = gameState.mode === 'TEAM' && gameState.teamPlayers && gameState.teamCurrentTurnIndex 
+          ? gameState.teamPlayers[currentTurnId]?.[gameState.teamCurrentTurnIndex[currentTurnId] % (gameState.teamPlayers[currentTurnId]?.length || 1)]
+          : null;
+
+        const currentMyTeamId = session.players[currentUser.uid]?.teamId || 'TEAM_A';
+        const isMyTurn = gameState.mode === 'TEAM' 
+          ? currentTurnId === currentMyTeamId && (activeTurnUserIdInTeam ? currentUser.uid === activeTurnUserIdInTeam : true)
+          : currentTurnId === currentUser.uid;
         
         if (session.hostId === currentUser.uid || isMyTurn) {
           const nextIndex = getNextTurnIndex(gameState.currentTurnIndex, gameState.rankings || []);
-          update(ref(db, `sessions/${session.id}/yutNoriGame`), {
+          const updateData: any = {
             currentTurnIndex: nextIndex,
             throwResults: [],
             canThrow: true,
             currentSticks: null,
             lastUpdate: Date.now(),
             turnStartTime: Date.now()
-          });
+          };
+          
+          if (gameState.mode === 'TEAM' && gameState.teamCurrentTurnIndex) {
+            const currentTurnId = gameState.turnOrder[gameState.currentTurnIndex];
+            updateData.teamCurrentTurnIndex = {
+              ...gameState.teamCurrentTurnIndex,
+              [currentTurnId]: (gameState.teamCurrentTurnIndex[currentTurnId] || 0) + 1
+            };
+          }
+
+          update(ref(db, `sessions/${session.id}/yutNoriGame`), updateData);
         }
       }
     }, 1000);
@@ -94,14 +111,24 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
 
   const currentTurnId = gameState.turnOrder[gameState.currentTurnIndex];
   const myTeamId = session.players[currentUser.uid]?.teamId || 'TEAM_A';
-  const isMyTurn = !isSpectator && (gameState.mode === 'TEAM' ? currentTurnId === myTeamId : currentTurnId === currentUser.uid);
+  
+  const activeTurnUserIdInTeam = gameState.mode === 'TEAM' && gameState.teamPlayers && gameState.teamCurrentTurnIndex 
+    ? gameState.teamPlayers[currentTurnId]?.[gameState.teamCurrentTurnIndex[currentTurnId] % (gameState.teamPlayers[currentTurnId]?.length || 1)]
+    : null;
+
+  const isMyTurn = !isSpectator && 
+    (gameState.mode === 'TEAM' 
+      ? currentTurnId === myTeamId && (activeTurnUserIdInTeam ? currentUser.uid === activeTurnUserIdInTeam : true)
+      : currentTurnId === currentUser.uid);
   
   const isTeamOnlyBots = (teamId: string) => {
     const teamPlayers = Object.values(session.players || {}).filter(p => (p as Player).teamId === teamId);
     return teamPlayers.length > 0 && teamPlayers.every(p => (p as Player).id.startsWith('ai_'));
   };
+  
   const isBotTurn = (gameState.mode === 'INDIVIDUAL' && currentTurnId.startsWith('ai_')) || 
-                    (gameState.mode === 'TEAM' && isTeamOnlyBots(currentTurnId));
+                    (gameState.mode === 'TEAM' && activeTurnUserIdInTeam && activeTurnUserIdInTeam.startsWith('ai_')) ||
+                    (gameState.mode === 'TEAM' && !activeTurnUserIdInTeam && isTeamOnlyBots(currentTurnId));
   const amIResponsibleForBot = session.hostId === currentUser.uid && isBotTurn;
 
   const throwResults = gameState.throwResults || [];
@@ -145,6 +172,12 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
         if (nextIndex !== gameState.currentTurnIndex) {
           updateData.currentTurnIndex = nextIndex;
           updateData.canThrow = canThrow;
+          if (gameState.mode === 'TEAM' && gameState.teamCurrentTurnIndex) {
+            updateData.teamCurrentTurnIndex = {
+              ...gameState.teamCurrentTurnIndex,
+              [currentTurnId]: (gameState.teamCurrentTurnIndex[currentTurnId] || 0) + 1
+            };
+          }
         }
         update(ref(db, `sessions/${session.id}/yutNoriGame`), updateData);
       }
@@ -563,6 +596,12 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
     };
     if (nextIndex !== gameState.currentTurnIndex) {
       updateData.currentTurnIndex = nextIndex;
+      if (gameState.mode === 'TEAM' && gameState.teamCurrentTurnIndex) {
+        updateData.teamCurrentTurnIndex = {
+          ...gameState.teamCurrentTurnIndex,
+          [currentTurnId]: (gameState.teamCurrentTurnIndex[currentTurnId] || 0) + 1
+        };
+      }
     }
 
     update(ref(db, `sessions/${session.id}/yutNoriGame`), updateData);
@@ -573,14 +612,24 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
   const handleNextTurn = () => {
     if (!isMyTurn && !amIResponsibleForBot) return;
     const nextIndex = getNextTurnIndex(gameState.currentTurnIndex, gameState.rankings || []);
-    update(ref(db, `sessions/${session.id}/yutNoriGame`), {
+    
+    const updateData: any = {
       currentTurnIndex: nextIndex,
       throwResults: [],
       canThrow: true,
       currentSticks: null,
       lastUpdate: Date.now(),
       turnStartTime: Date.now()
-    });
+    };
+    
+    if (gameState.mode === 'TEAM' && gameState.teamCurrentTurnIndex) {
+      updateData.teamCurrentTurnIndex = {
+        ...gameState.teamCurrentTurnIndex,
+        [currentTurnId]: (gameState.teamCurrentTurnIndex[currentTurnId] || 0) + 1
+      };
+    }
+
+    update(ref(db, `sessions/${session.id}/yutNoriGame`), updateData);
     setMessage('');
     setSelectedResultIndex(null);
   };
@@ -822,6 +871,11 @@ export const YutNori: React.FC<YutNoriProps> = ({ session, currentUser, isSpecta
             <h3 className="text-xl font-bold mb-4 text-[#073642] flex flex-wrap items-center justify-between gap-2">
               <div>
                 현재 턴: {getPlayerName(currentTurnId)}
+                {gameState.mode === 'TEAM' && activeTurnUserIdInTeam && session.players[activeTurnUserIdInTeam] && (
+                  <span className="ml-1 text-sm text-[#657b83]">
+                    ({session.players[activeTurnUserIdInTeam].nickname})
+                  </span>
+                )}
                 {isMyTurn && <span className="ml-2 text-sm text-[#859900]">(내 턴)</span>}
               </div>
               <div className="flex items-center gap-3">

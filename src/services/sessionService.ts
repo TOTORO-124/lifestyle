@@ -2013,6 +2013,19 @@ export const sessionService = {
       turnStartTime: Date.now()
     };
 
+    if (mode === 'TEAM') {
+      const teamA = order.filter(pid => players[pid].teamId === 'TEAM_A');
+      const teamB = order.filter(pid => players[pid].teamId === 'TEAM_B');
+      yutNoriGame.teamPlayers = {
+        TEAM_A: teamA,
+        TEAM_B: teamB
+      };
+      yutNoriGame.teamCurrentTurnIndex = {
+        TEAM_A: 0,
+        TEAM_B: 0
+      };
+    }
+
     await update(ref(db, `sessions/${sessionId}`), {
       status: SessionStatus.PLAYING,
       yutNoriGame

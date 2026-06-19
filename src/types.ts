@@ -349,6 +349,8 @@ export interface YutNoriGameState {
   mode: 'INDIVIDUAL' | 'TEAM';
   turnOrder: string[]; // player IDs or team IDs
   currentTurnIndex: number;
+  teamPlayers?: Record<string, string[]>;
+  teamCurrentTurnIndex?: Record<string, number>;
   pieces: Record<string, { id: string, position: number, count: number, path: number[] }[]>; // teamId/playerId -> pieces
   throwResults: string[];
   canThrow: boolean;
