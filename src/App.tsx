@@ -13,6 +13,7 @@ import { Canvas } from './components/Canvas';
 import { OfficeLifeBoard } from './components/OfficeLifeBoard';
 import { UserProfileCard } from './components/UserProfileCard';
 import { YutNori } from './components/YutNori';
+import { Alkkagi } from './components/Alkkagi';
 import { CosmicJackpot } from './components/CosmicJackpot';
 import FlappyBird from './components/FlappyBird';
 import Leaderboard from './components/Leaderboard';
@@ -502,6 +503,12 @@ export default function App() {
           return;
         }
         await sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId);
+      } else if (session.gameType === GameType.ALKKAGI) {
+        if (!omokBlackId || !omokWhiteId) {
+          setError('두 명의 플레이어를 선택해주세요.');
+          return;
+        }
+        await sessionService.startAlkkagiGame(session.id, omokBlackId, omokWhiteId);
       } else if (session.gameType === GameType.BINGO) {
         await sessionService.startBingoSetup(session.id, session.settings);
       } else if (session.gameType === GameType.DRAW) {
@@ -868,6 +875,14 @@ export default function App() {
                         >
                           <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">윷놀이</span>
                           <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">전통 보드게임</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCreateSession(GameType.ALKKAGI)} 
+                          className="office-btn-primary py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group bg-gradient-to-br from-[#217346] to-[#1a5c38]"
+                          disabled={loading}
+                        >
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">알까기</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">물리 대전</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.SUIKA)} 
@@ -1405,7 +1420,7 @@ export default function App() {
                           </div>
                         </div>
                       )}
-                      {session.gameType === GameType.OMOK && (
+                      {(session.gameType === GameType.OMOK || session.gameType === GameType.ALKKAGI) && (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between p-2 bg-gray-50 rounded border border-[#d1d1d1]">
                             <div className="flex items-center gap-2">
@@ -1413,7 +1428,11 @@ export default function App() {
                               <span className="text-[10px] font-bold text-[#666]">컴퓨터(확률 연산) 대전 모드</span>
                             </div>
                             <button 
-                              onClick={() => setIsOmokAIMatch(!isOmokAIMatch)}
+                              onClick={() => {
+                                setIsOmokAIMatch(!isOmokAIMatch);
+                                if (!isOmokAIMatch) setOmokBlackId('AI');
+                                else if (omokBlackId === 'AI') setOmokBlackId('');
+                              }}
                               className={`text-[9px] px-2 py-1 rounded font-bold transition-all ${isOmokAIMatch ? 'bg-[#217346] text-white' : 'bg-white border border-[#d1d1d1] text-[#666]'}`}
                             >
                               {isOmokAIMatch ? 'ON' : 'OFF'}
@@ -1499,12 +1518,16 @@ export default function App() {
                                   setError('두 플레이어 모두 컴퓨터일 수는 없습니다.');
                                   return;
                                 }
-                                sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId, omokDifficulty, omokRuleType);
+                                if (session.gameType === GameType.ALKKAGI) {
+                                  sessionService.startAlkkagiGame(session.id, omokBlackId, omokWhiteId);
+                                } else {
+                                  sessionService.startOmokGame(session.id, omokBlackId, omokWhiteId, omokDifficulty, omokRuleType);
+                                }
                               }}
                               className="w-full office-btn-primary py-2 text-[10px] font-bold flex items-center justify-center gap-2"
                             >
                               <Play size={14} />
-                              <span>오목 대전 시작</span>
+                              <span>{session.gameType === GameType.ALKKAGI ? '알까기 대전 시작' : '오목 대전 시작'}</span>
                             </button>
                           </div>
 
@@ -2433,6 +2456,8 @@ export default function App() {
               />
             ) : session.gameType === GameType.YUT_NORI ? (
               <YutNori session={session} currentUser={currentUser} isSpectator={isSpectator} />
+            ) : session.gameType === GameType.ALKKAGI ? (
+              <Alkkagi session={session} currentUser={currentUser} isHost={session.hostId === currentUser.uid} isAdminMode={isAdminMode} />
             ) : session.gameType === GameType.OFFICE_LIFE ? (
               <OfficeLifeBoard session={session} currentUser={currentUser} />
             ) : session.gameType === GameType.OFFICE_2048 ? (
@@ -3375,6 +3400,17 @@ export default function App() {
                           </div>
                           
 
+                        </div>
+                      ) : session.gameType === GameType.ALKKAGI ? (
+                        <div className="space-y-4">
+                          <div className="text-xs text-[#666]">승리:</div>
+                          {session.alkkagiGame?.winnerId === 'DRAW' ? (
+                            <div className="text-3xl font-black text-[#666]">무승부 (동시 탈락)</div>
+                          ) : (
+                            <div className="text-3xl font-black text-[#217346] truncate px-4">
+                              {session.players?.[session.alkkagiGame!.winnerId!]?.nickname || 'AI'} 승리!
+                            </div>
+                          )}
                         </div>
                       ) : session.gameType === GameType.LIAR ? (
                         <div className="space-y-4">

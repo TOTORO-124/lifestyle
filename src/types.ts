@@ -11,6 +11,7 @@ export enum GameType {
   COSMIC_JACKPOT = 'COSMIC_JACKPOT',
   YUT_NORI = 'YUT_NORI',
   SUIKA = 'SUIKA',
+  ALKKAGI = 'ALKKAGI',
 }
 
 export enum SessionStatus {
@@ -362,6 +363,34 @@ export interface YutNoriGameState {
   turnStartTime?: number;
 }
 
+export interface AlkkagiPieceState {
+  id: string;
+  team: 'BLACK' | 'WHITE';
+  x: number;
+  y: number;
+  isAlive: boolean;
+}
+
+export interface AlkkagiGameState {
+  status: 'PLAYING' | 'FINISHED';
+  currentPlayerId: string;
+  blackPlayerId: string;
+  whitePlayerId: string;
+  pieces: Record<string, AlkkagiPieceState>;
+  winnerId?: string | null;
+  action?: {
+    actionId: string;
+    pieceId: string;
+    vx: number;
+    vy: number;
+    initialPieces: Record<string, AlkkagiPieceState>;
+    finalPieces: Record<string, AlkkagiPieceState>;
+    nextPlayerId: string;
+    timestamp: number;
+  };
+  lastUpdate: number;
+}
+
 export interface LeaderboardEntry {
   playerId: string;
   nickname: string;
@@ -401,6 +430,7 @@ export interface Session {
   suikaGame?: SuikaGameState;
   cosmicJackpot?: CosmicJackpotGameState;
   yutNoriGame?: YutNoriGameState;
+  alkkagiGame?: AlkkagiGameState;
   leaderboards?: Record<string, LeaderboardEntry[]>;
   settings: {
     maxPlayers: number;

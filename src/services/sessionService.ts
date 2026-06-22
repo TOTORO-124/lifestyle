@@ -231,6 +231,11 @@ export const sessionService = {
           await this.processOmokAIMove(sessionId);
         }
         break;
+      case GameType.ALKKAGI:
+        if (session.alkkagiGame?.currentPlayerId === 'AI') {
+          // Handled client-side by host in Alkkagi.tsx
+        }
+        break;
       case GameType.BINGO:
         if (session.status === SessionStatus.PLAYING && session.bingoGame) {
           for (const ai of aiPlayers) {
@@ -879,6 +884,53 @@ export const sessionService = {
       timestamp: Date.now(),
       isSpectatorChat,
     });
+  },
+
+  async startAlkkagiGame(sessionId: string, blackPlayerId: string, whitePlayerId: string) {
+    if (!db) return;
+    
+    let actualBlack = blackPlayerId === 'AI' ? 'ai_black' : blackPlayerId;
+    let actualWhite = whitePlayerId === 'AI' ? 'ai_white' : whitePlayerId;
+
+    // Initialize 800x800 board with 5 pieces each
+    const pieces: any = {};
+    for (let i = 0; i < 5; i++) {
+        pieces[`B${i}`] = {
+            id: `B${i}`,
+            team: 'BLACK',
+            x: 100 + i * 150,
+            y: 700,
+            isAlive: true
+        };
+        pieces[`W${i}`] = {
+            id: `W${i}`,
+            team: 'WHITE',
+            x: 100 + i * 150,
+            y: 100,
+            isAlive: true
+        };
+    }
+    
+    // Set alkkagiGame first to make sure it's valid, then set status
+    try {
+        await update(ref(db, `sessions/${sessionId}/alkkagiGame`), {
+            status: 'PLAYING',
+            currentPlayerId: actualBlack,
+            blackPlayerId: actualBlack,
+            whitePlayerId: actualWhite,
+            pieces: pieces,
+            lastUpdate: Date.now()
+        });
+        
+        await update(ref(db, `sessions/${sessionId}`), {
+            status: SessionStatus.PLAYING
+        });
+        
+        await this.addLog(sessionId, `알까기 대전이 시작되었습니다!`, 'success');
+    } catch(err) {
+        console.error("Firebase Game Start Error:", err);
+        throw err;
+    }
   },
 
   async startOmokGame(sessionId: string, blackPlayerId: string, whitePlayerId: string, difficulty?: number, ruleType: 'RENJU' | 'FREE' = 'RENJU') {
