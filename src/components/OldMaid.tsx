@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Session, Player, OldMaidCard } from '../types';
 import { sessionService } from '../services/sessionService';
@@ -64,9 +64,37 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
     );
   }
 
-  const { players, turnOrder, currentTurnIndex, status, loserId, effect, message } = game;
+  const { players, turnOrder, currentTurnIndex, status, loserId, effect, message, drawingState, turnStartTime } = game;
   const isMyTurn = turnOrder[currentTurnIndex] === currentUser.uid;
   const currentTurnPid = turnOrder[currentTurnIndex];
+  
+  const TURN_LIMIT = 15;
+  const [timeLeft, setTimeLeft] = useState(TURN_LIMIT);
+
+  useEffect(() => {
+    if (status === 'PLAYING' && !drawingState) {
+      const start = turnStartTime || game.startTime;
+      const timer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - start) / 1000);
+        const remain = Math.max(0, TURN_LIMIT - elapsed);
+        setTimeLeft(remain);
+
+        // Auto-draw if time is up and it's my turn
+        if (remain === 0 && isMyTurn) {
+          const nextActiveIdx = getNextActivePlayerIndex(currentTurnIndex);
+          if (nextActiveIdx !== -1) {
+            const targetPlayerId = turnOrder[nextActiveIdx];
+            const targetHand = players[targetPlayerId]?.hand || [];
+            if (targetHand.length > 0) {
+              const randomCardIndex = Math.floor(Math.random() * targetHand.length);
+              initiateDraw(targetPlayerId, randomCardIndex);
+            }
+          }
+        }
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [status, isMyTurn, turnStartTime, game.startTime, drawingState, currentTurnIndex, players, turnOrder]);
   
   let meIndex = turnOrder.indexOf(currentUser.uid);
   if (meIndex === -1) {
@@ -117,6 +145,31 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
     }
     return null;
   };
+
+  const initiateDraw = async (targetId: string, cardIndex: number) => {
+    if (status !== 'PLAYING' || drawingState) return;
+    if (turnOrder[currentTurnIndex] !== currentUser.uid && !turnOrder[currentTurnIndex].startsWith('CPU_')) return;
+    
+    await sessionService.updateOldMaidGame(session.id, { 
+      drawingState: { pid: targetId, cardIndex, drawer: turnOrder[currentTurnIndex], timestamp: Date.now() } 
+    });
+  };
+
+  const processedDrawRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (drawingState && drawingState.drawer === currentUser.uid) {
+      if (processedDrawRef.current === drawingState.timestamp) return;
+
+      const elapsed = Date.now() - drawingState.timestamp;
+      const delay = Math.max(0, 2500 - elapsed); // 2.5 seconds suspense
+      const timer = setTimeout(() => {
+        processedDrawRef.current = drawingState.timestamp;
+        handleDrawCard(drawingState.pid, drawingState.cardIndex);
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [drawingState, currentUser.uid]);
 
   const handleDrawCard = async (targetId: string, cardIndex: number) => {
     if (status !== 'PLAYING') return;
@@ -178,7 +231,8 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
       players: newPlayers,
       effect: eff,
       effectTimestamp: Date.now(),
-      message: msg
+      message: msg,
+      drawingState: null
     };
 
     if (loser) {
@@ -186,6 +240,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
       updates.loserId = loser;
     } else {
       updates.currentTurnIndex = nextTurn;
+      updates.turnStartTime = Date.now();
     }
 
     await sessionService.updateOldMaidGame(session.id, updates);
@@ -258,7 +313,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
     
     if (position === 'bottom') {
       return (
-        <div className="mt-auto flex flex-col items-center pt-8 border-t border-green-700/50 w-full z-10 relative">
+        <div className="flex flex-col items-center pt-2 md:pt-4 pb-2 md:pb-4 border-t-2 border-green-700/50 w-full z-10 relative bg-black/20 backdrop-blur-sm">
           <div className="font-bold mb-4 text-xl flex items-center gap-2">
             <span className={turnOrder[currentTurnIndex] === pid ? 'text-yellow-400 font-black' : ''}>{name}</span>
             {!pState.isActive && <span className="text-sm bg-black/50 px-2 py-1 rounded text-white font-bold">탈출 성공! 🎉</span>}
@@ -271,11 +326,11 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
               </button>
             )}
           </div>
-          <div className="flex -space-x-4 md:-space-x-8 max-w-full overflow-x-auto p-4 items-end min-h-[160px]">
+          <div className="flex -space-x-10 sm:-space-x-12 md:-space-x-16 max-w-full overflow-x-auto p-4 md:p-8 items-end min-h-[140px] md:min-h-[180px] w-full justify-center">
             <AnimatePresence>
-              {(pState.hand || []).map(card => (
+              {(pState.hand || []).map((card, i) => (
                 <motion.div
-                  key={card.id}
+                  key={`${card.id}-${i}`}
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0, y: -50, opacity: 0 }}
@@ -291,26 +346,27 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
     }
 
     return (
-      <div className={`absolute flex flex-col items-center ${
-        position === 'top' ? 'top-4' : 
-        position === 'left' ? 'left-2 md:left-8' : 'right-2 md:right-8'
-      }`}>
+      <div className={`flex flex-col items-center justify-center`}>
         <div className={`font-bold mb-2 flex items-center gap-2 text-sm md:text-base ${turnOrder[currentTurnIndex] === pid ? 'text-yellow-400 bg-black/40 px-3 py-1 rounded-full' : 'bg-black/20 px-3 py-1 rounded-full'}`}>
           <User className="w-4 h-4" /> {name}
           {!pState.isActive && <span className="text-xs bg-red-600 px-2 py-1 rounded font-bold">탈출</span>}
         </div>
-        <div className={`flex ${vertical ? 'flex-col -space-y-12 md:-space-y-16' : '-space-x-4 md:-space-x-8'}`}>
+        <div className={`flex ${vertical ? 'flex-col -space-y-[4.5rem] sm:-space-y-[5.5rem] md:-space-y-[7.5rem] py-4' : '-space-x-10 sm:-space-x-12 md:-space-x-16 px-4'} max-w-full items-center`}>
           {(pState.hand || []).map((c, i) => {
             return (
-              <Card 
-                key={c.id} 
-                value={c.value}
-                isBack={!(status === 'FINISHED' && pid === loserId) && !isMe} 
-                isTarget={isTarget && amICurrent}
+              <div 
+                key={`${c.id}-${i}`} 
+                className={`transition-transform duration-200 ${isTarget && amICurrent && !drawingState ? 'hover:-translate-y-4 hover:scale-110 cursor-pointer' : ''}`}
                 onClick={() => {
-                  if (isTarget && amICurrent) handleDrawCard(pid, i);
+                  if (isTarget && amICurrent && !drawingState) initiateDraw(pid, i);
                 }} 
-              />
+              >
+                <Card 
+                  value={c.value}
+                  isBack={!(status === 'FINISHED' && pid === loserId) && !isMe} 
+                  isTarget={isTarget && amICurrent}
+                />
+              </div>
             )
           })}
         </div>
@@ -322,7 +378,8 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
   const showJokerScreen = showEffect === 'JOKER';
 
   return (
-    <div className={`w-full max-w-5xl mx-auto h-full min-h-[600px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-2xl relative overflow-hidden transition-all duration-300 ${isShake ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-[1.02]' : ''}`}>
+    <div className={`w-full max-w-5xl mx-auto h-full min-h-[600px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-[inset_0_0_50px_rgba(0,0,0,0.8),0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden transition-all duration-300 ${isShake ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-[1.02]' : ''}`}>
+            <div className="absolute inset-0 pointer-events-none opacity-20" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }}></div>
       <style>{`
         @keyframes shake {
           0% { transform: translate(1px, 1px) rotate(0deg); }
@@ -341,6 +398,25 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
 
       {/* Effect Overlays */}
       <AnimatePresence>
+        {drawingState && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-40 bg-black/70 flex flex-col items-center justify-center backdrop-blur-md">
+             <div className="text-center space-y-8 bg-black/50 p-10 rounded-2xl border border-gray-700 shadow-2xl">
+                <h3 className="text-2xl md:text-4xl font-bold text-white tracking-wide">
+                  {session.players[drawingState.drawer]?.nickname || drawingState.drawer}님이<br/>
+                  <span className="text-yellow-400 block mt-2">카드를 조심스럽게 확인 중입니다...</span>
+                </h3>
+                
+                <div className="w-64 h-3 bg-gray-900 rounded-full overflow-hidden mx-auto shadow-inner border border-gray-800">
+                   <motion.div 
+                     initial={{ width: "0%" }} 
+                     animate={{ width: "100%" }} 
+                     transition={{ duration: 2.5, ease: "linear" }}
+                     className="h-full bg-gradient-to-r from-yellow-500 to-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.5)]"
+                   />
+                </div>
+             </div>
+          </motion.div>
+        )}
         {showJokerScreen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-50 pointer-events-none text-center p-8">
             <div className="text-9xl mb-8 animate-bounce">🃏</div>
@@ -361,23 +437,45 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
       </AnimatePresence>
 
       {(status === 'PLAYING' || (status === 'FINISHED' && !showFinishedScreen)) && (
-        <div className="flex-1 flex flex-col p-4 relative">
-          <div className="text-center mt-2 mb-4 z-20">
-            <div className={`inline-block bg-black/60 border border-yellow-500/30 py-4 px-10 rounded-full shadow-2xl backdrop-blur-sm transform transition-transform ${isMyTurn && status === 'PLAYING' ? 'animate-pulse scale-105 border-yellow-400 border-2' : ''}`}>
-              <span className="font-black text-2xl md:text-4xl text-yellow-400">
-                {status === 'FINISHED' ? '게임 종료! 조커의 주인공이 결정되었습니다...' : (isMyTurn ? '🚨 내 차례입니다! 카드를 뽑아주세요 🚨' : `${session.players[currentTurnPid]?.nickname || currentTurnPid}님의 턴!`)}
-              </span>
-              {message && status === 'PLAYING' && <div className="text-lg md:text-2xl text-yellow-100 mt-2 font-bold">{message}</div>}
+        <div className="flex-1 flex flex-col pt-4">
+          <div className="flex-1 grid grid-cols-3 grid-rows-[auto_1fr] md:grid-rows-3 gap-2 px-2 pb-2 relative min-h-0">
+            {/* Top Player */}
+            <div className="col-start-2 row-start-1 flex items-start justify-center">
+              {renderPlayer(topId, 'top')}
+            </div>
+            
+            {/* Left Player */}
+            <div className="col-start-1 row-start-2 md:row-start-2 flex items-center justify-start z-10">
+              {renderPlayer(leftId, 'left')}
+            </div>
+            
+            {/* Center Status / Timer */}
+            <div className="col-start-1 col-span-3 md:col-start-2 md:col-span-1 row-start-2 flex flex-col items-center justify-center z-20 pointer-events-none self-center">
+              <div className={`inline-block bg-black/70 border border-yellow-500/30 py-3 px-6 md:py-4 md:px-10 rounded-full shadow-2xl backdrop-blur-md transform transition-transform ${isMyTurn && status === 'PLAYING' ? 'scale-105 border-yellow-400 border-2 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : ''}`}>
+                <span className="font-black text-lg md:text-3xl text-yellow-400 text-center block leading-tight">
+                  {status === 'FINISHED' ? '게임 종료!' : (isMyTurn ? '🚨 내 차례! 카드를 뽑으세요' : `${session.players[currentTurnPid]?.nickname || currentTurnPid}님의 턴`)}
+                </span>
+                {message && status === 'PLAYING' && <div className="text-sm md:text-xl text-yellow-100 mt-1 md:mt-2 font-bold text-center">{message}</div>}
+                {status === 'PLAYING' && !drawingState && (
+                  <div className="mt-2 md:mt-4 flex items-center justify-center gap-2 md:gap-3 pointer-events-auto">
+                     <div className="w-[120px] md:w-[200px] h-3 md:h-4 bg-black/80 rounded-full overflow-hidden border border-gray-600">
+                        <div className={`h-full transition-all duration-1000 ${timeLeft <= 5 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} style={{ width: `${(timeLeft / TURN_LIMIT) * 100}%` }}></div>
+                     </div>
+                     <span className={`font-bold text-lg md:text-xl ${timeLeft <= 5 ? 'text-red-400 font-black scale-110 transition-transform' : 'text-gray-300'}`}>{timeLeft}초</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Right Player */}
+            <div className="col-start-3 row-start-2 md:row-start-2 flex items-center justify-end z-10">
+              {renderPlayer(rightId, 'right')}
             </div>
           </div>
-
-          <div className="flex-1 relative flex items-center justify-center mt-8 md:mt-0">
-            {renderPlayer(topId, 'top')}
-            {renderPlayer(leftId, 'left')}
-            {renderPlayer(rightId, 'right')}
+          {/* Bottom Player (Me) */}
+          <div className="w-full shrink-0">
+            {renderPlayer(bottomId, 'bottom')}
           </div>
-
-          {renderPlayer(bottomId, 'bottom')}
         </div>
       )}
 

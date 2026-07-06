@@ -2123,6 +2123,7 @@ export const sessionService = {
       players: playersState,
       turnOrder,
       currentTurnIndex: 0,
+      turnStartTime: Date.now(),
       message: '게임이 시작되었습니다! 카드를 뽑아주세요.'
     };
 
