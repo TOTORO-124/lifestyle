@@ -2040,9 +2040,20 @@ export const sessionService = {
     const session = sessionSnap.val() as Session;
     if (!session || !session.players) return;
 
-    const realPlayers = Object.keys(session.players);
+    const allPlayers = Object.keys(session.players);
+    let realPlayers = allPlayers.filter(pid => !pid.startsWith('CPU_'));
+    if (realPlayers.length > 4) {
+      realPlayers = realPlayers.slice(0, 4); // Limit to 4 players max
+    }
     const turnOrder = [...realPlayers];
     
+    // Cleanup old CPUs from session
+    allPlayers.forEach(pid => {
+      if (pid.startsWith('CPU_')) {
+        delete session.players[pid];
+      }
+    });
+
     // Pad with CPUs up to 4 players if needed
     let cpuCount = 1;
     while (turnOrder.length < 4) {

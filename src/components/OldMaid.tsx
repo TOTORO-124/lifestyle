@@ -131,6 +131,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
     const toPlayer = players[toPid];
 
     const drawnCard = (fromPlayer.hand || [])[cardIndex];
+    if (!drawnCard) return;
     let newHandFrom = [...(fromPlayer.hand || [])];
     newHandFrom.splice(cardIndex, 1);
     
