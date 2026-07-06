@@ -1,7 +1,7 @@
 import { ref, set, push, onValue, update, get, remove, onDisconnect } from 'firebase/database';
 import { signInAnonymously } from 'firebase/auth';
 import { db, auth, isConfigured } from '../firebase';
-import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, CyberArenaGameState, ArenaProjectile, ArenaCharacter, ArenaItem, HallOfFameEntry, FlappyBirdGameState } from '../types';
+import { Session, Player, SessionStatus, GameType, LiarMode, LiarGameState, MafiaGameState, MafiaPhase, BingoGameState, DrawGameState, LeaderboardEntry, OfficeLifeGameState, CyberArenaGameState, ArenaProjectile, ArenaCharacter, ArenaItem, HallOfFameEntry, OldMaidGameState } from '../types';
 import { LIAR_TOPICS } from '../data/topics';
 import { DRAW_TOPICS } from '../data/drawTopics';
 import { BINGO_TOPICS } from '../data/bingoTopics';
@@ -892,41 +892,81 @@ export const sessionService = {
     let actualBlack = blackPlayerId === 'AI' ? 'ai_black' : blackPlayerId;
     let actualWhite = whitePlayerId === 'AI' ? 'ai_white' : whitePlayerId;
 
-    // Initialize 800x800 board with 5 pieces each
+    const formations = ['LINE', 'V_SHAPE', 'W_SHAPE', 'CROSS', 'SCATTERED', 'DIAGONAL'];
+    const formation = formations[Math.floor(Math.random() * formations.length)];
+
     const pieces: any = {};
-    for (let i = 0; i < 5; i++) {
-        pieces[`B${i}`] = {
-            id: `B${i}`,
-            team: 'BLACK',
-            x: 100 + i * 150,
-            y: 700,
-            isAlive: true
-        };
-        pieces[`W${i}`] = {
-            id: `W${i}`,
-            team: 'WHITE',
-            x: 100 + i * 150,
-            y: 100,
-            isAlive: true
-        };
+    const addPiece = (id: string, team: 'BLACK'|'WHITE', x: number, y: number) => {
+        pieces[id] = { id, team, x, y, isAlive: true };
+    };
+
+    if (formation === 'LINE') {
+        for (let i = 0; i < 5; i++) {
+            addPiece(`B${i}`, 'BLACK', 100 + i * 150, 700);
+            addPiece(`W${i}`, 'WHITE', 100 + i * 150, 100);
+        }
+    } else if (formation === 'V_SHAPE') {
+        const positions = [[400, 600], [250, 650], [550, 650], [100, 700], [700, 700]];
+        const whitePositions = [[400, 200], [250, 150], [550, 150], [100, 100], [700, 100]];
+        for (let i = 0; i < 5; i++) {
+            addPiece(`B${i}`, 'BLACK', positions[i][0], positions[i][1]);
+            addPiece(`W${i}`, 'WHITE', whitePositions[i][0], whitePositions[i][1]);
+        }
+    } else if (formation === 'W_SHAPE') {
+        const positions = [[100, 600], [250, 700], [400, 600], [550, 700], [700, 600]];
+        const whitePositions = [[100, 200], [250, 100], [400, 200], [550, 100], [700, 200]];
+        for (let i = 0; i < 5; i++) {
+            addPiece(`B${i}`, 'BLACK', positions[i][0], positions[i][1]);
+            addPiece(`W${i}`, 'WHITE', whitePositions[i][0], whitePositions[i][1]);
+        }
+    } else if (formation === 'CROSS') {
+        const positions = [[400, 650], [400, 530], [400, 770], [280, 650], [520, 650]];
+        const whitePositions = [[400, 150], [400, 30], [400, 270], [280, 150], [520, 150]];
+        for (let i = 0; i < 5; i++) {
+            addPiece(`B${i}`, 'BLACK', positions[i][0], positions[i][1]);
+            addPiece(`W${i}`, 'WHITE', whitePositions[i][0], whitePositions[i][1]);
+        }
+    } else if (formation === 'DIAGONAL') {
+        const positions = [[200, 600], [300, 650], [400, 700], [500, 750], [600, 800]];
+        const whitePositions = [[600, 200], [500, 150], [400, 100], [300, 50], [200, 0]];
+        for (let i = 0; i < 5; i++) {
+            addPiece(`B${i}`, 'BLACK', positions[i][0], positions[i][1] - 50); // Keep in bounds
+            addPiece(`W${i}`, 'WHITE', whitePositions[i][0], whitePositions[i][1] + 50);
+        }
+    } else {
+        // SCATTERED
+        for (let i = 0; i < 5; i++) {
+            addPiece(`B${i}`, 'BLACK', 100 + i * 150, 580 + Math.random() * 180);
+            addPiece(`W${i}`, 'WHITE', 100 + i * 150, 40 + Math.random() * 180);
+        }
     }
     
     // Set alkkagiGame first to make sure it's valid, then set status
     try {
         await update(ref(db, `sessions/${sessionId}/alkkagiGame`), {
             status: 'PLAYING',
+            startTime: Date.now(),
             currentPlayerId: actualBlack,
             blackPlayerId: actualBlack,
             whitePlayerId: actualWhite,
             pieces: pieces,
-            lastUpdate: Date.now()
+            lastUpdate: Date.now(),
+            formation: formation // Can be used for logging/UI later
         });
         
         await update(ref(db, `sessions/${sessionId}`), {
             status: SessionStatus.PLAYING
         });
         
-        await this.addLog(sessionId, `알까기 대전이 시작되었습니다!`, 'success');
+        const formationNames: Record<string, string> = {
+            'LINE': '일렬 진형',
+            'V_SHAPE': 'V자 진형',
+            'W_SHAPE': 'W자 진형',
+            'CROSS': '십자 진형',
+            'DIAGONAL': '사선 진형',
+            'SCATTERED': '산개 진형'
+        };
+        await this.addLog(sessionId, `알까기 대전이 시작되었습니다! (랜덤 진형: ${formationNames[formation] || formation})`, 'success');
     } catch(err) {
         console.error("Firebase Game Start Error:", err);
         throw err;
@@ -1993,46 +2033,106 @@ export const sessionService = {
     }
   },
 
-  // --- Flappy Bird ---
-  async startFlappyBirdGame(sessionId: string, mode: 'SOLO' | 'AI' | 'PVP', difficulty?: 'EASY' | 'NORMAL' | 'HARD' | 'DEVIL') {
+  // --- Old Maid (조커 도둑잡기) ---
+  async startOldMaidGame(sessionId: string) {
     if (!db) return;
     const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
     const session = sessionSnap.val() as Session;
-    if (!session) return;
+    if (!session || !session.players) return;
 
-    const players: Record<string, any> = {};
-    Object.keys(session.players).forEach(pid => {
-      players[pid] = { y: 300, score: 0, isAlive: true };
+    const realPlayers = Object.keys(session.players);
+    const turnOrder = [...realPlayers];
+    
+    // Pad with CPUs up to 4 players if needed
+    let cpuCount = 1;
+    while (turnOrder.length < 4) {
+      const cpuId = `CPU_${cpuCount}`;
+      turnOrder.push(cpuId);
+      session.players[cpuId] = { uid: cpuId, nickname: `컴퓨터 ${cpuCount}`, avatarIndex: 0, joinedAt: Date.now(), isReady: true };
+      cpuCount++;
+    }
+
+    // Shuffle turn order
+    for (let i = turnOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [turnOrder[i], turnOrder[j]] = [turnOrder[j], turnOrder[i]];
+    }
+
+    const VALUES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+    let deck: {id: string, value: string}[] = [];
+    VALUES.forEach(val => {
+      deck.push({ id: `A_${val}`, value: val });
+      deck.push({ id: `B_${val}`, value: val });
+    });
+    deck.push({ id: 'JOKER_1', value: 'JOKER' });
+
+    // Shuffle deck
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+
+    const playersState: Record<string, {hand: any[], isActive: boolean}> = {};
+    turnOrder.forEach(pid => {
+      playersState[pid] = { hand: [], isActive: true };
     });
 
-    const game: FlappyBirdGameState = {
+    // Deal
+    deck.forEach((card, index) => {
+      playersState[turnOrder[index % turnOrder.length]].hand.push(card);
+    });
+
+    // Remove initial pairs
+    turnOrder.forEach(pid => {
+      const hand = playersState[pid].hand;
+      const counts = new Map<string, any[]>();
+      hand.forEach(c => {
+        if (c.value === 'JOKER') return;
+        if (!counts.has(c.value)) counts.set(c.value, []);
+        counts.get(c.value)!.push(c);
+      });
+
+      const toRemove = new Set<string>();
+      counts.forEach(cards => {
+        const pairsCount = Math.floor(cards.length / 2);
+        for (let i = 0; i < pairsCount * 2; i++) {
+          toRemove.add(cards[i].id);
+        }
+      });
+
+      playersState[pid].hand = hand.filter(c => !toRemove.has(c.id));
+      if (playersState[pid].hand.length === 0) {
+        playersState[pid].isActive = false;
+      }
+    });
+
+    const game: any = { // Use any temporarily to avoid import issues in this script if OldMaidGameState isn't perfectly matched
       status: 'PLAYING',
-      mode,
-      difficulty,
-      seed: Math.floor(Math.random() * 1000000),
-      players,
-      startTime: Date.now()
+      startTime: Date.now(),
+      players: playersState,
+      turnOrder,
+      currentTurnIndex: 0,
+      message: '게임이 시작되었습니다! 카드를 뽑아주세요.'
     };
 
     await update(ref(db, `sessions/${sessionId}`), {
-      flappyBirdGame: game,
-      status: SessionStatus.PLAYING
+      oldMaidGame: game,
+      status: SessionStatus.PLAYING,
+      players: session.players // Update players to include CPUs if added
     });
-    await this.addLog(sessionId, `Flappy Bird 게임이 시작되었습니다.`, 'success');
+    await this.addLog(sessionId, `조커 도둑잡기 게임이 시작되었습니다.`, 'success');
   },
 
-  async updateFlappyBirdPlayer(sessionId: string, playerId: string, y: number, score: number, isAlive: boolean) {
+  async updateOldMaidGame(sessionId: string, updates: any) {
     if (!db) return;
-    await update(ref(db, `sessions/${sessionId}/flappyBirdGame/players/${playerId}`), {
-      y, score, isAlive
-    });
+    await update(ref(db, `sessions/${sessionId}/oldMaidGame`), updates);
   },
 
-  async endFlappyBirdGame(sessionId: string, winnerId?: string) {
+  async endOldMaidGame(sessionId: string, loserId: string) {
     if (!db) return;
-    await update(ref(db, `sessions/${sessionId}/flappyBirdGame`), {
+    await update(ref(db, `sessions/${sessionId}/oldMaidGame`), {
       status: 'FINISHED',
-      winnerId: winnerId || null
+      loserId: loserId
     });
   },
 

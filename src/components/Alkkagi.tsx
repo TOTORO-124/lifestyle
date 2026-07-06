@@ -508,7 +508,6 @@ export const Alkkagi: React.FC<Props> = ({ session, currentUser, isHost, isAdmin
     return (
       <div className="p-4 text-center">
         <p className="mb-2">알까기 게임 데이터를 불러옵니다...</p>
-        <p className="text-xs text-gray-400 text-left whitespace-pre-wrap">DEBUG: session ID: {session?.id}, status: {session?.status}, hasAlkkagi: {!!session?.alkkagiGame ? 'yes' : 'no'}</p>
         {isHost && (
           <button 
             onClick={() => sessionService.resetSession(session.id, session.players)}
@@ -517,9 +516,6 @@ export const Alkkagi: React.FC<Props> = ({ session, currentUser, isHost, isAdmin
             오류 복구: 로비로 돌아가기
           </button>
         )}
-        <pre className="text-xs text-left max-w-full overflow-auto mt-2 bg-gray-100 p-2 text-gray-800">
-          {JSON.stringify(session, null, 2)}
-        </pre>
       </div>
     );
   }

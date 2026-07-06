@@ -15,7 +15,7 @@ import { UserProfileCard } from './components/UserProfileCard';
 import { YutNori } from './components/YutNori';
 import { Alkkagi } from './components/Alkkagi';
 import { CosmicJackpot } from './components/CosmicJackpot';
-import FlappyBird from './components/FlappyBird';
+import { OldMaid } from './components/OldMaid';
 import Leaderboard from './components/Leaderboard';
 
 import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS, SYNERGIES } from './data/cyberArenaData';
@@ -398,8 +398,6 @@ export default function App() {
         if (e.key === 'ArrowDown') sessionService.moveOffice2048(session.id, 'DOWN', session);
         if (e.key === 'ArrowLeft') sessionService.moveOffice2048(session.id, 'LEFT', session);
         if (e.key === 'ArrowRight') sessionService.moveOffice2048(session.id, 'RIGHT', session);
-      } else if (session.gameType === GameType.FLAPPY_BIRD) {
-        // Flappy Bird keyboard is handled inside the component
       }
     };
 
@@ -517,12 +515,8 @@ export default function App() {
         await sessionService.startMinesweeperGame(session.id, session.settings.minesweeperDifficulty || 'EASY');
       } else if (session.gameType === GameType.OFFICE_2048) {
         await sessionService.startOffice2048Game(session.id);
-      } else if (session.gameType === GameType.FLAPPY_BIRD) {
-        if (session.settings.flappyBirdMode === 'PVP' && Object.keys(session.players || {}).length !== 2) {
-          setError('1:1 대전은 정확히 2명의 플레이어가 필요합니다.');
-          return;
-        }
-        await sessionService.startFlappyBirdGame(session.id, session.settings.flappyBirdMode || 'SOLO', session.settings.flappyBirdDifficulty || 'NORMAL');
+      } else if (session.gameType === GameType.OLD_MAID) {
+        await sessionService.startOldMaidGame(session.id);
       } else if (session.gameType === GameType.OFFICE_LIFE) {
         await sessionService.startOfficeLifeGame(session.id, session.players, session.turnOrder, session.settings.officeLifeMode || 'INDIVIDUAL');
       } else if (session.gameType === GameType.COSMIC_JACKPOT) {
@@ -843,12 +837,12 @@ export default function App() {
                           <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">직급 승진 대작전</span>
                         </button>
                         <button 
-                          onClick={() => handleCreateSession(GameType.FLAPPY_BIRD)} 
+                          onClick={() => handleCreateSession(GameType.OLD_MAID)} 
                           className="office-btn py-2 lg:py-4 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-1 hover:scale-[1.02] transition-transform group"
                           disabled={loading}
                         >
-                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">플래피버드</span>
-                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">장애물 피하기</span>
+                          <span className="font-bold text-[10px] lg:text-sm group-hover:scale-110 transition-transform">조커 도둑잡기</span>
+                          <span className="text-[7px] lg:text-[9px] font-normal opacity-80 hidden sm:block">긴장감 넘치는 카드게임</span>
                         </button>
                         <button 
                           onClick={() => handleCreateSession(GameType.OFFICE_LIFE)} 
@@ -930,7 +924,6 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
-                  <Leaderboard entries={globalLeaderboards?.FLAPPY_BIRD || []} title="플래피버드" sessionId="GLOBAL" gameType="FLAPPY_BIRD" />
                   <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (국가대표급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
                   <Leaderboard entries={globalLeaderboards?.SUIKA || []} title="초고속 승진 (승진게임)" sessionId="GLOBAL" gameType="SUIKA" />
                   <Leaderboard entries={globalLeaderboards?.COSMIC_JACKPOT || []} title="우주적 잭팟 마스터" sessionId="GLOBAL" gameType="COSMIC_JACKPOT" />
@@ -1645,40 +1638,7 @@ export default function App() {
                         </div>
                       )}
 
-                      {session.gameType === GameType.FLAPPY_BIRD && (
-                        <div className="space-y-3">
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-[#999]">모드</label>
-                            <select 
-                              className="office-input text-xs"
-                              value={session.settings.flappyBirdMode || 'SOLO'}
-                              onChange={(e) => {
-                                const mode = e.target.value as 'SOLO' | 'AI' | 'PVP';
-                                sessionService.updateSettings(session.id, { ...session.settings, flappyBirdMode: mode });
-                              }}
-                            >
-                              <option value="SOLO">솔로 플레이</option>
-                              <option value="AI">vs 컴퓨터</option>
-                              <option value="PVP">1:1 실시간 대전</option>
-                            </select>
-                          </div>
-                          {session.settings.flappyBirdMode === 'AI' && (
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-bold text-[#999]">난이도</label>
-                              <select 
-                                className="office-input text-xs"
-                                value={session.settings.flappyBirdDifficulty || 'NORMAL'}
-                                onChange={(e) => sessionService.updateSettings(session.id, { ...session.settings, flappyBirdDifficulty: e.target.value as any })}
-                              >
-                                <option value="EASY">쉬움</option>
-                                <option value="NORMAL">보통</option>
-                                <option value="HARD">어려움</option>
-                                <option value="DEVIL">악마</option>
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                      )}
+
 
                     <button 
                         onClick={() => sessionService.shuffleTurnOrder(session.id, session.players)}
@@ -2457,7 +2417,7 @@ export default function App() {
             ) : session.gameType === GameType.YUT_NORI ? (
               <YutNori session={session} currentUser={currentUser} isSpectator={isSpectator} />
             ) : session.gameType === GameType.ALKKAGI ? (
-              <Alkkagi session={session} currentUser={currentUser} isHost={session.hostId === currentUser.uid} isAdminMode={isAdminMode} />
+              <Alkkagi key={session.alkkagiGame?.startTime || session.alkkagiGame?.lastUpdate || 'alkkagi'} session={session} currentUser={currentUser} isHost={session.hostId === currentUser.uid} isAdminMode={isAdminMode} />
             ) : session.gameType === GameType.OFFICE_LIFE ? (
               <OfficeLifeBoard session={session} currentUser={currentUser} />
             ) : session.gameType === GameType.OFFICE_2048 ? (
@@ -2545,9 +2505,9 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            ) : session.gameType === GameType.FLAPPY_BIRD ? (
-              <div className="w-full h-full flex items-center justify-center bg-slate-900">
-                <FlappyBird session={session} currentUser={currentUser} />
+            ) : session.gameType === GameType.OLD_MAID ? (
+              <div className="w-full h-full flex items-center justify-center bg-green-900">
+                <OldMaid session={session} currentUser={currentUser} />
               </div>
             ) : session.gameType === GameType.DRAW ? (
               <div className="max-w-3xl mx-auto space-y-6">
@@ -3408,7 +3368,7 @@ export default function App() {
                             <div className="text-3xl font-black text-[#666]">무승부 (동시 탈락)</div>
                           ) : (
                             <div className="text-3xl font-black text-[#217346] truncate px-4">
-                              {session.players?.[session.alkkagiGame!.winnerId!]?.nickname || 'AI'} 승리!
+                              {session.players?.[session.alkkagiGame?.winnerId || '']?.nickname || 'AI'} 승리!
                             </div>
                           )}
                         </div>
@@ -3716,7 +3676,6 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <Leaderboard entries={globalLeaderboards?.OFFICE_2048 || []} title="직급 승진 (2048)" sessionId="GLOBAL" gameType="OFFICE_2048" />
                   <Leaderboard entries={globalLeaderboards?.MINESWEEPER || []} title="데이터 검수 (지뢰찾기)" sessionId="GLOBAL" gameType="MINESWEEPER" />
-                  <Leaderboard entries={globalLeaderboards?.FLAPPY_BIRD || []} title="플래피버드" sessionId="GLOBAL" gameType="FLAPPY_BIRD" />
                   <Leaderboard entries={globalLeaderboards?.OMOK_AI || []} title="오목 마스터 (국가대표급 컴퓨터)" sessionId="GLOBAL" gameType="OMOK_AI" />
                   <Leaderboard entries={globalLeaderboards?.SUIKA || []} title="초고속 승진 (승진게임)" sessionId="GLOBAL" gameType="SUIKA" />
                   <Leaderboard entries={globalLeaderboards?.COSMIC_JACKPOT || []} title="우주적 잭팟 마스터" sessionId="GLOBAL" gameType="COSMIC_JACKPOT" />

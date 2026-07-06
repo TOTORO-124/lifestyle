@@ -6,7 +6,7 @@ export enum GameType {
   DRAW = 'DRAW',
   MINESWEEPER = 'MINESWEEPER',
   OFFICE_2048 = 'OFFICE_2048',
-  FLAPPY_BIRD = 'FLAPPY_BIRD',
+  OLD_MAID = 'OLD_MAID',
   OFFICE_LIFE = 'OFFICE_LIFE',
   COSMIC_JACKPOT = 'COSMIC_JACKPOT',
   YUT_NORI = 'YUT_NORI',
@@ -171,18 +171,24 @@ export interface Office2048GameState {
   status: 'PLAYING' | 'WON' | 'LOST';
 }
 
-export interface FlappyBirdGameState {
+export interface OldMaidCard {
+  id: string;
+  value: string;
+}
+
+export interface OldMaidGameState {
   status: 'PLAYING' | 'FINISHED';
-  mode: 'SOLO' | 'AI' | 'PVP';
-  difficulty?: 'EASY' | 'NORMAL' | 'HARD' | 'DEVIL';
-  seed: number;
-  players: Record<string, {
-    y: number;
-    score: number;
-    isAlive: boolean;
-  }>;
-  winnerId?: string;
+  loserId?: string;
   startTime: number;
+  players: Record<string, {
+    hand: OldMaidCard[];
+    isActive: boolean;
+  }>;
+  turnOrder: string[];
+  currentTurnIndex: number;
+  message?: string;
+  effect?: string | null;
+  effectTimestamp?: number;
 }
 
 export interface OfficeLifeGameState {
@@ -424,7 +430,7 @@ export interface Session {
   drawGame?: DrawGameState;
   minesweeperGame?: MinesweeperGameState;
   office2048Game?: Office2048GameState;
-  flappyBirdGame?: FlappyBirdGameState;
+  oldMaidGame?: OldMaidGameState;
   officeLifeGame?: OfficeLifeGameState;
   cyberArenaGame?: CyberArenaGameState;
   suikaGame?: SuikaGameState;
