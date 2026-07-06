@@ -2069,13 +2069,15 @@ export const sessionService = {
       [turnOrder[i], turnOrder[j]] = [turnOrder[j], turnOrder[i]];
     }
 
-    const VALUES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-    let deck: {id: string, value: string}[] = [];
+    const VALUES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+    const SUITS = ['S', 'H', 'C', 'D'];
+    let deck: {id: string, value: string, suit?: string}[] = [];
     VALUES.forEach(val => {
-      deck.push({ id: `A_${val}`, value: val });
-      deck.push({ id: `B_${val}`, value: val });
+      SUITS.forEach(suit => {
+        deck.push({ id: `${suit}_${val}`, value: val, suit });
+      });
     });
-    deck.push({ id: 'JOKER_1', value: 'JOKER' });
+    deck.push({ id: 'JOKER_1', value: 'JOKER', suit: 'JOKER' });
 
     // Shuffle deck
     for (let i = deck.length - 1; i > 0; i--) {
@@ -2117,12 +2119,17 @@ export const sessionService = {
       }
     });
 
+    let initialTurnIndex = 0;
+    while (initialTurnIndex < 4 && !playersState[turnOrder[initialTurnIndex]]?.isActive) {
+      initialTurnIndex++;
+    }
+
     const game: any = { // Use any temporarily to avoid import issues in this script if OldMaidGameState isn't perfectly matched
       status: 'PLAYING',
       startTime: Date.now(),
       players: playersState,
       turnOrder,
-      currentTurnIndex: 0,
+      currentTurnIndex: initialTurnIndex,
       turnStartTime: Date.now(),
       message: '게임이 시작되었습니다! 카드를 뽑아주세요.'
     };

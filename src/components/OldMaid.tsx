@@ -21,7 +21,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
   if (!game) {
     if (localState === 'HOW_TO_PLAY') {
       return (
-        <div className="w-full max-w-4xl mx-auto h-full min-h-[600px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-2xl relative overflow-hidden items-center justify-center p-8 text-center space-y-6">
+        <div className="w-full max-w-4xl mx-auto h-full min-h-[400px] md:min-h-[600px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-2xl relative overflow-hidden items-center justify-center p-8 text-center space-y-6">
           <h2 className="text-3xl font-bold font-sans">게임 방법</h2>
           <div className="space-y-4 text-lg bg-black/30 p-6 rounded-xl max-w-md">
             <p>상대의 카드 한 장을 뽑아 같은 숫자를 맞추세요.</p>
@@ -40,7 +40,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
     }
 
     return (
-      <div className="w-full max-w-4xl mx-auto h-full min-h-[600px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-2xl relative overflow-hidden items-center justify-center space-y-6">
+      <div className="w-full max-w-4xl mx-auto h-full min-h-[400px] md:min-h-[600px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-2xl relative overflow-hidden items-center justify-center space-y-6">
         <div className="text-6xl mb-4 animate-bounce">🃏</div>
         <h1 className="text-4xl md:text-5xl font-black font-sans text-yellow-400">조커 도둑잡기</h1>
         <p className="text-green-200 text-lg">심장이 쫄깃해지는 국민 눈치게임!</p>
@@ -91,7 +91,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
             }
           }
         }
-      }, 1000);
+      }, 400);
       return () => clearInterval(timer);
     }
   }, [status, isMyTurn, turnStartTime, game.startTime, drawingState, currentTurnIndex, players, turnOrder]);
@@ -107,10 +107,10 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
   }
   const [bottomId, leftId, topId, rightId] = visualOrder;
 
-  const getNextActivePlayerIndex = (startIndex: number) => {
+  const getNextActivePlayerIndex = (startIndex: number, playersState: any = players) => {
     let index = (startIndex + 1) % 4;
     while (index !== startIndex) {
-      if (players[turnOrder[index]]?.isActive) return index;
+      if (playersState[turnOrder[index]]?.isActive) return index;
       index = (index + 1) % 4;
     }
     return -1;
@@ -148,7 +148,9 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
 
   const initiateDraw = async (targetId: string, cardIndex: number) => {
     if (status !== 'PLAYING' || drawingState) return;
-    if (turnOrder[currentTurnIndex] !== currentUser.uid && !turnOrder[currentTurnIndex].startsWith('CPU_')) return;
+    const currentPid = turnOrder[currentTurnIndex];
+    if (currentPid !== currentUser.uid && !currentPid.startsWith('CPU_')) return;
+    if (!players[currentPid]?.isActive) return;
     
     await sessionService.updateOldMaidGame(session.id, { 
       drawingState: { pid: targetId, cardIndex, drawer: turnOrder[currentTurnIndex], timestamp: Date.now() } 
@@ -162,7 +164,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
       if (processedDrawRef.current === drawingState.timestamp) return;
 
       const elapsed = Date.now() - drawingState.timestamp;
-      const delay = Math.max(0, 2500 - elapsed); // 2.5 seconds suspense
+      const delay = Math.max(0, 400 - elapsed); // 2.5 seconds suspense
       const timer = setTimeout(() => {
         processedDrawRef.current = drawingState.timestamp;
         handleDrawCard(drawingState.pid, drawingState.cardIndex);
@@ -182,6 +184,8 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
 
     const fromPlayer = players[fromPid];
     const toPlayer = players[toPid];
+    
+    if (!fromPlayer?.isActive || !toPlayer?.isActive) return;
 
     const drawnCard = (fromPlayer.hand || [])[cardIndex];
     if (!drawnCard) return;
@@ -224,7 +228,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
       }
     }
 
-    const nextTurn = getNextActivePlayerIndex(currentTurnIndex);
+    const nextTurn = getNextActivePlayerIndex(currentTurnIndex, newPlayers);
     const loser = checkGameEnd(newPlayers);
 
     const updates: any = {
@@ -254,7 +258,13 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
       const realPlayers = turnOrder.filter(pid => !pid.startsWith('CPU_'));
       const imResponsible = (isHost && realPlayers.includes(currentUser.uid)) || realPlayers[0] === currentUser.uid;
 
-      if (isCpuTurn && imResponsible && players[currentPid]?.isActive) {
+      if (imResponsible && !players[currentPid]?.isActive) {
+        // Auto-skip inactive players
+        const nextActiveIdx = getNextActivePlayerIndex(currentTurnIndex);
+        if (nextActiveIdx !== -1) {
+          sessionService.updateOldMaidGame(session.id, { currentTurnIndex: nextActiveIdx });
+        }
+      } else if (isCpuTurn && imResponsible && players[currentPid]?.isActive) {
         const nextActiveIdx = getNextActivePlayerIndex(currentTurnIndex);
         if (nextActiveIdx !== -1) {
           const targetPlayerId = turnOrder[nextActiveIdx];
@@ -263,7 +273,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
                const randomCardIndex = Math.floor(Math.random() * (players[targetPlayerId].hand || []).length);
                handleDrawCard(targetPlayerId, randomCardIndex);
             }
-          }, 1500);
+          }, 400);
           return () => clearTimeout(delay);
         }
       }
@@ -326,7 +336,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
               </button>
             )}
           </div>
-          <div className="flex -space-x-10 sm:-space-x-12 md:-space-x-16 max-w-full overflow-x-auto p-4 md:p-8 items-end min-h-[140px] md:min-h-[180px] w-full justify-center">
+          <div className="flex flex-wrap justify-center gap-1 sm:gap-2 max-w-full overflow-y-auto p-2 md:p-4 items-center min-h-[100px] md:min-h-[140px] w-full">
             <AnimatePresence>
               {(pState.hand || []).map((card, i) => (
                 <motion.div
@@ -336,7 +346,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
                   exit={{ scale: 0, y: -50, opacity: 0 }}
                   className="flex-shrink-0"
                 >
-                  <Card value={card.value} />
+                  <Card value={card.value} suit={card.suit} />
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -351,7 +361,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
           <User className="w-4 h-4" /> {name}
           {!pState.isActive && <span className="text-xs bg-red-600 px-2 py-1 rounded font-bold">탈출</span>}
         </div>
-        <div className={`flex ${vertical ? 'flex-col -space-y-[4.5rem] sm:-space-y-[5.5rem] md:-space-y-[7.5rem] py-4' : '-space-x-10 sm:-space-x-12 md:-space-x-16 px-4'} max-w-full items-center`}>
+        <div className={`flex flex-wrap justify-center gap-1 sm:gap-2 p-2 w-full max-w-full`}>
           {(pState.hand || []).map((c, i) => {
             return (
               <div 
@@ -363,6 +373,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
               >
                 <Card 
                   value={c.value}
+                  suit={c.suit}
                   isBack={!(status === 'FINISHED' && pid === loserId) && !isMe} 
                   isTarget={isTarget && amICurrent}
                 />
@@ -378,7 +389,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
   const showJokerScreen = showEffect === 'JOKER';
 
   return (
-    <div className={`w-full max-w-5xl mx-auto h-full min-h-[600px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-[inset_0_0_50px_rgba(0,0,0,0.8),0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden transition-all duration-300 ${isShake ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-[1.02]' : ''}`}>
+    <div className={`w-full max-w-5xl mx-auto h-[85vh] md:h-[80vh] min-h-[450px] md:min-h-[600px] max-h-[800px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-[inset_0_0_50px_rgba(0,0,0,0.8),0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden transition-all duration-300 ${isShake ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-[1.02]' : ''}`}>
             <div className="absolute inset-0 pointer-events-none opacity-20" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }}></div>
       <style>{`
         @keyframes shake {
@@ -410,7 +421,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
                    <motion.div 
                      initial={{ width: "0%" }} 
                      animate={{ width: "100%" }} 
-                     transition={{ duration: 2.5, ease: "linear" }}
+                     transition={{ duration: 0.4, ease: "linear" }}
                      className="h-full bg-gradient-to-r from-yellow-500 to-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.5)]"
                    />
                 </div>
@@ -523,13 +534,13 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
   );
 }
 
-const Card = ({ value, isBack, isTarget, onClick }: { value?: string, isBack?: boolean, isTarget?: boolean, onClick?: () => void }) => {
+const Card = ({ value, suit, isBack, isTarget, onClick }: { value?: string, suit?: string, isBack?: boolean, isTarget?: boolean, onClick?: () => void }) => {
   if (isBack) {
     return (
       <div 
         onClick={onClick}
         className={`
-          w-16 h-24 sm:w-20 sm:h-28 md:w-24 md:h-36 rounded-xl bg-gradient-to-br from-red-800 to-red-950 border-2 border-white/20 flex-shrink-0
+          w-12 h-16 sm:w-16 sm:h-24 md:w-20 md:h-28 rounded-xl bg-gradient-to-br from-red-800 to-red-950 border-2 border-white/20 flex-shrink-0
           shadow-[2px_2px_10px_rgba(0,0,0,0.6)] flex items-center justify-center relative overflow-hidden
           ${isTarget ? 'cursor-pointer hover:-translate-y-4 hover:shadow-[0_0_25px_#E8B81C] border-[#E8B81C] border-4 transition-all z-20' : ''}
           ${isTarget ? 'animate-pulse' : ''}
@@ -543,19 +554,21 @@ const Card = ({ value, isBack, isTarget, onClick }: { value?: string, isBack?: b
   }
 
   const isJoker = value === 'JOKER';
+  const isRed = suit === 'H' || suit === 'D';
+  const suitSymbol = suit === 'S' ? '♠️' : suit === 'H' ? '♥️' : suit === 'C' ? '♣️' : suit === 'D' ? '♦️' : '🃏';
 
   return (
     <div className={`
-      w-16 h-24 sm:w-20 sm:h-28 md:w-24 md:h-36 rounded-xl bg-white border-2 border-gray-200 flex-shrink-0
+      w-12 h-16 sm:w-16 sm:h-24 md:w-20 md:h-28 rounded-xl bg-white border-2 border-gray-200 flex-shrink-0
       shadow-[4px_4px_15px_rgba(0,0,0,0.4)] flex flex-col justify-between p-1 sm:p-2
-      ${isJoker ? 'text-purple-700 bg-gradient-to-br from-purple-50 to-pink-50' : 'text-gray-900'}
+      ${isJoker ? 'text-purple-700 bg-gradient-to-br from-purple-50 to-pink-50' : (isRed ? 'text-red-600' : 'text-gray-900')}
       hover:-translate-y-6 transition-transform duration-300 z-10 cursor-default
     `}>
       <div className={`font-black text-sm md:text-xl leading-none`}>
         {isJoker ? 'J' : value}
       </div>
-      <div className="self-center text-3xl md:text-5xl drop-shadow-md">
-        {isJoker ? '🃏' : '♠️'}
+      <div className="self-center text-3xl md:text-4xl lg:text-5xl drop-shadow-md">
+        {suitSymbol}
       </div>
       <div className="font-black text-sm md:text-xl leading-none rotate-180">
         {isJoker ? 'J' : value}
