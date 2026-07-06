@@ -2136,6 +2136,23 @@ export const sessionService = {
     });
   },
 
+  async shuffleOldMaidHand(sessionId: string, playerId: string) {
+    if (!db) return;
+    const gameSnap = await get(ref(db, `sessions/${sessionId}/oldMaidGame`));
+    const game = gameSnap.val();
+    if (!game || !game.players || !game.players[playerId]) return;
+
+    const hand = [...(game.players[playerId].hand || [])];
+    for (let i = hand.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [hand[i], hand[j]] = [hand[j], hand[i]];
+    }
+
+    await update(ref(db, `sessions/${sessionId}/oldMaidGame/players/${playerId}`), {
+      hand
+    });
+  },
+
   // --- Office Life ---
   async startYutNori(sessionId: string, players: Record<string, Player>, turnOrder?: string[], mode: 'INDIVIDUAL' | 'TEAM' = 'INDIVIDUAL', pieceCount: number = 4) {
     if (!db || !players) return;

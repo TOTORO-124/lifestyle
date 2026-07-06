@@ -130,11 +130,11 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
     const fromPlayer = players[fromPid];
     const toPlayer = players[toPid];
 
-    const drawnCard = fromPlayer.hand[cardIndex];
-    let newHandFrom = [...fromPlayer.hand];
+    const drawnCard = (fromPlayer.hand || [])[cardIndex];
+    let newHandFrom = [...(fromPlayer.hand || [])];
     newHandFrom.splice(cardIndex, 1);
     
-    let newHandTo = [...toPlayer.hand, drawnCard];
+    let newHandTo = [...(toPlayer.hand || []), drawnCard];
 
     let pairMatched = false;
     const handBeforePairCheck = newHandTo.length;
@@ -203,8 +203,8 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
         if (nextActiveIdx !== -1) {
           const targetPlayerId = turnOrder[nextActiveIdx];
           const delay = setTimeout(() => {
-            if (players[targetPlayerId] && players[targetPlayerId].hand.length > 0) {
-               const randomCardIndex = Math.floor(Math.random() * players[targetPlayerId].hand.length);
+            if (players[targetPlayerId] && (players[targetPlayerId].hand || []).length > 0) {
+               const randomCardIndex = Math.floor(Math.random() * (players[targetPlayerId].hand || []).length);
                handleDrawCard(targetPlayerId, randomCardIndex);
             }
           }, 1500);
@@ -213,6 +213,16 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
       }
     }
   }, [currentTurnIndex, status, game]);
+
+  const [showFinishedScreen, setShowFinishedScreen] = useState(false);
+  useEffect(() => {
+    if (status === 'FINISHED') {
+      const timer = setTimeout(() => setShowFinishedScreen(true), 3000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowFinishedScreen(false);
+    }
+  }, [status]);
 
   const [showEffect, setShowEffect] = useState<string | null>(null);
   useEffect(() => {
@@ -251,10 +261,18 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
           <div className="font-bold mb-4 text-xl flex items-center gap-2">
             <span className={turnOrder[currentTurnIndex] === pid ? 'text-yellow-400 font-black' : ''}>{name}</span>
             {!pState.isActive && <span className="text-sm bg-black/50 px-2 py-1 rounded text-white font-bold">탈출 성공! 🎉</span>}
+            {pState.isActive && isMe && status === 'PLAYING' && (
+              <button 
+                onClick={() => sessionService.shuffleOldMaidHand(session.id, pid)}
+                className="ml-4 px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded-full text-sm font-bold flex items-center gap-1 shadow-lg transition-transform active:scale-95"
+              >
+                <RefreshCw className="w-4 h-4" /> 카드 섞기
+              </button>
+            )}
           </div>
           <div className="flex -space-x-4 md:-space-x-8 max-w-full overflow-x-auto p-4 items-end min-h-[160px]">
             <AnimatePresence>
-              {pState.hand.map(card => (
+              {(pState.hand || []).map(card => (
                 <motion.div
                   key={card.id}
                   initial={{ scale: 0, opacity: 0 }}
@@ -281,11 +299,12 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
           {!pState.isActive && <span className="text-xs bg-red-600 px-2 py-1 rounded font-bold">탈출</span>}
         </div>
         <div className={`flex ${vertical ? 'flex-col -space-y-12 md:-space-y-16' : '-space-x-4 md:-space-x-8'}`}>
-          {pState.hand.map((c, i) => {
+          {(pState.hand || []).map((c, i) => {
             return (
               <Card 
                 key={c.id} 
-                isBack 
+                value={c.value}
+                isBack={!(status === 'FINISHED' && pid === loserId) && !isMe} 
                 isTarget={isTarget && amICurrent}
                 onClick={() => {
                   if (isTarget && amICurrent) handleDrawCard(pid, i);
@@ -340,14 +359,14 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
         )}
       </AnimatePresence>
 
-      {status === 'PLAYING' && (
+      {(status === 'PLAYING' || (status === 'FINISHED' && !showFinishedScreen)) && (
         <div className="flex-1 flex flex-col p-4 relative">
           <div className="text-center mt-2 mb-4 z-20">
-            <div className={`inline-block bg-black/60 border border-yellow-500/30 py-4 px-10 rounded-full shadow-2xl backdrop-blur-sm transform transition-transform ${isMyTurn ? 'animate-pulse scale-105 border-yellow-400 border-2' : ''}`}>
+            <div className={`inline-block bg-black/60 border border-yellow-500/30 py-4 px-10 rounded-full shadow-2xl backdrop-blur-sm transform transition-transform ${isMyTurn && status === 'PLAYING' ? 'animate-pulse scale-105 border-yellow-400 border-2' : ''}`}>
               <span className="font-black text-2xl md:text-4xl text-yellow-400">
-                {isMyTurn ? '🚨 내 차례입니다! 카드를 뽑아주세요 🚨' : `${session.players[currentTurnPid]?.nickname || currentTurnPid}님의 턴!`}
+                {status === 'FINISHED' ? '게임 종료! 조커의 주인공이 결정되었습니다...' : (isMyTurn ? '🚨 내 차례입니다! 카드를 뽑아주세요 🚨' : `${session.players[currentTurnPid]?.nickname || currentTurnPid}님의 턴!`)}
               </span>
-              {message && <div className="text-lg md:text-2xl text-yellow-100 mt-2 font-bold">{message}</div>}
+              {message && status === 'PLAYING' && <div className="text-lg md:text-2xl text-yellow-100 mt-2 font-bold">{message}</div>}
             </div>
           </div>
 
@@ -361,7 +380,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
         </div>
       )}
 
-      {status === 'FINISHED' && (
+      {status === 'FINISHED' && showFinishedScreen && (
         <div className="flex-1 flex flex-col items-center justify-center p-8 bg-black/90 z-50 space-y-8 absolute inset-0">
           <motion.div 
             initial={{ y: 50, opacity: 0 }}
