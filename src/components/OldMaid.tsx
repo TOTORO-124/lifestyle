@@ -370,8 +370,12 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
         
       }
       
-      let duration = 1000;
-      if (effect && effect.startsWith('JOKER_')) {
+      let duration = 1500;
+      if (effect === 'PAIR') {
+        duration = 600;
+      } else if (effect === 'ESCAPE') {
+        duration = 1500;
+      } else if (effect && effect.startsWith('JOKER_')) {
         duration = 800;
       }
       const timer = setTimeout(() => setShowEffect(null), duration);
@@ -393,7 +397,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
     
     if (position === 'bottom') {
       return (
-        <div className="flex flex-col items-center pt-2 md:pt-4 pb-2 md:pb-4 border-t-2 border-green-700/50 w-full z-10 relative bg-black/20 backdrop-blur-sm">
+        <div className="flex flex-col items-center w-full relative">
           {/* Render Emojis for bottom player */}
           <AnimatePresence>
             {floatingEmojis.filter(e => e.pid === pid).map(e => (
@@ -609,8 +613,8 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
           </motion.div>
         )}
         {showEffect === 'PAIR' && (
-          <motion.div key="pair" initial={{ scale: 0, opacity: 0, rotate: -20 }} animate={{ scale: 1.5, opacity: 1, rotate: 0 }} exit={{ opacity: 0, scale: 2 }} className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-            <h2 className="text-8xl font-black text-yellow-300 drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)]">짝!</h2>
+          <motion.div key="pair" initial={{ scale: 0, opacity: 0, rotate: -20 }} animate={{ scale: 1.2, opacity: 1, rotate: 0 }} exit={{ opacity: 0, scale: 1.5 }} transition={{ duration: 0.3 }} className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+            <h2 className="text-6xl font-black text-yellow-300 drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)]">짝!</h2>
           </motion.div>
         )}
         {showEffect === 'ESCAPE' && (
@@ -621,46 +625,49 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
       </AnimatePresence>
 
       {(status === 'PLAYING' || (status === 'FINISHED' && !showFinishedScreen)) && (
-        <div className="flex-1 flex flex-col pt-4">
-          <div className="flex-1 relative w-full h-full min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col w-full h-full relative overflow-hidden pb-4">
           {/* Top Player */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
+          <div className="flex-none flex justify-center items-start pt-4 h-[25%] z-10">
             {renderPlayer(topId, 'top')}
           </div>
           
-          {/* Left Player */}
-          <div className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 z-10 flex flex-col items-start">
-            {renderPlayer(leftId, 'left')}
-          </div>
-          
-          {/* Center Status / Timer */}
-          <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center">
-            <div className={`inline-block bg-black/70 border border-yellow-500/30 py-3 px-6 md:py-4 md:px-10 rounded-full shadow-2xl backdrop-blur-md transform transition-transform ${isMyTurn && status === 'PLAYING' ? 'scale-105 border-yellow-400 border-2 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : ''}`}>
-              <span className="font-black text-lg md:text-3xl text-yellow-400 text-center block leading-tight">
-                {status === 'FINISHED' ? '게임 종료!' : (isMyTurn ? '🚨 내 차례! 카드를 뽑으세요' : `${session.players[currentTurnPid]?.nickname || currentTurnPid}님의 턴`)}
-              </span>
-              {message && status === 'PLAYING' && <div className="text-sm md:text-xl text-yellow-100 mt-1 md:mt-2 font-bold text-center">{message}</div>}
-              {status === 'PLAYING' && !drawingState && (
-                <div className="mt-2 md:mt-4 flex items-center justify-center gap-2 md:gap-3 pointer-events-auto">
-                   <div className="w-[120px] md:w-[200px] h-3 md:h-4 bg-black/80 rounded-full overflow-hidden border border-gray-600">
-                      <div className={`h-full transition-all duration-1000 ${timeLeft <= 5 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} style={{ width: `${(timeLeft / TURN_LIMIT) * 100}%` }}></div>
-                   </div>
-                   <span className={`font-bold text-lg md:text-xl ${timeLeft <= 5 ? 'text-red-400 font-black scale-110 transition-transform' : 'text-gray-300'}`}>{timeLeft}초</span>
-                </div>
-              )}
+          {/* Middle Section: Left, Center, Right */}
+          <div className="flex-1 flex justify-between items-center w-full px-2 sm:px-6 relative z-10 min-h-[30%]">
+            <div className="flex-1 flex justify-start">
+              {renderPlayer(leftId, 'left')}
             </div>
-          </div>
-          
-          {/* Right Player */}
-          <div className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 z-10 flex flex-col items-end">
-            {renderPlayer(rightId, 'right')}
+            
+            {/* Sleek Center Status / Timer */}
+            <div className="absolute top-[40%] md:top-[45%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20 flex flex-col items-center">
+              <div className={`inline-flex flex-col items-center bg-black/80 border border-yellow-500/30 py-2 px-6 rounded-full shadow-2xl backdrop-blur-md transform transition-transform ${isMyTurn && status === 'PLAYING' ? 'scale-105 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : ''}`}>
+                <div className="flex items-center gap-4">
+                   <span className="font-black text-sm md:text-base text-yellow-400 whitespace-nowrap">
+                     {status === 'FINISHED' ? '게임 종료!' : (isMyTurn ? '🚨 내 차례!' : `${session.players[currentTurnPid]?.nickname || currentTurnPid}님의 턴`)}
+                   </span>
+                   {status === 'PLAYING' && !drawingState && (
+                      <div className="flex items-center gap-2 pointer-events-auto border-l border-gray-600 pl-4">
+                         <div className="w-[60px] md:w-[100px] h-2 bg-black/80 rounded-full overflow-hidden border border-gray-600">
+                            <div className={`h-full transition-all duration-1000 ${timeLeft <= 5 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} style={{ width: `${(timeLeft / TURN_LIMIT) * 100}%` }}></div>
+                         </div>
+                         <span className={`font-bold text-sm ${timeLeft <= 5 ? 'text-red-400 font-black' : 'text-gray-300'}`}>{timeLeft}초</span>
+                      </div>
+                   )}
+                </div>
+              </div>
+              {message && status === 'PLAYING' && <div className="text-xs md:text-sm text-yellow-100 mt-2 font-bold text-center bg-black/60 px-4 py-1 rounded-full w-max mx-auto">{message}</div>}
+            </div>
+            
+            <div className="flex-1 flex justify-end">
+              {renderPlayer(rightId, 'right')}
+            </div>
           </div>
 
           {/* Bottom Player (Me) */}
-          <div className="absolute bottom-0 left-0 w-full z-30">
-            {renderPlayer(bottomId, 'bottom')}
+          <div className="flex-none flex justify-center items-end w-full z-30 mt-auto">
+            <div className="w-full max-w-2xl mx-auto flex flex-col items-center bg-black/30 backdrop-blur-sm rounded-t-3xl border-t border-green-600/30 pt-4 px-2">
+              {renderPlayer(bottomId, 'bottom')}
+            </div>
           </div>
-        </div>
         </div>
       )}
 
