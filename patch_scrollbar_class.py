@@ -3,8 +3,7 @@ import re
 with open('src/components/OldMaid.tsx', 'r', encoding='utf-8') as f:
     content = f.read()
 
-content = content.replace('key={`${card.id}-${i}`}', 'key={card.id || i}')
-content = content.replace('key={`${c.id}-${i}`}', 'key={c.id || i}')
+content = content.replace('scrollbar-hide', 'no-scrollbar')
 
 with open('src/components/OldMaid.tsx', 'w', encoding='utf-8') as f:
     f.write(content)

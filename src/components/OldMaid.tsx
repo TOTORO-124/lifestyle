@@ -304,7 +304,11 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
         setShowEffect(effect);
       }
       
-      const timer = setTimeout(() => setShowEffect(null), 1500);
+      let duration = 1000;
+      if (effect && effect.startsWith('JOKER_')) {
+        duration = 800;
+      }
+      const timer = setTimeout(() => setShowEffect(null), duration);
       return () => clearTimeout(timer);
     }
   }, [effect, game.effectTimestamp, currentUser.uid]);
@@ -330,21 +334,21 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
             {pState.isActive && isMe && status === 'PLAYING' && (
               <button 
                 onClick={() => sessionService.shuffleOldMaidHand(session.id, pid)}
-                className="ml-4 px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded-full text-sm font-bold flex items-center gap-1 shadow-lg transition-transform active:scale-95"
+                className="ml-4 px-4 py-2 bg-blue-500 hover:bg-blue-400 border border-blue-300 rounded-full text-sm font-black flex items-center gap-2 shadow-xl transition-all active:scale-95 text-white"
               >
                 <RefreshCw className="w-4 h-4" /> 카드 섞기
               </button>
             )}
           </div>
-          <div className="flex flex-wrap justify-center gap-1 sm:gap-2 max-w-full overflow-y-auto p-2 md:p-4 items-center min-h-[100px] md:min-h-[140px] w-full">
+          <div className="flex flex-nowrap justify-center -space-x-[1rem] sm:-space-x-[2rem] md:-space-x-[3rem] p-4 md:p-6 w-full pb-8 px-8">
             <AnimatePresence>
               {(pState.hand || []).map((card, i) => (
                 <motion.div
-                  key={`${card.id}-${i}`}
+                  key={card.id || i}
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0, y: -50, opacity: 0 }}
-                  className="flex-shrink-0"
+                  className="flex-shrink-0 transition-transform duration-200 hover:-translate-y-6 hover:z-30 relative"
                 >
                   <Card value={card.value} suit={card.suit} />
                 </motion.div>
@@ -361,11 +365,11 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
           <User className="w-4 h-4" /> {name}
           {!pState.isActive && <span className="text-xs bg-red-600 px-2 py-1 rounded font-bold">탈출</span>}
         </div>
-        <div className={`flex flex-wrap justify-center gap-1 sm:gap-2 p-2 w-full max-w-full`}>
+        <div className={`flex ${vertical ? 'flex-col -space-y-[2.2rem] sm:-space-y-[4.2rem] md:-space-y-[5.5rem] py-4' : 'flex-nowrap justify-center -space-x-[1.2rem] sm:-space-x-[2.2rem] md:-space-x-[3.2rem] px-4'} items-center justify-center`}>
           {(pState.hand || []).map((c, i) => {
             return (
               <div 
-                key={`${c.id}-${i}`} 
+                key={c.id || i} 
                 className={`transition-transform duration-200 ${isTarget && amICurrent && !drawingState ? 'hover:-translate-y-4 hover:scale-110 cursor-pointer' : ''}`}
                 onClick={() => {
                   if (isTarget && amICurrent && !drawingState) initiateDraw(pid, i);
@@ -389,7 +393,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
   const showJokerScreen = showEffect === 'JOKER';
 
   return (
-    <div className={`w-full max-w-5xl mx-auto h-[85vh] md:h-[80vh] min-h-[450px] md:min-h-[600px] max-h-[800px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-[inset_0_0_50px_rgba(0,0,0,0.8),0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden transition-all duration-300 ${isShake ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-[1.02]' : ''}`}>
+    <div className={`w-full max-w-4xl mx-auto aspect-square lg:aspect-[4/3] min-h-[450px] max-h-[85vh] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-[inset_0_0_50px_rgba(0,0,0,0.8),0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden transition-all duration-300 ${isShake ? 'animate-[shake_0.5s_ease-in-out_infinite] scale-[1.02]' : ''}`}>
             <div className="absolute inset-0 pointer-events-none opacity-20" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }}></div>
       <style>{`
         @keyframes shake {
@@ -410,7 +414,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
       {/* Effect Overlays */}
       <AnimatePresence>
         {drawingState && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-40 bg-black/70 flex flex-col items-center justify-center backdrop-blur-md">
+          <motion.div key="drawing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-40 bg-black/70 flex flex-col items-center justify-center backdrop-blur-md">
              <div className="text-center space-y-8 bg-black/50 p-10 rounded-2xl border border-gray-700 shadow-2xl">
                 <h3 className="text-2xl md:text-4xl font-bold text-white tracking-wide">
                   {session.players[drawingState.drawer]?.nickname || drawingState.drawer}님이<br/>
@@ -429,19 +433,19 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
           </motion.div>
         )}
         {showJokerScreen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-50 pointer-events-none text-center p-8">
+          <motion.div key="joker" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-50 pointer-events-none text-center p-8">
             <div className="text-9xl mb-8 animate-bounce">🃏</div>
             <h2 className="text-4xl md:text-6xl font-black text-red-500 drop-shadow-[0_0_20px_rgba(220,38,38,0.8)]">조커 발견!!</h2>
             <p className="text-2xl mt-4 text-gray-300">앗! 위험한 카드를 뽑았습니다...</p>
           </motion.div>
         )}
         {showEffect === 'PAIR' && (
-          <motion.div initial={{ scale: 0, opacity: 0, rotate: -20 }} animate={{ scale: 1.5, opacity: 1, rotate: 0 }} exit={{ opacity: 0, scale: 2 }} className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <motion.div key="pair" initial={{ scale: 0, opacity: 0, rotate: -20 }} animate={{ scale: 1.5, opacity: 1, rotate: 0 }} exit={{ opacity: 0, scale: 2 }} className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
             <h2 className="text-8xl font-black text-yellow-300 drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)]">짝!</h2>
           </motion.div>
         )}
         {showEffect === 'ESCAPE' && (
-          <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1.2, opacity: 1 }} exit={{ opacity: 0, scale: 2 }} className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none bg-black/40">
+          <motion.div key="escape" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1.2, opacity: 1 }} exit={{ opacity: 0, scale: 2 }} className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none bg-black/40">
             <h2 className="text-6xl md:text-8xl font-black text-[#50C878] drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)]">탈출 성공!</h2>
           </motion.div>
         )}
@@ -449,44 +453,45 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
 
       {(status === 'PLAYING' || (status === 'FINISHED' && !showFinishedScreen)) && (
         <div className="flex-1 flex flex-col pt-4">
-          <div className="flex-1 grid grid-cols-3 grid-rows-[auto_1fr] md:grid-rows-3 gap-2 px-2 pb-2 relative min-h-0">
-            {/* Top Player */}
-            <div className="col-start-2 row-start-1 flex items-start justify-center">
-              {renderPlayer(topId, 'top')}
-            </div>
-            
-            {/* Left Player */}
-            <div className="col-start-1 row-start-2 md:row-start-2 flex items-center justify-start z-10">
-              {renderPlayer(leftId, 'left')}
-            </div>
-            
-            {/* Center Status / Timer */}
-            <div className="col-start-1 col-span-3 md:col-start-2 md:col-span-1 row-start-2 flex flex-col items-center justify-center z-20 pointer-events-none self-center">
-              <div className={`inline-block bg-black/70 border border-yellow-500/30 py-3 px-6 md:py-4 md:px-10 rounded-full shadow-2xl backdrop-blur-md transform transition-transform ${isMyTurn && status === 'PLAYING' ? 'scale-105 border-yellow-400 border-2 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : ''}`}>
-                <span className="font-black text-lg md:text-3xl text-yellow-400 text-center block leading-tight">
-                  {status === 'FINISHED' ? '게임 종료!' : (isMyTurn ? '🚨 내 차례! 카드를 뽑으세요' : `${session.players[currentTurnPid]?.nickname || currentTurnPid}님의 턴`)}
-                </span>
-                {message && status === 'PLAYING' && <div className="text-sm md:text-xl text-yellow-100 mt-1 md:mt-2 font-bold text-center">{message}</div>}
-                {status === 'PLAYING' && !drawingState && (
-                  <div className="mt-2 md:mt-4 flex items-center justify-center gap-2 md:gap-3 pointer-events-auto">
-                     <div className="w-[120px] md:w-[200px] h-3 md:h-4 bg-black/80 rounded-full overflow-hidden border border-gray-600">
-                        <div className={`h-full transition-all duration-1000 ${timeLeft <= 5 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} style={{ width: `${(timeLeft / TURN_LIMIT) * 100}%` }}></div>
-                     </div>
-                     <span className={`font-bold text-lg md:text-xl ${timeLeft <= 5 ? 'text-red-400 font-black scale-110 transition-transform' : 'text-gray-300'}`}>{timeLeft}초</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Right Player */}
-            <div className="col-start-3 row-start-2 md:row-start-2 flex items-center justify-end z-10">
-              {renderPlayer(rightId, 'right')}
+          <div className="flex-1 relative w-full h-full min-h-0 overflow-hidden">
+          {/* Top Player */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
+            {renderPlayer(topId, 'top')}
+          </div>
+          
+          {/* Left Player */}
+          <div className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 z-10 flex flex-col items-start">
+            {renderPlayer(leftId, 'left')}
+          </div>
+          
+          {/* Center Status / Timer */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center">
+            <div className={`inline-block bg-black/70 border border-yellow-500/30 py-3 px-6 md:py-4 md:px-10 rounded-full shadow-2xl backdrop-blur-md transform transition-transform ${isMyTurn && status === 'PLAYING' ? 'scale-105 border-yellow-400 border-2 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : ''}`}>
+              <span className="font-black text-lg md:text-3xl text-yellow-400 text-center block leading-tight">
+                {status === 'FINISHED' ? '게임 종료!' : (isMyTurn ? '🚨 내 차례! 카드를 뽑으세요' : `${session.players[currentTurnPid]?.nickname || currentTurnPid}님의 턴`)}
+              </span>
+              {message && status === 'PLAYING' && <div className="text-sm md:text-xl text-yellow-100 mt-1 md:mt-2 font-bold text-center">{message}</div>}
+              {status === 'PLAYING' && !drawingState && (
+                <div className="mt-2 md:mt-4 flex items-center justify-center gap-2 md:gap-3 pointer-events-auto">
+                   <div className="w-[120px] md:w-[200px] h-3 md:h-4 bg-black/80 rounded-full overflow-hidden border border-gray-600">
+                      <div className={`h-full transition-all duration-1000 ${timeLeft <= 5 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} style={{ width: `${(timeLeft / TURN_LIMIT) * 100}%` }}></div>
+                   </div>
+                   <span className={`font-bold text-lg md:text-xl ${timeLeft <= 5 ? 'text-red-400 font-black scale-110 transition-transform' : 'text-gray-300'}`}>{timeLeft}초</span>
+                </div>
+              )}
             </div>
           </div>
+          
+          {/* Right Player */}
+          <div className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 z-10 flex flex-col items-end">
+            {renderPlayer(rightId, 'right')}
+          </div>
+
           {/* Bottom Player (Me) */}
-          <div className="w-full shrink-0">
+          <div className="absolute bottom-0 left-0 w-full z-30">
             {renderPlayer(bottomId, 'bottom')}
           </div>
+        </div>
         </div>
       )}
 

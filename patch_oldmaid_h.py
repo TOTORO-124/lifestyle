@@ -3,8 +3,9 @@ import re
 with open('src/components/OldMaid.tsx', 'r', encoding='utf-8') as f:
     content = f.read()
 
-content = content.replace('key={`${card.id}-${i}`}', 'key={card.id || i}')
-content = content.replace('key={`${c.id}-${i}`}', 'key={c.id || i}')
+target = "w-full max-w-5xl mx-auto min-h-[600px] flex flex-col"
+replacement = "w-full max-w-5xl mx-auto h-full max-h-full flex flex-col"
+content = content.replace(target, replacement)
 
 with open('src/components/OldMaid.tsx', 'w', encoding='utf-8') as f:
     f.write(content)
