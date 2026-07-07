@@ -2167,9 +2167,12 @@ export const sessionService = {
       [hand[i], hand[j]] = [hand[j], hand[i]];
     }
 
-    await update(ref(db, `sessions/${sessionId}/oldMaidGame/players/${playerId}`), {
-      hand
-    });
+    const updates: Record<string, any> = {};
+    updates[`sessions/${sessionId}/oldMaidGame/players/${playerId}/hand`] = hand;
+    updates[`sessions/${sessionId}/oldMaidGame/effect`] = `EMOJI_${playerId}_🔀 슉슉!`;
+    updates[`sessions/${sessionId}/oldMaidGame/effectTimestamp`] = Date.now();
+    
+    await update(ref(db), updates);
   },
 
   // --- Office Life ---

@@ -39,12 +39,45 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
       );
     }
 
+    const statsEntries = Object.entries(session.stats || {})
+      .map(([pid, s]) => ({ pid, ...s }))
+      .filter(s => session.players[s.pid] && !s.pid.startsWith('CPU_'))
+      .sort((a, b) => b.totalScore - a.totalScore);
+
     return (
-      <div className="w-full max-w-4xl mx-auto h-full min-h-[400px] md:min-h-[600px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-2xl relative overflow-hidden items-center justify-center space-y-6">
-        <div className="text-6xl mb-4 animate-bounce">🃏</div>
-        <h1 className="text-4xl md:text-5xl font-black font-sans text-yellow-400">조커 도둑잡기</h1>
-        <p className="text-green-200 text-lg">심장이 쫄깃해지는 국민 눈치게임!</p>
-        <div className="flex gap-4 mt-8">
+      <div className="w-full max-w-4xl mx-auto h-full min-h-[400px] md:min-h-[600px] flex flex-col bg-[#1A4D2E] text-white rounded-lg shadow-2xl relative overflow-hidden items-center justify-center py-10 px-4 space-y-8">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="text-6xl mb-2 animate-bounce">🃏</div>
+          <h1 className="text-4xl md:text-5xl font-black font-sans text-yellow-400">조커 도둑잡기</h1>
+          <p className="text-green-200 text-lg text-center">심장이 쫄깃해지는 국민 눈치게임!</p>
+        </div>
+
+        {statsEntries.length > 0 && (
+          <div className="bg-black/30 rounded-xl p-6 w-full max-w-md border border-yellow-500/30">
+            <h3 className="text-yellow-400 font-bold mb-4 text-center flex items-center justify-center gap-2">
+              🏆 명예의 전당 (전적)
+            </h3>
+            <div className="space-y-3">
+              {statsEntries.slice(0, 3).map((s, idx) => (
+                <div key={s.pid} className="flex justify-between items-center bg-black/40 px-4 py-2 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl font-black text-gray-400">
+                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                    </span>
+                    <span className="font-bold">{session.players[s.pid]?.nickname || '알 수 없음'}</span>
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-green-400 font-bold">{s.wins || 0}승</span>
+                    <span className="text-gray-400 mx-2">|</span>
+                    <span className="text-yellow-400 font-bold">{s.totalScore || 0}점</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-4 mt-4">
           <button
             onClick={() => setLocalState('HOW_TO_PLAY')}
             className="px-6 py-3 bg-green-800 hover:bg-green-700 rounded-full font-bold transition flex items-center gap-2 shadow-lg"
@@ -291,7 +324,17 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
   }, [status]);
 
   const [showEffect, setShowEffect] = useState<string | null>(null);
-  const [floatingEmojis, setFloatingEmojis] = useState<{ id: string, pid: string, emoji: string }[]>([]);
+  const [floatingEmojis, setFloatingEmojis] = useState<{ id: string, pid: string, emoji: string, cardIndex?: number }[]>([]);
+  const [dealAnimation, setDealAnimation] = useState(true);
+
+  useEffect(() => {
+    if (status === 'PLAYING') {
+      setDealAnimation(true);
+      const t = setTimeout(() => setDealAnimation(false), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [status === 'PLAYING']);
+
   
   useEffect(() => {
     if (effect && game.effectTimestamp) {
@@ -309,6 +352,15 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
         const emoji = parts[2];
         const id = Date.now() + Math.random().toString();
         setFloatingEmojis(prev => [...prev, { id, pid, emoji }]);
+        setTimeout(() => {
+          setFloatingEmojis(prev => prev.filter(e => e.id !== id));
+        }, 2000);
+      } else if (effect.startsWith('PING_')) {
+        const parts = effect.split('_');
+        const pid = parts[1];
+        const cidx = parseInt(parts[2], 10);
+        const id = Date.now() + Math.random().toString();
+        setFloatingEmojis(prev => [...prev, { id, pid, emoji: '✨', cardIndex: cidx }]);
         setTimeout(() => {
           setFloatingEmojis(prev => prev.filter(e => e.id !== id));
         }, 2000);
@@ -348,10 +400,10 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
               <motion.div
                 key={e.id}
                 initial={{ opacity: 0, y: 0, scale: 0.5 }}
-                animate={{ opacity: 1, y: -80, scale: 2.5 }}
+                animate={{ opacity: 1, y: -80, scale: e.emoji.length > 2 ? 1.5 : 2.5 }}
                 exit={{ opacity: 0, y: -150 }}
                 transition={{ duration: 1.5, ease: "easeOut" }}
-                className="absolute top-[-40px] left-1/2 -translate-x-1/2 z-50 pointer-events-none text-6xl"
+                className={`absolute top-[-40px] left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap font-black drop-shadow-xl ${e.emoji.length > 2 ? 'bg-white text-black px-4 py-2 rounded-full border-2 border-black text-xl' : 'text-6xl'}`}
               >
                 {e.emoji}
               </motion.div>
@@ -361,41 +413,76 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
           <div className="font-bold mb-4 text-xl flex items-center gap-2">
             <span className={turnOrder[currentTurnIndex] === pid ? 'text-yellow-400 font-black' : ''}>{name}</span>
             {!pState.isActive && <span className="text-sm bg-black/50 px-2 py-1 rounded text-white font-bold">탈출 성공! 🎉</span>}
-            {pState.isActive && isMe && status === 'PLAYING' && (
-              <div className="flex items-center ml-4 gap-1">
+          </div>
+          
+          {/* Quick Actions (Emojis, Macros, Shuffle) */}
+          {pState.isActive && isMe && status === 'PLAYING' && (
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-2 px-2 max-w-full">
+              <div className="flex items-center bg-black/30 rounded-full px-2 py-1 gap-1">
                 {['😂', '😭', '😡', '👍', '😱'].map(emoji => (
                   <button 
                     key={emoji}
                     onClick={() => sessionService.sendOldMaidEmoji(session.id, pid, emoji)}
-                    className="p-1 hover:bg-white/20 rounded-full transition-transform active:scale-90 text-xl"
+                    className="p-1 hover:bg-white/20 rounded-full transition-transform active:scale-90 text-lg sm:text-xl"
                   >
                     {emoji}
                   </button>
                 ))}
               </div>
-            )}
-            {pState.isActive && isMe && status === 'PLAYING' && (
+              <div className="hidden sm:flex items-center gap-1">
+                {['여깄지롱 😜', '살려줘... 😭', '빨리 뽑아! ⏰', '안돼!! 😱'].map(msg => (
+                  <button
+                    key={msg}
+                    onClick={() => sessionService.sendOldMaidEmoji(session.id, pid, msg)}
+                    className="px-2 py-1 bg-black/40 hover:bg-black/60 rounded-full text-[10px] sm:text-xs text-white transition-transform active:scale-95 whitespace-nowrap"
+                  >
+                    {msg}
+                  </button>
+                ))}
+              </div>
               <button 
                 onClick={() => sessionService.shuffleOldMaidHand(session.id, pid)}
-                className="ml-4 px-4 py-2 bg-blue-500 hover:bg-blue-400 border border-blue-300 rounded-full text-sm font-black flex items-center gap-2 shadow-xl transition-all active:scale-95 text-white"
+                className="px-3 py-1 bg-blue-500 hover:bg-blue-400 border border-blue-300 rounded-full text-xs sm:text-sm font-black flex items-center gap-1 shadow-xl transition-all active:scale-95 text-white whitespace-nowrap"
               >
-                <RefreshCw className="w-4 h-4" /> 카드 섞기
+                <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" /> 카드 섞기
               </button>
-            )}
-          </div>
-          <div className="flex flex-nowrap justify-center -space-x-[1rem] sm:-space-x-[2rem] md:-space-x-[3rem] p-4 md:p-6 w-full pb-8 px-8">
+            </div>
+          )}
+          <div className="flex flex-nowrap justify-center -space-x-[1.5rem] sm:-space-x-[2.5rem] md:-space-x-[3.5rem] p-2 sm:p-4 w-full pb-4 sm:pb-8 px-4 sm:px-8 perspective-1000">
             <AnimatePresence>
-              {(pState.hand || []).map((card, i) => (
-                <motion.div
-                  key={card.id || i}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, y: -50, opacity: 0 }}
-                  className="flex-shrink-0 transition-transform duration-200 hover:-translate-y-6 hover:z-30 relative"
-                >
-                  <Card value={card.value} suit={card.suit} />
-                </motion.div>
-              ))}
+              {(pState.hand || []).map((card, i) => {
+                const total = pState.hand.length;
+                const middle = (total - 1) / 2;
+                const rotation = (i - middle) * 4;
+                const yOffset = Math.abs(i - middle) * 3;
+                const isPinged = floatingEmojis.some(e => e.pid === pid && e.cardIndex === i);
+                
+                return (
+                  <motion.div
+                    key={card.id || i}
+                    initial={{ scale: 0, opacity: 0, y: dealAnimation ? -500 : 50 }}
+                    animate={{ scale: 1, opacity: 1, rotate: rotation, y: yOffset }}
+                    exit={{ scale: 0, y: -100, opacity: 0 }}
+                    transition={{ duration: dealAnimation ? 0.6 : 0.3, delay: dealAnimation ? i * 0.05 : 0 }}
+                    className={`flex-shrink-0 transition-transform duration-200 hover:-translate-y-6 hover:z-30 relative group ${isPinged ? 'animate-pulse drop-shadow-[0_0_15px_rgba(255,215,0,1)]' : ''}`}
+                    style={{ transformOrigin: 'bottom center', zIndex: i }}
+                  >
+                    <Card value={card.value} suit={card.suit} />
+                    {isPinged && (
+                      <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-2xl animate-bounce z-50">✨</div>
+                    )}
+                    {isTarget && !amICurrent && (
+                      <button 
+                        onClick={() => sessionService.sendOldMaidPing(session.id, pid, i)}
+                        className="absolute inset-0 w-full h-full z-40 opacity-0 group-hover:opacity-100 flex items-center justify-center bg-black/40 text-2xl rounded-xl transition-opacity"
+                        title="이 카드 뽑아보라고 도발하기"
+                      >
+                        👇
+                      </button>
+                    )}
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
           </div>
         </div>
@@ -410,10 +497,10 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
             <motion.div
               key={e.id}
               initial={{ opacity: 0, y: 0, scale: 0.5 }}
-              animate={{ opacity: 1, y: -50, scale: 2 }}
+              animate={{ opacity: 1, y: -50, scale: e.emoji.length > 2 ? 1 : 2 }}
               exit={{ opacity: 0, y: -100 }}
               transition={{ duration: 1.5, ease: "easeOut" }}
-              className="absolute top-0 left-1/2 -translate-x-1/2 z-50 pointer-events-none text-4xl"
+              className={`absolute top-0 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap font-black drop-shadow-xl ${e.emoji.length > 2 ? 'bg-white text-black px-3 py-1 rounded-full border-2 border-black text-sm' : 'text-4xl'}`}
             >
               {e.emoji}
             </motion.div>
@@ -424,25 +511,48 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
           <User className="w-4 h-4" /> {name}
           {!pState.isActive && <span className="text-xs bg-red-600 px-2 py-1 rounded font-bold">탈출</span>}
         </div>
-        <div className={`flex ${vertical ? 'flex-col -space-y-[2.2rem] sm:-space-y-[4.2rem] md:-space-y-[5.5rem] py-4' : 'flex-nowrap justify-center -space-x-[1.2rem] sm:-space-x-[2.2rem] md:-space-x-[3.2rem] px-4'} items-center justify-center`}>
-          {(pState.hand || []).map((c, i) => {
-            return (
-              <div 
-                key={c.id || i} 
-                className={`transition-transform duration-200 ${isTarget && amICurrent && !drawingState ? 'hover:-translate-y-4 hover:scale-110 cursor-pointer' : ''}`}
-                onClick={() => {
-                  if (isTarget && amICurrent && !drawingState) initiateDraw(pid, i);
-                }} 
-              >
-                <Card 
-                  value={c.value}
-                  suit={c.suit}
-                  isBack={!(status === 'FINISHED' && pid === loserId) && !isMe} 
-                  isTarget={isTarget && amICurrent}
-                />
-              </div>
-            )
-          })}
+        <div className={`flex ${vertical ? 'flex-col -space-y-[2.2rem] sm:-space-y-[4.2rem] md:-space-y-[5.5rem] py-4' : 'flex-nowrap justify-center -space-x-[1.2rem] sm:-space-x-[2.2rem] md:-space-x-[3.2rem] px-4'} items-center justify-center perspective-1000`}>
+          <AnimatePresence>
+            {(pState.hand || []).map((c, i) => {
+              const total = pState.hand.length;
+              const middle = (total - 1) / 2;
+              const rotation = vertical ? 0 : (i - middle) * 3;
+              const yOffset = vertical ? 0 : Math.abs(i - middle) * 1.5;
+              const isPinged = floatingEmojis.some(e => e.pid === pid && e.cardIndex === i);
+              const isBeingDrawn = drawingState?.pid === pid && drawingState?.cardIndex === i;
+              
+              return (
+                <motion.div 
+                  key={c.id || i}
+                  initial={{ scale: 0, opacity: 0, y: dealAnimation ? 200 : 0, x: dealAnimation && vertical ? (position === 'left' ? 200 : -200) : 0 }}
+                  animate={{ 
+                    scale: isBeingDrawn ? 1.2 : 1, 
+                    opacity: isBeingDrawn ? 0.5 : 1, 
+                    rotate: rotation, 
+                    y: isBeingDrawn ? 100 : yOffset,
+                    zIndex: isBeingDrawn ? 100 : i
+                  }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ duration: dealAnimation ? 0.6 : 0.3, delay: dealAnimation ? i * 0.05 : 0 }}
+                  className={`transition-transform duration-200 relative ${isTarget && amICurrent && !drawingState ? 'hover:-translate-y-4 hover:scale-110 cursor-pointer z-40' : ''} ${isPinged ? 'animate-pulse drop-shadow-[0_0_15px_rgba(255,215,0,1)]' : ''}`}
+                  style={{ transformOrigin: vertical ? 'center center' : 'bottom center', zIndex: isBeingDrawn ? 100 : i }}
+                  onClick={() => {
+                    if (isTarget && amICurrent && !drawingState) initiateDraw(pid, i);
+                  }} 
+                >
+                  <Card 
+                    value={c.value}
+                    suit={c.suit}
+                    isBack={!(status === 'FINISHED' && pid === loserId) && !isMe} 
+                    isTarget={isTarget && amICurrent}
+                  />
+                  {isPinged && (
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-2xl animate-bounce z-50">✨</div>
+                  )}
+                </motion.div>
+              )
+            })}
+          </AnimatePresence>
         </div>
       </div>
     );
@@ -524,7 +634,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
           </div>
           
           {/* Center Status / Timer */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center">
+          <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center">
             <div className={`inline-block bg-black/70 border border-yellow-500/30 py-3 px-6 md:py-4 md:px-10 rounded-full shadow-2xl backdrop-blur-md transform transition-transform ${isMyTurn && status === 'PLAYING' ? 'scale-105 border-yellow-400 border-2 shadow-[0_0_20px_rgba(250,204,21,0.5)]' : ''}`}>
               <span className="font-black text-lg md:text-3xl text-yellow-400 text-center block leading-tight">
                 {status === 'FINISHED' ? '게임 종료!' : (isMyTurn ? '🚨 내 차례! 카드를 뽑으세요' : `${session.players[currentTurnPid]?.nickname || currentTurnPid}님의 턴`)}

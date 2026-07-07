@@ -3,24 +3,91 @@ import re
 with open('src/components/OldMaid.tsx', 'r', encoding='utf-8') as f:
     content = f.read()
 
-# Bottom player
-target_bottom = '<div className="flex flex-nowrap gap-2 max-w-full overflow-x-auto p-4 md:p-8 items-center min-h-[100px] md:min-h-[140px] w-full justify-start md:justify-center no-scrollbar">'
-replace_bottom = '<div className="flex -space-x-[1.5rem] sm:-space-x-[2.5rem] md:-space-x-[3.5rem] max-w-full overflow-x-auto p-4 md:p-8 items-center min-h-[100px] md:min-h-[140px] w-full justify-center no-scrollbar pb-8 px-8">'
-content = content.replace(target_bottom, replace_bottom)
+# 1. Move center panel up
+target_center = """          {/* Center Status / Timer */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center">"""
+replace_center = """          {/* Center Status / Timer */}
+          <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col items-center">"""
+content = content.replace(target_center, replace_center)
 
-target_motion = 'className="flex-shrink-0"'
-replace_motion = 'className="flex-shrink-0 transition-transform duration-200 hover:-translate-y-6 hover:z-30 relative"'
-content = content.replace(target_motion, replace_motion)
+# 2. Compact bottom player UI (emojis & text macros & shuffle button)
+target_bottom_ui = """            {pState.isActive && isMe && status === 'PLAYING' && (
+              <div className="flex flex-col ml-4 gap-2 border-l border-white/20 pl-4">
+                <div className="flex items-center gap-1">
+                  {['😂', '😭', '😡', '👍', '😱'].map(emoji => (
+                    <button 
+                      key={emoji}
+                      onClick={() => sessionService.sendOldMaidEmoji(session.id, pid, emoji)}
+                      className="p-1 hover:bg-white/20 rounded-full transition-transform active:scale-90 text-xl"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {['여깄지롱 😜', '살려줘... 😭', '빨리 뽑아! ⏰', '안돼!! 😱'].map(msg => (
+                    <button
+                      key={msg}
+                      onClick={() => sessionService.sendOldMaidEmoji(session.id, pid, msg)}
+                      className="px-2 py-1 bg-black/40 hover:bg-black/60 rounded-full text-xs text-white transition-transform active:scale-95"
+                    >
+                      {msg}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {pState.isActive && isMe && status === 'PLAYING' && (
+              <button 
+                onClick={() => sessionService.shuffleOldMaidHand(session.id, pid)}
+                className="ml-4 px-4 py-2 bg-blue-500 hover:bg-blue-400 border border-blue-300 rounded-full text-sm font-black flex items-center gap-2 shadow-xl transition-all active:scale-95 text-white"
+              >
+                <RefreshCw className="w-4 h-4" /> 카드 섞기
+              </button>
+            )}
+          </div>"""
 
-# Opponents
-target_opp = """<div className={`flex ${vertical ? 'flex-col gap-1 py-2 overflow-y-auto max-h-[300px]' : 'flex-nowrap gap-1 px-2 overflow-x-auto max-w-[250px] sm:max-w-[400px]'} items-center justify-start no-scrollbar`}>"""
-replace_opp = """<div className={`flex ${vertical ? 'flex-col -space-y-[2.5rem] sm:-space-y-[3.5rem] md:-space-y-[4.5rem] py-4' : '-space-x-[1.5rem] sm:-space-x-[2.5rem] md:-space-x-[3.5rem] px-4'} items-center justify-center no-scrollbar`}>"""
-content = content.replace(target_opp, replace_opp)
+replace_bottom_ui = """          </div>
+          
+          {/* Quick Actions (Emojis, Macros, Shuffle) */}
+          {pState.isActive && isMe && status === 'PLAYING' && (
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-2 px-2 max-w-full">
+              <div className="flex items-center bg-black/30 rounded-full px-2 py-1 gap-1">
+                {['😂', '😭', '😡', '👍', '😱'].map(emoji => (
+                  <button 
+                    key={emoji}
+                    onClick={() => sessionService.sendOldMaidEmoji(session.id, pid, emoji)}
+                    className="p-1 hover:bg-white/20 rounded-full transition-transform active:scale-90 text-lg sm:text-xl"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+              <div className="hidden sm:flex items-center gap-1">
+                {['여깄지롱 😜', '살려줘... 😭', '빨리 뽑아! ⏰', '안돼!! 😱'].map(msg => (
+                  <button
+                    key={msg}
+                    onClick={() => sessionService.sendOldMaidEmoji(session.id, pid, msg)}
+                    className="px-2 py-1 bg-black/40 hover:bg-black/60 rounded-full text-[10px] sm:text-xs text-white transition-transform active:scale-95 whitespace-nowrap"
+                  >
+                    {msg}
+                  </button>
+                ))}
+              </div>
+              <button 
+                onClick={() => sessionService.shuffleOldMaidHand(session.id, pid)}
+                className="px-3 py-1 bg-blue-500 hover:bg-blue-400 border border-blue-300 rounded-full text-xs sm:text-sm font-black flex items-center gap-1 shadow-xl transition-all active:scale-95 text-white whitespace-nowrap"
+              >
+                <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" /> 카드 섞기
+              </button>
+            </div>
+          )}"""
+content = content.replace(target_bottom_ui, replace_bottom_ui)
 
-# Container
-target_container = "w-full max-w-5xl mx-auto h-full max-h-full flex flex-col bg-[#1A4D2E]"
-replace_container = "w-full max-w-5xl mx-auto aspect-[3/4] md:aspect-square lg:aspect-[4/3] max-h-full flex flex-col bg-[#1A4D2E]"
-content = content.replace(target_container, replace_container)
+# 3. Increase fan overlapping to save horizontal space and smooth rotation
+target_fan_bottom = """          <div className="flex flex-nowrap justify-center -space-x-[1rem] sm:-space-x-[2rem] md:-space-x-[3rem] p-4 md:p-6 w-full pb-8 px-8 perspective-1000">"""
+replace_fan_bottom = """          <div className="flex flex-nowrap justify-center -space-x-[1.5rem] sm:-space-x-[2.5rem] md:-space-x-[3.5rem] p-2 sm:p-4 w-full pb-4 sm:pb-8 px-4 sm:px-8 perspective-1000">"""
+content = content.replace(target_fan_bottom, replace_fan_bottom)
 
 with open('src/components/OldMaid.tsx', 'w', encoding='utf-8') as f:
     f.write(content)
