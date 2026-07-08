@@ -12,6 +12,7 @@ export enum GameType {
   YUT_NORI = 'YUT_NORI',
   SUIKA = 'SUIKA',
   ALKKAGI = 'ALKKAGI',
+  ONECARD = 'ONECARD',
 }
 
 export enum SessionStatus {
@@ -63,6 +64,7 @@ export interface UserProfile {
 
 export interface Player {
   id: string;
+  uid?: string;
   nickname: string;
   isHost: boolean;
   isAlive: boolean;
@@ -70,6 +72,7 @@ export interface Player {
   isConnected: boolean;
   isSpectator?: boolean;
   isAI?: boolean;
+  isBot?: boolean;
   role?: string;
   voteTarget?: string;
   hasConfirmedRole?: boolean;
@@ -145,6 +148,7 @@ export interface DrawGameState {
 
 export interface GameLog {
   id: string;
+  uid?: string;
   type: 'info' | 'success' | 'warning';
   content: string;
   timestamp: number;
@@ -173,6 +177,7 @@ export interface Office2048GameState {
 
 export interface OldMaidCard {
   id: string;
+  uid?: string;
   value: string;
 }
 
@@ -230,6 +235,7 @@ export interface OfficeLifeGameState {
 
 export interface ArenaItem {
   id: string;
+  uid?: string;
   name: string;
   description: string;
   cost: number;
@@ -253,6 +259,7 @@ export interface ArenaItem {
 
 export interface ArenaCharacter {
   id: string;
+  uid?: string;
   name: string;
   description: string;
   baseHp: number;
@@ -268,6 +275,7 @@ export interface ArenaCharacter {
 
 export interface ArenaSkill {
   id: string;
+  uid?: string;
   name: string;
   description: string;
   energyCost: number;
@@ -286,6 +294,7 @@ export interface ArenaSkill {
 
 export interface ArenaProjectile {
   id: string;
+  uid?: string;
   ownerId: string;
   x: number;
   y: number;
@@ -371,6 +380,7 @@ export interface YutNoriGameState {
 
 export interface AlkkagiPieceState {
   id: string;
+  uid?: string;
   team: 'BLACK' | 'WHITE';
   x: number;
   y: number;
@@ -406,6 +416,7 @@ export interface LeaderboardEntry {
 
 export interface HallOfFameEntry {
   id: string;
+  uid?: string;
   themeId: string;
   themeName: string;
   playerNicknames: string[];
@@ -415,8 +426,32 @@ export interface HallOfFameEntry {
   timestamp: number;
 }
 
+
+export interface OneCardCard {
+  id: string;
+  uid?: string;
+  suit: 'spades' | 'hearts' | 'diamonds' | 'clubs' | 'joker';
+  rank: 'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K' | 'black' | 'color';
+}
+
+export interface OneCardGameState {
+  status: 'PLAYING' | 'FINISHED';
+  winnerId?: string;
+  deck: OneCardCard[];
+  discardPile: OneCardCard[];
+  players: Record<string, {
+    hand: OneCardCard[];
+  }>;
+  turnOrder: string[];
+  currentTurnIndex: number;
+  direction: 1 | -1;
+  currentSuit?: 'spades' | 'hearts' | 'diamonds' | 'clubs' | 'joker';
+  penaltyStack: number;
+}
+
 export interface Session {
   id: string;
+  uid?: string;
   gameType: GameType;
   hostId: string;
   status: SessionStatus;
@@ -437,6 +472,7 @@ export interface Session {
   cosmicJackpot?: CosmicJackpotGameState;
   yutNoriGame?: YutNoriGameState;
   alkkagiGame?: AlkkagiGameState;
+  oneCardGame?: OneCardGameState;
   leaderboards?: Record<string, LeaderboardEntry[]>;
   settings: {
     maxPlayers: number;
@@ -465,6 +501,7 @@ export interface Session {
 
 export interface ChatMessage {
   id: string;
+  uid?: string;
   senderId: string;
   senderName: string;
   content: string;

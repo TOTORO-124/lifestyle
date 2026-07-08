@@ -10,6 +10,7 @@ import { CHANCE_CARDS } from '../data/chanceCards';
 import { OFFICE_ITEMS } from '../data/officeItems';
 import { OFFICE_RANKS, OFFICE_ROLES } from '../data/officeRanks';
 
+import { createDeck, shuffleDeck, isPlayable } from '../game/cardUtils';
 import { ARENA_SKILLS, ARENA_ITEMS, ARENA_CHARACTERS } from '../data/cyberArenaData';
 
 export const sessionService = {
@@ -31,7 +32,7 @@ export const sessionService = {
           xp: 0,
           level: 1,
           totalWins: 0,
-          joinedAt: Date.now()
+          
         };
         await set(userRef, initialProfile);
       }
@@ -158,7 +159,7 @@ export const sessionService = {
         type: 'info',
         content: `${nickname}님이 관전자로 입장했습니다.`,
         timestamp: Date.now()
-      });
+    });
     }
   },
 
@@ -966,7 +967,7 @@ export const sessionService = {
             'DIAGONAL': '사선 진형',
             'SCATTERED': '산개 진형'
         };
-        await this.addLog(sessionId, `알까기 대전이 시작되었습니다! (랜덤 진형: ${formationNames[formation] || formation})`, 'success');
+        await this.addLog(sessionId, `알까기 대전이 시작되었습니다! (랜덤 진형: ${formationNames[formation] || formation}`, 'success');
     } catch(err) {
         console.error("Firebase Game Start Error:", err);
         throw err;
@@ -999,7 +1000,7 @@ export const sessionService = {
     };
 
     await update(ref(db, `sessions/${sessionId}`), updates);
-    await this.addLog(sessionId, `오목 대전이 시작되었습니다. (${ruleType === 'RENJU' ? '렌주 룰' : '자유 룰'})`, 'success');
+    await this.addLog(sessionId, `오목 대전이 시작되었습니다. (${ruleType === 'RENJU' ? '렌주 룰' : '자유 룰'}`, 'success');
   },
 
   async startBingoSetup(sessionId: string, settings: any) {
@@ -2034,6 +2035,295 @@ export const sessionService = {
   },
 
   // --- Old Maid (조커 도둑잡기) ---
+  
+  async startOneCardGame(sessionId: string) {
+    if (!db) return;
+    const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
+    const session = sessionSnap.val() as Session;
+    if (!session || !session.players) return;
+
+    const realPlayers = Object.keys(session.players).filter(pid => !pid.startsWith('CPU_'));
+    const turnOrder = [...realPlayers];
+    
+    // Add CPUs if only 1 player
+    if (turnOrder.length === 1) {
+      for (let i = 1; i <= 3; i++) {
+        const cpuId = `CPU_ONECARD_${i}`;
+        turnOrder.push(cpuId);
+        session.players[cpuId] = {
+          id: cpuId,
+          nickname: `컴퓨터 ${i}`,
+          isBot: true,
+          isHost: false,
+          isAlive: true,
+          isReady: true,
+          isConnected: true,
+        };
+      }
+      await update(ref(db, `sessions/${sessionId}/players`), session.players);
+    }
+
+    let deck = shuffleDeck(createDeck());
+    const playersState: any = {};
+    
+    turnOrder.forEach(pid => {
+      playersState[pid] = {
+        hand: deck.splice(0, 7)
+      };
+    });
+
+    let firstCard = deck.pop()!;
+    while (firstCard.suit === 'joker' || firstCard.rank === '2' || firstCard.rank === 'A' || firstCard.rank === '7' || firstCard.rank === 'J' || firstCard.rank === 'Q') {
+      deck.unshift(firstCard);
+      firstCard = deck.pop()!;
+    }
+
+    const gameState = {
+      status: 'PLAYING',
+      deck: deck,
+      discardPile: [firstCard],
+      currentSuit: firstCard.suit,
+      players: playersState,
+      turnOrder,
+      currentTurnIndex: 0,
+      direction: 1,
+      penaltyStack: 0
+    };
+
+    await update(ref(db, `sessions/${sessionId}`), {
+      status: SessionStatus.PLAYING,
+      oneCardGame: gameState,
+      logs: { [`log_${Date.now()}_${Math.floor(Math.random()*10000)}`]: { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: '원카드 게임이 시작되었습니다.', type: 'info', timestamp: Date.now() } }
+    });
+  },
+
+  async playOneCard(sessionId: string, playerId: string, cardIndex: number, changedSuit?: string) {
+    if (!db) return;
+    const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
+    const session = sessionSnap.val() as Session;
+    if (!session || !session.oneCardGame || session.oneCardGame.status !== 'PLAYING') return;
+
+    const game = session.oneCardGame;
+    const playerState = game.players[playerId];
+    if (!playerState || playerState.hand.length <= cardIndex) return;
+    
+    if (game.turnOrder[game.currentTurnIndex] !== playerId) return;
+
+    const card = playerState.hand[cardIndex];
+    playerState.hand.splice(cardIndex, 1);
+    
+    if (!game.discardPile) game.discardPile = [];
+    game.discardPile.push(card);
+    
+    game.currentSuit = (changedSuit || (card.suit === 'joker' ? game.currentSuit : card.suit)) as any;
+    
+    const suitSymbols: Record<string, string> = {
+      spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣', joker: '🃏'
+    };
+    
+    const suitStr = changedSuit ? ` (무늬 변경: ${suitSymbols[changedSuit] || changedSuit}` : '';
+    const playerName = session.players[playerId]?.nickname || '플레이어';
+    
+    const newLogs = session.logs || {};
+    newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = {
+        id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(),
+        content: `${playerName}님이 ${card.suit === 'joker' ? '조커' : card.suit + ' ' + card.rank} 카드를 냈습니다.${suitStr}`,
+      type: 'info',
+      timestamp: Date.now()
+    };
+
+    if (playerState.hand.length === 0) {
+      game.status = 'FINISHED';
+      game.winnerId = playerId;
+      newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = {
+        id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(),
+        content: `${playerName}님 승리!`,
+        type: 'info',
+        timestamp: Date.now()
+    };
+      await update(ref(db, `sessions/${sessionId}`), { oneCardGame: game, logs: newLogs });
+      return;
+    }
+
+    let skipNext = false;
+    let playAgain = false;
+    
+    if (card.rank === 'Q') {
+      game.direction = (game.direction === 1 ? -1 : 1) as 1 | -1;
+      newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `Q: 진행 방향이 반대로 바뀝니다!`, type: 'info', timestamp: Date.now() };
+    } else if (card.rank === 'J') {
+      skipNext = true;
+      newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `J: 다음 플레이어를 건너뜁니다!`, type: 'info', timestamp: Date.now() };
+    } else if (card.rank === 'K') {
+      playAgain = true;
+      newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `K: 한번 더 낼 수 있습니다!`, type: 'info', timestamp: Date.now() };
+    } else if (card.rank === '7') {
+      newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `7: 무늬를 변경했습니다!`, type: 'info', timestamp: Date.now() };
+    }
+
+    if (game.penaltyStack > 0 && card.rank === '3') {
+      game.penaltyStack = 0;
+      newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `3: 공격을 막았습니다!`, type: 'info', timestamp: Date.now() };
+    } else {
+      const attackVal = card.suit === 'joker' && card.rank === 'color' ? 7 :
+                        card.suit === 'joker' && card.rank === 'black' ? 5 :
+                        card.rank === 'A' && card.suit === 'spades' ? 5 :
+                        card.rank === 'A' ? 3 :
+                        card.rank === '2' ? 2 : 0;
+      if (attackVal > 0) {
+        game.penaltyStack += attackVal;
+        newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `공격! 다음 사람은 누적 ${game.penaltyStack}장을 먹어야 합니다.`, type: 'info', timestamp: Date.now() };
+      }
+    }
+
+    let nextIdx = game.currentTurnIndex;
+    if (!playAgain) {
+      nextIdx = game.currentTurnIndex + game.direction;
+      if (nextIdx >= game.turnOrder.length) nextIdx = nextIdx % game.turnOrder.length;
+      if (nextIdx < 0) nextIdx = (nextIdx % game.turnOrder.length + game.turnOrder.length) % game.turnOrder.length;
+      
+      if (skipNext) {
+        nextIdx = nextIdx + game.direction;
+        if (nextIdx >= game.turnOrder.length) nextIdx = nextIdx % game.turnOrder.length;
+        if (nextIdx < 0) nextIdx = (nextIdx % game.turnOrder.length + game.turnOrder.length) % game.turnOrder.length;
+      }
+    }
+    
+    game.currentTurnIndex = nextIdx;
+
+    // Trigger AI if next is bot
+    const nextPlayerId = game.turnOrder[game.currentTurnIndex];
+    if (nextPlayerId.startsWith('CPU_')) {
+      setTimeout(() => sessionService.triggerOneCardBot(sessionId, nextPlayerId), 1500);
+    }
+
+    await update(ref(db, `sessions/${sessionId}`), { oneCardGame: game, logs: newLogs });
+  },
+
+  async drawOneCard(sessionId: string, playerId: string) {
+    if (!db) return;
+    const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
+    const session = sessionSnap.val() as Session;
+    if (!session || !session.oneCardGame || session.oneCardGame.status !== 'PLAYING') return;
+
+    const game = session.oneCardGame;
+    const playerState = game.players[playerId];
+    
+    if (game.turnOrder[game.currentTurnIndex] !== playerId) return;
+
+    let drawAmount = game.penaltyStack > 0 ? game.penaltyStack : 1;
+    let actualDrawn = 0;
+    const newLogs = session.logs || {};
+    const playerName = session.players[playerId]?.nickname || '플레이어';
+
+    if (!game.deck) game.deck = [];
+
+    for (let i = 0; i < drawAmount; i++) {
+      if (game.deck.length === 0) {
+        if (!game.discardPile || game.discardPile.length <= 1) {
+          newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `무승부! 카드가 없습니다.`, type: 'info', timestamp: Date.now()
+    };
+          game.status = 'FINISHED';
+          await update(ref(db, `sessions/${sessionId}`), { oneCardGame: game, logs: newLogs });
+          return;
+        }
+        const topCard = game.discardPile.pop()!;
+        game.deck = shuffleDeck(game.discardPile);
+        game.discardPile = [topCard];
+        newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `덱을 다시 섞었습니다.`, type: 'info', timestamp: Date.now()
+    };
+      }
+      const drawn = game.deck.pop();
+      if (drawn) {
+        if (!playerState.hand) playerState.hand = [];
+        playerState.hand.push(drawn);
+        actualDrawn++;
+      }
+    }
+
+    if (game.penaltyStack > 0) {
+      newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `${playerName}님이 공격 방어에 실패하여 ${actualDrawn}장을 뽑았습니다.`, type: 'info', timestamp: Date.now()
+    };
+      game.penaltyStack = 0;
+    } else {
+      newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `${playerName}님이 카드를 1장 뽑았습니다.`, type: 'info', timestamp: Date.now()
+    };
+    }
+
+    let nextIdx = game.currentTurnIndex + game.direction;
+    if (nextIdx >= game.turnOrder.length) nextIdx = nextIdx % game.turnOrder.length;
+    if (nextIdx < 0) nextIdx = (nextIdx % game.turnOrder.length + game.turnOrder.length) % game.turnOrder.length;
+    game.currentTurnIndex = nextIdx;
+
+    const nextPlayerId = game.turnOrder[game.currentTurnIndex];
+    if (nextPlayerId.startsWith('CPU_')) {
+      setTimeout(() => sessionService.triggerOneCardBot(sessionId, nextPlayerId), 1500);
+    }
+
+    await update(ref(db, `sessions/${sessionId}`), { oneCardGame: game, logs: newLogs });
+  },
+
+  async triggerOneCardBot(sessionId: string, botId: string) {
+    if (!db) return;
+    const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
+    const session = sessionSnap.val() as Session;
+    if (!session || !session.oneCardGame || session.oneCardGame.status !== 'PLAYING') return;
+
+    const game = session.oneCardGame;
+    if (game.turnOrder[game.currentTurnIndex] !== botId) return;
+
+    const botState = game.players[botId];
+    if (!botState) return;
+
+    const topCard = game.discardPile[game.discardPile.length - 1];
+    const playableCards = botState.hand.filter(card => isPlayable(card, topCard, game.currentSuit, game.penaltyStack));
+
+    if (playableCards.length > 0) {
+      let selectedCard = playableCards[0];
+      if (game.penaltyStack === 0) {
+        const getPriority = (card: any) => {
+          if (card.suit === 'joker') return 1;
+          if (card.rank === 'A') return 2;
+          if (card.rank === '2') return 3;
+          if (card.rank === 'J') return 4;
+          if (card.rank === 'Q') return 5;
+          if (card.rank === '7') return 6;
+          
+          const suitCounts: Record<string, number> = { spades: 0, hearts: 0, diamonds: 0, clubs: 0 };
+          botState.hand.forEach((c: any) => {
+            if (c.suit !== 'joker') suitCounts[c.suit]++;
+          });
+          const maxCount = Math.max(...Object.values(suitCounts));
+          if (card.suit !== 'joker' && suitCounts[card.suit] === maxCount) return 7;
+          return 8;
+        };
+
+        playableCards.sort((a, b) => {
+          const diff = getPriority(a) - getPriority(b);
+          if (diff === 0) return Math.random() - 0.5;
+          return diff;
+        });
+        selectedCard = playableCards[0];
+      }
+
+      let changedSuit: string | undefined;
+      if (selectedCard.rank === '7' || selectedCard.suit === 'joker') {
+        const suitCounts: Record<string, number> = { spades: 0, hearts: 0, diamonds: 0, clubs: 0 };
+        botState.hand.forEach((c: any) => {
+          if (c.suit !== 'joker') suitCounts[c.suit]++;
+        });
+        const maxCount = Math.max(...Object.values(suitCounts));
+        const candidates = Object.keys(suitCounts).filter(s => suitCounts[s] === maxCount);
+        changedSuit = candidates[Math.floor(Math.random() * candidates.length)];
+      }
+
+      const cardIdx = botState.hand.findIndex((c: any) => c.id === selectedCard.id);
+      await this.playOneCard(sessionId, botId, cardIdx, changedSuit);
+    } else {
+      await this.drawOneCard(sessionId, botId);
+    }
+  },
+
   async startOldMaidGame(sessionId: string) {
     if (!db) return;
     const sessionSnap = await get(ref(db, `sessions/${sessionId}`));
@@ -2059,7 +2349,7 @@ export const sessionService = {
     while (turnOrder.length < 4) {
       const cpuId = `CPU_${cpuCount}`;
       turnOrder.push(cpuId);
-      session.players[cpuId] = { uid: cpuId, nickname: `컴퓨터 ${cpuCount}`, avatarIndex: 0, joinedAt: Date.now(), isReady: true };
+      session.players[cpuId] = { id: cpuId, nickname: `컴퓨터 ${cpuCount}`, isReady: true, isHost: false, isAlive: true, isConnected: true, isBot: true };
       cpuCount++;
     }
 
@@ -2131,7 +2421,7 @@ export const sessionService = {
       turnOrder,
       currentTurnIndex: initialTurnIndex,
       turnStartTime: Date.now(),
-      message: '게임이 시작되었습니다! 카드를 뽑아주세요.'
+      content: '게임이 시작되었습니다! 카드를 뽑아주세요.'
     };
 
     await update(ref(db, `sessions/${sessionId}`), {
