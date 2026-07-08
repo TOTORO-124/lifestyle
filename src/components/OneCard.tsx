@@ -24,8 +24,31 @@ const CardView = ({ card, isPlayable = false, onClick, hidden = false, className
   }
 
   const { symbol, color } = suitSymbols[card.suit];
-  const displayRank = card.rank === 'black' ? 'B' : card.rank === 'color' ? 'C' : card.rank;
+  const displayRank = card.rank;
   const isJoker = card.suit === 'joker';
+
+  if (isJoker) {
+    const isColorJoker = card.rank === 'color';
+    const jokerColor = isColorJoker ? 'text-rose-500' : 'text-slate-800';
+    return (
+      <motion.button 
+        whileHover={isPlayable ? { y: -12, scale: 1.05 } : {}}
+        onClick={onClick}
+        disabled={!isPlayable && onClick !== undefined}
+        className={`relative w-16 h-24 sm:w-24 sm:h-36 bg-white rounded-xl shadow-md flex flex-col justify-between p-1.5 sm:p-2 border-[3px] ${isPlayable ? 'border-green-400 cursor-pointer shadow-[0_5px_15px_rgba(74,222,128,0.4)]' : 'border-gray-200 opacity-50'} transition-all ${className}`}
+      >
+        <div className={`text-left text-[10px] sm:text-xs font-black ${jokerColor} leading-none tracking-tighter`}>
+          <div>JOKER</div>
+        </div>
+        <div className={`text-center text-4xl sm:text-5xl absolute inset-0 flex items-center justify-center ${isColorJoker ? 'opacity-90' : 'opacity-70 grayscale'}`}>
+           🃏
+        </div>
+        <div className={`text-right text-[10px] sm:text-xs font-black ${jokerColor} leading-none rotate-180 tracking-tighter`}>
+          <div>JOKER</div>
+        </div>
+      </motion.button>
+    );
+  }
 
   return (
     <motion.button 
@@ -39,7 +62,7 @@ const CardView = ({ card, isPlayable = false, onClick, hidden = false, className
         <div className="text-xs sm:text-lg">{symbol}</div>
       </div>
       <div className={`text-center text-4xl sm:text-5xl absolute inset-0 flex items-center justify-center opacity-20 ${color}`}>
-         {isJoker ? '🃏' : symbol}
+         {symbol}
       </div>
       <div className={`text-right text-sm sm:text-xl font-black ${color} leading-none rotate-180`}>
         <div>{displayRank}</div>
@@ -55,6 +78,7 @@ export default function OneCard({ session, currentUser, onLeave }: { session: Se
   const [pendingCardIndex, setPendingCardIndex] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [oneCardDeclared, setOneCardDeclared] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   // Scroll ref for horizontal scrolling
   const handScrollRef = useRef<HTMLDivElement>(null);
@@ -65,13 +89,40 @@ export default function OneCard({ session, currentUser, onLeave }: { session: Se
   const isHost = session.hostId === myId;
   
   if (gameState.status === 'FINISHED') {
+    const isBankrupt = gameState.loserId && gameState.players[gameState.loserId]?.hand.length >= 20;
     return (
-      <div className="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center z-[100] p-8 text-center text-white">
-        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-8xl mb-6 drop-shadow-[0_0_30px_rgba(250,204,21,0.6)]">🏆</motion.div>
-        <h2 className="text-5xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 mb-4 drop-shadow-lg">
-          {gameState?.winnerId ? (session.players[gameState.winnerId]?.nickname || '컴퓨터') : '누군가'} 승리!
+      <div className="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center z-[100] p-4 sm:p-8 text-center text-white overflow-y-auto">
+        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-6xl sm:text-8xl mb-6 drop-shadow-[0_0_30px_rgba(250,204,21,0.6)]">
+          {isBankrupt ? '💸' : '🎯'}
+        </motion.div>
+        <h2 className="text-4xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 mb-2 drop-shadow-lg leading-tight">
+          게임 종료!
         </h2>
-        <p className="text-xl text-slate-400 mb-12">게임이 종료되었습니다.</p>
+        {gameState.loserId && (
+          <p className="text-xl sm:text-3xl font-bold text-rose-400 mb-6">
+            {session.players[gameState.loserId]?.nickname || '컴퓨터'}님 {isBankrupt ? '파산 (20장 초과)' : '패배'}! 꼴찌입니다.
+          </p>
+        )}
+        
+        {gameState.rankings && gameState.rankings.length > 0 && (
+          <div className="bg-slate-800/80 rounded-2xl p-6 mb-8 w-full max-w-md border border-slate-700 shadow-xl">
+            <h3 className="text-2xl font-black text-slate-200 mb-4">순위</h3>
+            <ul className="space-y-3">
+              {gameState.rankings.map((pid, idx) => (
+                <li key={pid} className="flex justify-between items-center text-lg bg-slate-700/50 p-3 rounded-xl">
+                  <span className="font-bold text-slate-300">{idx + 1}등</span>
+                  <span className="font-bold text-white">{session.players[pid]?.nickname || '컴퓨터'}</span>
+                </li>
+              ))}
+              {gameState.loserId && (
+                <li className="flex justify-between items-center text-lg bg-rose-900/30 border border-rose-500/30 p-3 rounded-xl">
+                  <span className="font-bold text-rose-400">{gameState.rankings.length + 1}등 (꼴찌)</span>
+                  <span className="font-bold text-rose-100">{session.players[gameState.loserId]?.nickname || '컴퓨터'}</span>
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
         
         <div className="flex gap-4">
           {isHost && (
@@ -163,6 +214,125 @@ export default function OneCard({ session, currentUser, onLeave }: { session: Se
   return (
     <div className="w-full h-full flex flex-col bg-slate-900 text-slate-100 relative overflow-hidden font-sans">
       
+      {/* Rules Modal */}
+      <AnimatePresence>
+        {showRules && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-slate-800 rounded-2xl p-6 sm:p-8 max-w-2xl w-full border border-slate-700 shadow-2xl overflow-y-auto max-h-[85vh] scrollbar-hide relative"
+            >
+              <button 
+                onClick={() => setShowRules(false)}
+                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-slate-700/50 hover:bg-slate-600 text-slate-300 transition-colors"
+              >
+                ✕
+              </button>
+              
+              <h2 className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 mb-6 drop-shadow-sm">
+                1CARD 룰 안내
+              </h2>
+              
+              <div className="space-y-6 text-sm sm:text-base text-slate-300">
+                <section>
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs">1</span>
+                    기본 룰
+                  </h3>
+                  <ul className="list-disc pl-5 space-y-1 text-slate-400">
+                    <li>바닥에 있는 카드와 <span className="text-indigo-300 font-bold">무늬</span> 또는 <span className="text-indigo-300 font-bold">숫자(기호)</span>가 같은 카드만 낼 수 있습니다.</li>
+                    <li>낼 카드가 없거나 내기 싫다면 덱(뒷면 카드)을 눌러서 1장을 먹어야 합니다.</li>
+                    <li>손에 든 카드를 모두 없애면 승리합니다.</li>
+                  </ul>
+                </section>
+                
+                <section>
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded bg-rose-500/20 text-rose-300 flex items-center justify-center text-xs">⚔</span>
+                    공격 카드
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-2">공격을 받으면 다음 사람은 카드를 내거나 맞아야 합니다. 같은 공격이나 더 센 공격으로 방어할 수 있습니다.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-slate-700/30 p-3 rounded-xl border border-slate-700">
+                      <div className="font-black text-white text-lg">2</div>
+                      <div className="text-rose-400 font-bold mb-1">공격력: 2장</div>
+                      <div className="text-xs text-slate-400">다음 사람에게 2장을 먹입니다.</div>
+                    </div>
+                    <div className="bg-slate-700/30 p-3 rounded-xl border border-slate-700">
+                      <div className="font-black text-white text-lg">A</div>
+                      <div className="text-rose-400 font-bold mb-1">공격력: 3장 (스페이드 A는 5장)</div>
+                      <div className="text-xs text-slate-400">다음 사람에게 3장(또는 5장)을 먹입니다.</div>
+                    </div>
+                    <div className="bg-slate-700/30 p-3 rounded-xl border border-slate-700">
+                      <div className="font-black text-slate-300 text-lg">흑백 조커</div>
+                      <div className="text-purple-400 font-bold mb-1">공격력: 5장</div>
+                      <div className="text-xs text-slate-400">어떤 상황에서든 낼 수 있습니다.</div>
+                    </div>
+                    <div className="bg-slate-700/30 p-3 rounded-xl border border-slate-700">
+                      <div className="font-black text-rose-400 text-lg">컬러 조커</div>
+                      <div className="text-purple-400 font-bold mb-1">공격력: 7장</div>
+                      <div className="text-xs text-slate-400">무적의 카드! 낼 때 무늬도 바꿀 수 있습니다.</div>
+                    </div>
+                  </div>
+                </section>
+                
+                <section>
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-xs">🛡</span>
+                    방어 카드
+                  </h3>
+                  <ul className="list-disc pl-5 space-y-1 text-slate-400">
+                    <li><span className="text-white font-bold">3 카드:</span> 같은 무늬의 3을 내면 공격을 <span className="text-emerald-400">방어(무효화)</span>할 수 있습니다! (스페이드 3은 조커 방어 가능)</li>
+                    <li>더 강한 공격카드를 내서 다음 사람에게 누적시킬 수도 있습니다.</li>
+                  </ul>
+                </section>
+                
+                <section>
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded bg-amber-500/20 text-amber-300 flex items-center justify-center text-xs">★</span>
+                    특수 카드
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-slate-700/30 p-3 rounded-xl border border-slate-700 flex justify-between items-center">
+                      <span className="font-black text-white">7</span>
+                      <span className="text-sm text-slate-400 text-right">내고 난 뒤 <span className="text-amber-300">원하는 무늬로 변경</span> 가능</span>
+                    </div>
+                    <div className="bg-slate-700/30 p-3 rounded-xl border border-slate-700 flex justify-between items-center">
+                      <span className="font-black text-white">J</span>
+                      <span className="text-sm text-slate-400 text-right">다음 사람을 <span className="text-amber-300">점프(건너뜀)</span></span>
+                    </div>
+                    <div className="bg-slate-700/30 p-3 rounded-xl border border-slate-700 flex justify-between items-center">
+                      <span className="font-black text-white">Q</span>
+                      <span className="text-sm text-slate-400 text-right">게임 진행 방향을 <span className="text-amber-300">반대로(리버스)</span></span>
+                    </div>
+                    <div className="bg-slate-700/30 p-3 rounded-xl border border-slate-700 flex justify-between items-center">
+                      <span className="font-black text-white">K</span>
+                      <span className="text-sm text-slate-400 text-right">카드 한 장을 <span className="text-amber-300">더 낼 수 있음</span></span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+              
+              <div className="mt-8">
+                <button 
+                  onClick={() => setShowRules(false)}
+                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-lg transition-colors shadow-lg active:scale-95"
+                >
+                  확인했습니다
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Header */}
       <header className="flex-none p-4 flex items-center justify-between bg-slate-800/80 backdrop-blur-sm border-b border-slate-700/50 shadow-sm z-20">
         <div className="flex items-center gap-4 sm:gap-6">
@@ -177,6 +347,12 @@ export default function OneCard({ session, currentUser, onLeave }: { session: Se
           </div>
         </div>
         <div className="flex gap-2">
+          <button 
+            onClick={() => setShowRules(true)}
+            className="px-3 sm:px-4 py-1.5 sm:py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/30 rounded-full font-bold text-xs sm:text-sm transition-colors flex items-center gap-1.5"
+          >
+            <span>룰 보기</span>
+          </button>
           {isHost && (
             <button 
               onClick={() => sessionService.startOneCardGame(session.id)}
@@ -204,21 +380,30 @@ export default function OneCard({ session, currentUser, onLeave }: { session: Se
           return (
             <div key={pid} className={`flex flex-col items-center bg-slate-800/60 backdrop-blur-sm p-3 sm:p-5 rounded-2xl border-2 transition-all duration-300 ${isCurrent ? 'border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.4)] -translate-y-2' : 'border-slate-700/50'}`}>
               <span className="font-bold text-xs sm:text-sm whitespace-nowrap mb-3 text-slate-200">{nickname}</span>
-              <div className="flex -space-x-4 sm:-space-x-5">
-                 {Array.from({ length: Math.min(handSize, 5) }).map((_, i) => (
-                   <div key={i} className="transform scale-[0.6] sm:scale-75 -my-8 sm:-my-6 origin-top">
-                     <CardView hidden={true} />
-                   </div>
-                 ))}
-                 {handSize > 5 && (
-                   <div className="z-10 bg-slate-900 rounded-full w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-[10px] sm:text-xs font-bold -ml-2 sm:-ml-3 border-2 border-slate-700 shadow-md">
-                     +{handSize - 5}
-                   </div>
-                 )}
-              </div>
-              <span className={`text-[10px] sm:text-xs font-black mt-3 px-2 py-0.5 rounded-full ${handSize === 1 ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-700 text-slate-300'}`}>
-                {handSize}장
-              </span>
+              {handSize === 0 ? (
+                <div className="flex flex-col items-center justify-center h-16 sm:h-24">
+                  <span className="text-3xl sm:text-4xl drop-shadow-md">🏆</span>
+                  <span className="text-xs sm:text-sm font-bold text-yellow-400 mt-2">탈출 성공</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex -space-x-4 sm:-space-x-5">
+                     {Array.from({ length: Math.min(handSize, 5) }).map((_, i) => (
+                       <div key={i} className="transform scale-[0.6] sm:scale-75 -my-8 sm:-my-6 origin-top">
+                         <CardView hidden={true} />
+                       </div>
+                     ))}
+                     {handSize > 5 && (
+                       <div className="z-10 bg-slate-900 rounded-full w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-[10px] sm:text-xs font-bold -ml-2 sm:-ml-3 border-2 border-slate-700 shadow-md">
+                         +{handSize - 5}
+                       </div>
+                     )}
+                  </div>
+                  <span className={`text-[10px] sm:text-xs font-black mt-3 px-2 py-0.5 rounded-full ${handSize === 1 ? 'bg-red-500 text-white animate-pulse' : handSize >= 15 ? 'bg-rose-900 text-rose-200 animate-pulse' : 'bg-slate-700 text-slate-300'}`}>
+                    {handSize}장 {handSize >= 15 && ' (위험)'}
+                  </span>
+                </>
+              )}
             </div>
           );
         })}
@@ -292,7 +477,14 @@ export default function OneCard({ session, currentUser, onLeave }: { session: Se
       {/* My Player Area */}
       {!isSpectator && myState && (
         <div className="flex-none bg-slate-800/90 backdrop-blur-xl rounded-t-[2rem] border-t border-slate-700/80 p-4 sm:p-6 flex flex-col items-center pb-6 sm:pb-8 shadow-[0_-10px_40px_rgba(0,0,0,0.3)] z-30">
-          
+          {myState.hand.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 bg-slate-800/80 backdrop-blur-sm rounded-2xl w-full max-w-5xl">
+              <span className="text-6xl drop-shadow-[0_0_20px_rgba(250,204,21,0.6)] mb-4 animate-bounce">🏆</span>
+              <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600">탈출 성공!</span>
+              <span className="text-slate-400 mt-2">다른 플레이어들의 게임을 관전하세요.</span>
+            </div>
+          ) : (
+          <>
           <div className="flex flex-col sm:flex-row items-center justify-between w-full max-w-5xl mb-4 sm:mb-6 gap-3">
              <div className="flex items-center gap-3">
                <div className={`w-3 h-3 rounded-full ${myTurn ? 'bg-green-500 shadow-[0_0_10px_#22c55e] animate-pulse' : 'bg-slate-500'}`}></div>
@@ -350,6 +542,8 @@ export default function OneCard({ session, currentUser, onLeave }: { session: Se
               </AnimatePresence>
             </div>
           </div>
+          </>
+        )}
         </div>
       )}
 

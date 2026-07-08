@@ -426,7 +426,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
                 {['😂', '😭', '😡', '👍', '😱'].map(emoji => (
                   <button 
                     key={emoji}
-                    onClick={() => sessionService.sendOldMaidEmoji(session.id, pid, emoji)}
+                    onClick={() => (sessionService as any).sendOldMaidEmoji(session.id, pid, emoji)}
                     className="p-1 hover:bg-white/20 rounded-full transition-transform active:scale-90 text-lg sm:text-xl"
                   >
                     {emoji}
@@ -437,7 +437,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
                 {['여깄지롱 😜', '살려줘... 😭', '빨리 뽑아! ⏰', '안돼!! 😱'].map(msg => (
                   <button
                     key={msg}
-                    onClick={() => sessionService.sendOldMaidEmoji(session.id, pid, msg)}
+                    onClick={() => (sessionService as any).sendOldMaidEmoji(session.id, pid, msg)}
                     className="px-2 py-1 bg-black/40 hover:bg-black/60 rounded-full text-[10px] sm:text-xs text-white transition-transform active:scale-95 whitespace-nowrap"
                   >
                     {msg}
@@ -471,13 +471,13 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
                     className={`flex-shrink-0 transition-transform duration-200 hover:-translate-y-6 hover:z-30 relative group ${isPinged ? 'animate-pulse drop-shadow-[0_0_15px_rgba(255,215,0,1)]' : ''}`}
                     style={{ transformOrigin: 'bottom center', zIndex: i }}
                   >
-                    <Card value={card.value} suit={card.suit} />
+                    <Card value={card.value} suit={(card as any).suit} />
                     {isPinged && (
                       <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-2xl animate-bounce z-50">✨</div>
                     )}
                     {isTarget && !amICurrent && (
                       <button 
-                        onClick={() => sessionService.sendOldMaidPing(session.id, pid, i)}
+                        onClick={() => (sessionService as any).sendOldMaidPing(session.id, pid, i)}
                         className="absolute inset-0 w-full h-full z-40 opacity-0 group-hover:opacity-100 flex items-center justify-center bg-black/40 text-2xl rounded-xl transition-opacity"
                         title="이 카드 뽑아보라고 도발하기"
                       >
@@ -546,7 +546,7 @@ export function OldMaid({ session, currentUser }: OldMaidProps) {
                 >
                   <Card 
                     value={c.value}
-                    suit={c.suit}
+                    suit={(c as any).suit}
                     isBack={!(status === 'FINISHED' && pid === loserId) && !isMe} 
                     isTarget={isTarget && amICurrent}
                   />

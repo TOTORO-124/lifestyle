@@ -194,6 +194,8 @@ export interface OldMaidGameState {
   message?: string;
   effect?: string | null;
   effectTimestamp?: number;
+  drawingState?: any;
+  turnStartTime?: number;
 }
 
 export interface OfficeLifeGameState {
@@ -437,6 +439,8 @@ export interface OneCardCard {
 export interface OneCardGameState {
   status: 'PLAYING' | 'FINISHED';
   winnerId?: string;
+  loserId?: string;
+  rankings?: string[];
   deck: OneCardCard[];
   discardPile: OneCardCard[];
   players: Record<string, {
