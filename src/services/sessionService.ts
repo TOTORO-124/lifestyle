@@ -2283,6 +2283,10 @@ export const sessionService = {
       newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `${playerName}님이 공격 방어에 실패하여 ${actualDrawn}장을 뽑았습니다.`, type: 'info', timestamp: Date.now()
     };
       game.penaltyStack = 0;
+      const topCard = game.discardPile[game.discardPile.length - 1];
+      if (topCard?.suit === 'joker') {
+        game.currentSuit = null as any;
+      }
     } else {
       newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = { id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(), content: `${playerName}님이 카드를 1장 뽑았습니다.`, type: 'info', timestamp: Date.now()
     };
@@ -2369,7 +2373,7 @@ export const sessionService = {
       }
 
       let changedSuit: string | undefined;
-      if (selectedCard.rank === '7' || selectedCard.suit === 'joker') {
+      if (selectedCard.rank === '7') {
         const suitCounts: Record<string, number> = { spades: 0, hearts: 0, diamonds: 0, clubs: 0 };
         botState.hand.forEach((c: any) => {
           if (c.suit !== 'joker') suitCounts[c.suit]++;
