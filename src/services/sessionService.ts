@@ -873,6 +873,18 @@ export const sessionService = {
     await update(ref(db, `sessions/${sessionId}`), updates);
   },
 
+  async sendEmoticon(sessionId: string, playerId: string, emoji: string) {
+    if (!db) return;
+    try {
+      await update(ref(db, `sessions/${sessionId}/players/${playerId}/emoticon`), {
+        emoji,
+        timestamp: Date.now()
+      });
+    } catch (e) {
+      console.error('Failed to send emoticon', e);
+    }
+  },
+
   async sendMessage(sessionId: string, senderId: string, senderName: string, content: string, isSpectatorChat: boolean = false) {
     if (!db) return;
     const messagesRef = ref(db, `sessions/${sessionId}/messages`);

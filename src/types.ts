@@ -73,6 +73,7 @@ export interface Player {
   isSpectator?: boolean;
   isAI?: boolean;
   isBot?: boolean;
+  emoticon?: { emoji: string; timestamp: number };
   role?: string;
   voteTarget?: string;
   hasConfirmedRole?: boolean;
