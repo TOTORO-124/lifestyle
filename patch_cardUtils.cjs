@@ -1,4 +1,7 @@
-export type Suit = 'spades' | 'hearts' | 'diamonds' | 'clubs' | 'joker';
+const fs = require('fs');
+let path = 'src/game/cardUtils.ts';
+
+const newCode = `export type Suit = 'spades' | 'hearts' | 'diamonds' | 'clubs' | 'joker';
 export type Rank = 'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K' | 'black' | 'color';
 
 export interface Card {
@@ -14,7 +17,7 @@ export const createDeck = (): Card[] => {
   
   for (const suit of suits) {
     for (const rank of ranks) {
-      deck.push({ id: `${suit}-${rank}`, suit, rank });
+      deck.push({ id: \`\${suit}-\${rank}\`, suit, rank });
     }
   }
   
@@ -80,3 +83,7 @@ export const isPlayable = (card: Card, topCard: Card, currentSuit?: Suit, penalt
   
   return false;
 };
+`;
+
+fs.writeFileSync(path, newCode);
+console.log('patched cardUtils');
