@@ -2277,12 +2277,12 @@ export const sessionService = {
     }
 
 
-    if (playerState.hand.length >= 20) {
+    if (playerState.hand.length > 12) {
       game.status = 'FINISHED';
       game.loserId = playerId;
       newLogs[`log_${Date.now()}_${Math.floor(Math.random() * 10000)}`] = {
         id: Date.now().toString() + Math.floor(Math.random() * 10000).toString(),
-        content: `${playerName}님의 카드가 20장 이상이 되어 파산했습니다! 조기 게임 종료.`,
+        content: `${playerName}님의 카드가 12장을 초과하여 파산했습니다! 조기 게임 종료.`,
         type: 'info',
         timestamp: Date.now()
       };
